@@ -4,54 +4,54 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>alovOS — Kitchen Management System</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Inter:wght@200;300;400&family=JetBrains+Mono:wght@300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=Inter:wght@200;300;400&family=JetBrains+Mono:wght@300&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#080808;--fg:#f6f3ef;--muted:#9A9A9A;--muted2:#7a7a7a;--copper:#D99A7A;--border:rgba(255,255,255,0.09);--card:#141414}
 *{margin:0;padding:0;box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;font-weight:300;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 .serif{font-family:'Cormorant Garamond',serif;font-weight:300}
 .mono{font-family:'JetBrains Mono',monospace;font-weight:300}
-.nav{max-width:1120px;margin:0 auto;padding:28px 24px;display:flex;justify-content:space-between;align-items:center}
-.lang{display:flex;gap:4px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:999px;padding:4px}
-.lang button{background:0 0;border:0;color:var(--muted2);font-size:11px;padding:6px 12px;border-radius:999px;cursor:pointer;letter-spacing:.1em}
+.nav{max-width:1120px;margin:0 auto;padding:26px 20px;display:flex;justify-content:space-between;align-items:center}
+.lang{display:flex;gap:3px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:999px;padding:3px}
+.lang button{background:0 0;border:0;color:var(--muted2);font-size:11px;padding:7px 13px;border-radius:999px;cursor:pointer;letter-spacing:.1em}
 .lang button.active{background:var(--fg);color:#000}
-.hero{max-width:1120px;margin:0 auto;padding:28px 24px 10px;text-align:center}
-.hero h1{font-size:clamp(38px,5.8vw,68px);line-height:.92;letter-spacing:-.04em;margin:20px 0 14px}
+.hero{max-width:1120px;margin:0 auto;padding:24px 20px 8px;text-align:center}
+.hero h1{font-size:clamp(34px,8vw,64px);line-height:.92;letter-spacing:-.03em;margin:18px 0 14px}
 .hero h1 i{font-style:normal;color:var(--copper)}
-.hero p{color:var(--muted);max-width:560px;margin:0 auto 24px;font-size:15.5px;line-height:1.55;opacity:.95}
-.badge{border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:10px;letter-spacing:.16em;color:var(--muted2);text-transform:uppercase;display:inline-block;background:rgba(255,255,255,.02)}
-.btn{padding:13px 26px;border-radius:999px;font-size:13.5px;text-decoration:none;display:inline-block;border:1px solid transparent;transition:.2s;font-weight:400}
+.hero p{color:var(--muted);max-width:540px;margin:0 auto 22px;font-size:14.5px;line-height:1.5}
+.badge{border:1px solid var(--border);border-radius:999px;padding:5px 12px;font-size:9px;letter-spacing:.18em;color:var(--muted2);text-transform:uppercase;display:inline-block;background:rgba(255,255,255,.02)}
+.btn{padding:13px 24px;border-radius:999px;font-size:13.5px;text-decoration:none;display:inline-block;border:1px solid transparent;font-weight:400}
 .btn-primary{background:var(--fg);color:#000}
-.btn-ghost{border-color:var(--border);color:var(--fg);margin-left:10px;background:rgba(255,255,255,.03)}
-.phone-wrap{max-width:1120px;margin:42px auto 0;padding:0 24px;display:flex;justify-content:center}
-.phone{width:340px;background:linear-gradient(180deg,#161616 0%,#101010 100%);border:1px solid rgba(255,255,255,.11);border-radius:38px;padding:12px 12px 18px;box-shadow:0 0 0 1px rgba(255,255,255,.06),0 30px 80px rgba(0,0,0,.8),0 0 80px rgba(217,154,122,.12)}
-.phone-notch{width:96px;height:24px;background:#000;border-radius:0 0 16px 16px;margin:0 auto 14px}
-.phone-header{display:flex;justify-content:space-between;align-items:center;padding:0 8px 14px;color:var(--muted2);font-size:11px}
-.phone-title{font-size:15px;color:var(--fg);font-weight:500}
-.stat-main{border:1px solid rgba(217,154,122,.22);background:linear-gradient(180deg,rgba(217,154,122,.08),rgba(0,0,0,0));border-radius:14px;padding:14px;text-align:center;margin:0 2px}
-.stat-main b{font-size:28px;display:block;margin:4px 0}
-.stat-main span{font-size:11px;color:var(--copper)}
-.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.stat-small{border:1px solid var(--border);background:#121212;border-radius:12px;padding:10px}
-.stat-small b{font-size:11px;color:var(--copper);display:block;margin-bottom:6px}
-.stat-small li{font-size:11px;list-style:none;line-height:1.5;color:#c9c9c9}
-.stat-small li em{font-style:normal;color:var(--muted2);font-size:10px}
-.grid-wrap{max-width:1120px;margin:38px auto 0;padding:18px 24px}
-.grid-label{font-size:10.5px;letter-spacing:.22em;color:var(--muted2);text-transform:uppercase;margin-bottom:18px;display:flex;gap:14px;align-items:center}
-.grid-label:before,.grid-label:after{content:'';height:1px;flex:1;background:linear-gradient(90deg,transparent,var(--border),transparent)}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.card{border:1px solid var(--border);background:var(--card);border-radius:12px;padding:16px 12px;min-height:112px;display:flex;flex-direction:column;align-items:flex-start;gap:2px}
-.card svg{width:20px;height:20px;stroke:var(--copper);stroke-width:1.2;fill:none;margin-bottom:10px}
-.card b{font-size:12px;font-weight:400}
-.card span{font-size:10.5px;color:var(--muted2);margin-top:2px}
-footer{max-width:1120px;margin:48px auto 0;padding:22px 24px;border-top:1px solid var(--border);display:flex;justify-content:center;gap:16px;color:var(--muted2);font-size:10.5px;text-align:center;flex-wrap:wrap}
-@media(max-width:860px){.grid{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:600px){.grid{grid-template-columns:repeat(2,1fr);gap:8px}.card{min-height:108px;padding:14px 10px}.phone{width:300px}}
+.btn-ghost{border-color:var(--border);color:var(--fg);margin-left:8px;background:rgba(255,255,255,.03)}
+.phone-wrap{max-width:1120px;margin:34px auto 0;padding:0 16px;display:flex;justify-content:center}
+.phone{width:318px;background:#121212;border:1px solid rgba(255,255,255,.10);border-radius:28px;padding:8px 8px 14px;box-shadow:0 20px 60px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.04) inset}
+.phone-notch{width:84px;height:18px;background:#000;border-radius:0 0 12px 12px;margin:0 auto 10px}
+.phone-header{display:flex;justify-content:space-between;align-items:center;padding:2px 10px 12px;color:var(--muted2);font-size:11px}
+.phone-title{font-size:14px;color:var(--fg);font-weight:400;letter-spacing:.02em}
+.stat-main{border:1px solid rgba(217,154,122,.22);background:linear-gradient(180deg,#181311 0%,#121212 100%);border-radius:16px;padding:16px 12px;text-align:center}
+.stat-main.lbl{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--copper);opacity:.9}
+.stat-main b{font-size:34px;font-family:'Cormorant Garamond',serif;font-weight:400;letter-spacing:-.02em;display:block;margin:6px 0 2px;color:#fff}
+.stat-main.sub{font-size:11px;color:var(--copper);opacity:.8}
+.stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.stat-small{border:1px solid var(--border);background:#141414;border-radius:14px;padding:10px 10px}
+.stat-small b{font-size:11px;color:var(--copper);display:block;margin-bottom:6px;font-weight:400}
+.stat-small div{font-size:11.5px;color:#ddd;line-height:1.4}
+.stat-small div em{font-style:normal;color:var(--muted2);font-size:11px}
+.grid-wrap{max-width:1120px;margin:28px auto 0;padding:0 12px}
+.grid-label{font-size:9.5px;letter-spacing:.22em;color:var(--muted2);text-transform:uppercase;margin:0 8px 14px;display:flex;gap:12px;align-items:center}
+.grid-label:after{content:'';height:1px;flex:1;background:var(--border)}
+.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.card{border:1px solid rgba(255,255,255,.08);background:#131313;border-radius:14px;padding:14px 12px;min-height:96px;transition:.2s}
+.card svg{width:22px;height:22px;stroke:var(--copper);stroke-width:1.15;fill:none;opacity:.95;margin-bottom:10px;display:block}
+.card b{font-size:13px;font-weight:400;color:#f0ece7;display:block}
+.card span{font-size:11px;color:var(--muted2);margin-top:3px;display:block}
+footer{max-width:1120px;margin:40px auto 0;padding:20px 12px;border-top:1px solid var(--border);color:var(--muted2);font-size:10px;letter-spacing:.06em;text-align:center}
+@media(min-width:700px){.grid{grid-template-columns:repeat(4,1fr);gap:10px}.grid-wrap{padding:0 24px}.nav{padding:28px 24px}}
 </style>
 </head>
 <body>
 <nav class="nav">
-<div class="logo"><img src="logo.png" alt="alovOS" style="height:54px;width:auto;display:block;mix-blend-mode:screen"></div>
+<div class="logo"><img src="logo.png" alt="alovOS" style="height:52px;width:auto;display:block"></div>
 <div class="lang"><button data-lang="az">AZ</button><button data-lang="ru">RU</button><button data-lang="en" class="active">EN</button></div>
 </nav>
 <div class="hero">
@@ -64,10 +64,10 @@ footer{max-width:1120px;margin:48px auto 0;padding:22px 24px;border-top:1px soli
 <div class="phone">
 <div class="phone-notch"></div>
 <div class="phone-header"><span>9:41</span><div class="phone-title">Dashboard</div><span>◍</span></div>
-<div class="stat-main"><span class="mono" data-i18n="pv1">Current Stock Value</span><b class="serif">$12,840</b><span data-i18n="pv2">+4.2% vs last month</span></div>
+<div class="stat-main"><div class="lbl mono" data-i18n="pv1">Current Stock Value</div><b>$12,840</b><div class="sub" data-i18n="pv2">+4.2% vs last month</div></div>
 <div class="stat-row">
-<div class="stat-small"><b>⚠ Low Stock</b><li>Chicken <em>• 2kg left</em></li><li>Tomatoes <em>• 5kg left</em></li></div>
-<div class="stat-small"><b>◷ Expiring Soon</b><li>Milk <em>• in 3 days</em></li><li>Herbs <em>• in 1 day</em></li></div>
+<div class="stat-small"><b>⚠ Low Stock</b><div>Chicken <em>• 2kg left</em></div><div>Tomatoes <em>• 5kg left</em></div></div>
+<div class="stat-small"><b>◍ Expiring Soon</b><div>Milk <em>• in 3 days</em></div><div>Herbs <em>• in 1 day</em></div></div>
 </div>
 </div>
 </div>
@@ -84,11 +84,11 @@ footer{max-width:1120px;margin:48px auto 0;padding:22px 24px;border-top:1px soli
 <div class="card"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-6"/></svg><b data-i18n="m8">Reports</b><span data-i18n="d8">Daily insights</span></div>
 <div class="card"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7-6 13-6 13S6 15 6 8z"/><circle cx="12" cy="8" r="2"/></svg><b data-i18n="m9">Alerts</b><span data-i18n="d9">Low stock</span></div>
 <div class="card"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1" fill="#D99A7A"/><circle cx="14" cy="12" r="1" fill="#D99A7A"/><circle cx="10" cy="18" r="1" fill="#D99A7A"/></svg><b data-i18n="m10">POS Sync</b><span data-i18n="d10">Square, Toast</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9l-2.1 2.1M7 17l-2.1 2.1"/></svg><b data-i18n="m11">Multi-Unit</b><span data-i18n="d11">All locations</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg><b data-i18n="m11">Multi-Unit</b><span data-i18n="d11">All locations</span></div>
 <div class="card"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><b data-i18n="m12">API</b><span data-i18n="d12">Integrations</span></div>
 </div>
 </div>
-<footer><div>© 2024 alovOS · Privacy · Terms · Status — All systems operational</div></footer>
+<footer>© 2024 alovOS · Privacy · Terms · Status — All systems operational</footer>
 <script>
 const dict={
 az:{badge:"Restoran Anbar OS · Beta",title:"Stoku izlə. Tullantını azalt.<br><i>Nəzarətdə qal.</i>",subtitle:"Restoran anbarı üçün müasir OS. Real vaxt izləmə və avtomatik sifariş.",cta1:"Pulsuz Başla",cta2:"Panelə bax",label:"ROADMAP — 12 ADDIMLA TAM AVTOMATLAŞDIRMA",pv1:"Cari Anbar Dəyəri",pv2:"+4.2% ötən ayla müqayisədə",m1:"Anbar",m2:"Təchizatçılar",m3:"Sifarişlər",m4:"Tullantı",m5:"Reseptlər",m6:"Xərclər",m7:"Komanda",m8:"Hesabat",m9:"Xəbərdarlıq",m10:"POS Sinxron",m11:"Çox Məkan",m12:"API",d1:"Canlı stok",d2:"Birbaşa sifariş",d3:"Avto sifariş",d4:"30% azalma",d5:"Yemək maya dəyəri",d6:"Marja",d7:"Rollar və giriş",d8:"Günlük analiz",d9:"Az stok",d10:"Square, Toast",d11:"Bütün məkanlar",d12:"İnteqrasiyalar"},
@@ -96,7 +96,7 @@ ru:{badge:"Restaurant Inventory OS · Бета",title:"Отслеживай ск
 en:{badge:"Restaurant Inventory OS · Beta",title:"Track stock. Cut waste.<br><i>Stay in control.</i>",subtitle:"The modern OS for restaurant inventory. Real-time tracking and automated reorders.",cta1:"Start Free Trial",cta2:"View Dashboard",label:"ROADMAP — 12 STEPS TO FULL AUTOMATION",pv1:"Current Stock Value",pv2:"+4.2% vs last month",m1:"Inventory",m2:"Suppliers",m3:"Orders",m4:"Waste",m5:"Recipes",m6:"Costs",m7:"Teams",m8:"Reports",m9:"Alerts",m10:"POS Sync",m11:"Multi-Unit",m12:"API",d1:"Real-time stock",d2:"Direct orders",d3:"Auto reorder",d4:"Reduce 30%",d5:"Dish costing",d6:"Margins",d7:"Roles & access",d8:"Daily insights",d9:"Low stock",d10:"Square, Toast",d11:"All locations",d12:"Integrations"}
 };
 function setLang(l){localStorage.setItem('alovos_lang',l);document.querySelectorAll('[data-i18n]').forEach(e=>{const k=e.getAttribute('data-i18n');if(dict[l][k])e.innerHTML=dict[l][k]});document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('active',b.dataset.lang===l))}
-document.querySelectorAll('.lang button').forEach(b=>b.addEventListener('click',()=>setLang(b.dataset.lang)));setLang(localStorage.getItem('alovos_lang')||'en');
+document.querySelectorAll('.lang button').forEach(b=>b.addEventListener('click',()=>setLang(b.dataset.lang)));setLang(localStorage.getItem('alovos_lang')||'az');
 </script>
 </body>
-  </html>
+</html>
