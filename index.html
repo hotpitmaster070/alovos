@@ -3,66 +3,76 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>alovOS</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@300&display=swap" rel="stylesheet">
+<title>alovOS — Kitchen Management System</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Inter:wght@200;300;400&family=JetBrains+Mono:wght@300&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0A0A0A;--fg:#F5F3EF;--m:#8A8A8A;--m2:#555;--b:rgba(255,255,255,.09)}
+:root{--bg:#080808;--fg:#f6f3ef;--muted:#7a7a7a;--copper:#D99A7A;--border:rgba(255,255,255,0.09);--card:#141414}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;padding-bottom:40px}
-.mono{font-family:'JetBrains Mono',monospace}
-.nav{position:relative;display:flex;justify-content:center;align-items:center;padding:16px 12px;max-width:720px;margin:0 auto}
-.logo-center img{height:38px;max-width:140px;object-fit:contain;display:block;filter:brightness(1.1)}
-.lang{position:absolute;right:12px;top:50%;transform:translateY(-50%);display:flex;gap:2px;background:rgba(255,255,255,.06);border:1px solid var(--b);border-radius:999px;padding:2px}
-.lang button{background:0 0;border:0;color:#555;font-size:10px;padding:5px 10px;border-radius:999px}
-.lang button.active{background:#F5F3EF;color:#000}
-.hero{max-width:720px;margin:0 auto;padding:8px 16px 0;text-align:center}
-.badge{border:1px solid var(--b);border-radius:999px;padding:5px 12px;font-size:9px;color:#8A8A8A;text-transform:uppercase;display:inline-block}
-.hero h1{font-size:26px;line-height:1.1;font-weight:600;margin:14px 0 10px}
-.hero p{color:#8A8A8A;font-size:11px;line-height:1.5;max-width:520px;margin:0 auto 16px}
-.btns{display:flex;justify-content:center;gap:8px}
-.btn{padding:10px 18px;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;min-width:110px;text-align:center}
-.btn-primary{background:#F5F3EF;color:#000}.btn-ghost{border:1px solid var(--b);color:#F5F3EF}
-.grid-wrap{max-width:720px;margin:20px auto 0;padding:0 12px}
-.grid-label{font-size:8px;letter-spacing:.2em;color:#555;text-transform:uppercase;margin-bottom:10px;display:flex;gap:8px;align-items:center}
-.grid-label:after{content:'';height:1px;flex:1;background:var(--b)}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.card{border:1px solid var(--b);background:#151515;border-radius:10px;padding:12px 6px;min-height:72px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px}
-.card svg{width:20px;height:20px;stroke:#E8E6E1;stroke-width:1.2;fill:none}
-.card b{font-size:8.5px;font-weight:500;color:#D6D3CE}
-.phone-wrap{max-width:720px;margin:20px auto 0;padding:0 16px;display:flex;justify-content:center}
-.phone{width:100%;max-width:300px;background:#111;border:1px solid rgba(255,255,255,.10);border-radius:32px;padding:10px 10px 16px}
-.phone-notch{width:88px;height:20px;background:#000;border-radius:0 0 14px 14px;margin:0 auto 10px}
-.phone-head{text-align:center;font-size:12px;font-weight:600;padding:4px 0 12px}
-.main{border:1px solid rgba(255,255,255,.08);background:#1A1A1A;border-radius:14px;padding:12px;text-align:center}
-.main b{font-size:26px;font-weight:700;display:block;margin:3px 0}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
-.sm{border:1px solid rgba(255,255,255,.07);background:#171717;border-radius:12px;padding:12px 8px;text-align:center;display:flex;flex-direction:column;align-items:center;gap:4px;min-height:72px;justify-content:center}
-.sm svg{width:18px!important;height:18px!important}
-.sm b{font-size:9px}.sm div{font-size:8px;color:#8A8A8A}
-footer{max-width:720px;margin:18px auto 0;padding:16px 12px 0;text-align:center;color:#555;font-size:8px}
+body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;font-weight:300;-webkit-font-smoothing:antialiased}
+.serif{font-family:'Cormorant Garamond',serif;font-weight:300}
+.mono{font-family:'JetBrains Mono',monospace;font-weight:300}
+.nav{max-width:1120px;margin:0 auto;padding:24px;display:flex;justify-content:space-between;align-items:center}
+.lang{display:flex;gap:4px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:999px;padding:4px}
+.lang button{background:0 0;border:0;color:var(--muted);font-size:11px;padding:6px 12px;border-radius:999px;cursor:pointer;letter-spacing:.1em}
+.lang button.active{background:var(--fg);color:#000}
+.hero{max-width:1120px;margin:0 auto;padding:20px 24px 10px;text-align:center}
+.hero h1{font-size:clamp(36px,5.5vw,64px);line-height:.95;letter-spacing:-.03em;margin:18px 0 12px}
+.hero h1 i{font-style:normal;color:var(--copper)}
+.hero p{color:var(--muted);max-width:520px;margin:0 auto 22px;font-size:15px;line-height:1.5}
+.badge{border:1px solid var(--border);border-radius:999px;padding:5px 12px;font-size:10px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;display:inline-block}
+.btn{padding:12px 22px;border-radius:999px;font-size:13px;text-decoration:none;display:inline-block;border:1px solid transparent}
+.btn-primary{background:var(--fg);color:#000}
+.btn-ghost{border-color:var(--border);color:var(--fg);margin-left:8px}
+.grid-wrap{max-width:1120px;margin:0 auto;padding:18px 24px}
+.grid-label{font-size:10px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;display:flex;gap:10px;align-items:center}
+.grid-label:after{content:'';height:1px;flex:1;background:var(--border)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.card{border:1px solid var(--border);background:var(--card);border-radius:12px;padding:14px 12px;transition:.2s}
+.card:hover{border-color:rgba(217,154,122,.35);background:#1a1a1a}
+.card svg{width:20px;height:20px;stroke:var(--fg);stroke-width:1.2;fill:none;opacity:.9;margin-bottom:8px}
+.card b{font-size:12px;font-weight:400;display:block;letter-spacing:.01em}
+.card span{font-size:10px;color:var(--muted)}
+footer{max-width:1120px;margin:40px auto 0;padding:22px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:10px;letter-spacing:.08em}
+@media(max-width:600px){.grid{grid-template-columns:repeat(3,1fr);gap:8px}.card{padding:12px 10px}.card b{font-size:11px}}
 </style>
 </head>
 <body>
 <nav class="nav">
-<div class="logo-center"><img src="./logo.png" alt="alovOS"></div>
-<div class="lang"><button class="active">AZ</button><button>RU</button><button>EN</button></div>
+<div class="logo"><img src="logo.png" alt="alovOS" style="height:56px;width:auto;display:block"></div>
+<div class="lang"><button data-lang="az">AZ</button><button data-lang="ru">RU</button><button data-lang="en" class="active">EN</button></div>
 </nav>
-<div class="hero"><div class="badge mono">Restaurant Inventory OS · Now in beta</div><h1>Track stock. Cut waste.<br>Stay in control.</h1><p>The modern operating system for restaurant inventory. Real-time tracking, automated reorders, and cost insights for modern kitchens.</p><div class="btns"><a class="btn btn-primary" href="#">Get Started</a><a class="btn btn-ghost" href="#">See Roadmap</a></div></div>
-<div class="grid-wrap"><div class="grid-label mono">ROADMAP — 12 STEPS TO FULL AUTOMATION</div><div class="grid">
-<div class="card"><svg viewBox="0 0 24 24"><path d="M12 2L4 6.5v6.5c0 4.5 2.7 8.5 8 11 5.3-2.5 8-6.5 8-11V6.5L12 2z"/></svg><b>01 Ingredient Tracking</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M12 3a4 4 0 0 0-4 4c0 3 4 8 4 8s4-5 4-8a4 4 0 0 0-4-4z"/></svg><b>02 Low Stock Alerts</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13" rx="1.5"/><path d="M16 8h4l3 6v3h-7V8z"/></svg><b>03 Supplier Sync</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg><b>04 Cost Analysis</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="1.5"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg><b>05 Waste Insights</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><b>06 Order Automation</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M12 3a5 5 0 0 0-5 5c0 4.5 5 10 5 10s5-5.5 5-10a5 5 0 0 0-5-5z"/></svg><b>07 Multi-Location</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18"/></svg><b>08 Batch Expiry</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg><b>09 Recipe Costing</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l3-3 3 2 4-5"/></svg><b>10 Reports & Analytics</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21l-2-3h12l-2 3"/></svg><b>11 Mobile Scanning</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M12 10v3"/><circle cx="12" cy="17" r="2"/></svg><b>12 Integrations</b></div>
-</div></div>
-<div class="phone-wrap"><div class="phone"><div class="phone-notch"></div><div class="phone-head">Dashboard</div><div class="main"><div style="font-size:9px;color:#8A8A8A">Current Stock Value</div><b>$12,840</b><div style="font-size:9px;color:#6fcf8a">-8.2% vs last week →</div></div><div class="row"><div class="sm"><svg viewBox="0 0 24 24"><path d="M12 2L4 6v6c0 5 3 3 8 10 5-1 8-5 8-10V6l-8-4z"/></svg><b>Low Stock</b><div>4 Items</div></div><div class="sm"><svg viewBox="0 0 24 24"><path d="M12 3L2 19h20L12 3z"/></svg><b>Expiring Soon</b><div>2 Items</div></div></div></div></div>
-<footer>Built for modern kitchens. Inspired by Linear · Stripe.<br><br>alovOS · v0.12 · Join the waitlist → · Privacy · Contact</footer>
+<div class="hero">
+<div class="badge mono" data-i18n="badge">Restaurant Inventory OS · Beta</div>
+<h1 class="serif" data-i18n="title">Track stock. Cut waste.<br><i>Stay in control.</i></h1>
+<p data-i18n="subtitle">The modern OS for restaurant inventory. Real-time tracking and automated reorders.</p>
+<div><a class="btn btn-primary" href="#" data-i18n="cta1">Start Free Trial</a><a class="btn btn-ghost" href="#" data-i18n="cta2">View Dashboard</a></div>
+</div>
+<div class="grid-wrap">
+<div class="grid-label mono" data-i18n="label">Core Modules — 12 steps to automation</div>
+<div class="grid">
+<div class="card"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v5c0 5 4.5 8 9 10 4.5-2 9-5 9-10V7L12 2z"/></svg><b data-i18n="m1">Inventory</b><span data-i18n="d1">Real-time stock</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 6v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg><b data-i18n="m2">Suppliers</b><span data-i18n="d2">Direct orders</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M6 2h12l4 6v14H2V8l4-6z"/><path d="M6 2v6h12V2"/><path d="M9 14h6"/></svg><b data-i18n="m3">Orders</b><span data-i18n="d3">Auto reorder</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 12 7 12s7-7 7-12a7 7 0 0 0-7-7z"/></svg><b data-i18n="m4">Waste</b><span data-i18n="d4">Reduce 30%</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><b data-i18n="m5">Recipes</b><span data-i18n="d5">Dish costing</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg><b data-i18n="m6">Costs</b><span data-i18n="d6">Margins</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg><b data-i18n="m7">Teams</b><span data-i18n="d7">Roles & access</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-6"/></svg><b data-i18n="m8">Reports</b><span data-i18n="d8">Daily insights</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7-6 13-6 13S6 15 6 8z"/><circle cx="12" cy="8" r="2"/></svg><b data-i18n="m9">Alerts</b><span data-i18n="d9">Low stock</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1" fill="white"/><circle cx="14" cy="12" r="1" fill="white"/><circle cx="10" cy="18" r="1" fill="white"/></svg><b data-i18n="m10">POS Sync</b><span data-i18n="d10">Square, Toast</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9l-2.1 2.1M7 17l-2.1 2.1"/></svg><b data-i18n="m11">Multi-Unit</b><span data-i18n="d11">All locations</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><b data-i18n="m12">API</b><span data-i18n="d12">Integrations</span></div>
+</div>
+</div>
+<footer><div>alovOS v0.15 · Built for modern kitchens · Baku, AZ</div><div style="display:flex;gap:14px"><a href="#" style="color:inherit;text-decoration:none">Privacy</a><a href="#" style="color:inherit;text-decoration:none">Terms</a><span style="opacity:.6">support@alovos.app — soon</span></div></footer>
+<script>
+const dict={
+az:{badge:"Restoran Anbar OS · Beta",title:"Stoku izlə. Tullantını azalt.<br><i>Nəzarətdə qal.</i>",subtitle:"Restoran anbarı üçün müasir OS. Real vaxt izləmə və avtomatik sifariş.",cta1:"Pulsuz Başla",cta2:"Panelə bax",label:"Əsas Modullar — 12 addım",m1:"Anbar",m2:"Təchizatçılar",m3:"Sifarişlər",m4:"Tullantı",m5:"Reseptlər",m6:"Xərclər",m7:"Komanda",m8:"Hesabat",m9:"Xəbərdarlıq",m10:"POS Sinxron",m11:"Çox Məkan",m12:"API",d1:"Canlı stok",d2:"Birbaşa sifariş",d3:"Avto sifariş",d4:"30% azalma",d5:"Yemək maya dəyəri",d6:"Marja",d7:"Rollar və giriş",d8:"Günlük analiz",d9:"Az stok",d10:"Square, Toast",d11:"Bütün məkanlar",d12:"İnteqrasiyalar"},
+ru:{badge:"Restaurant Inventory OS · Бета",title:"Отслеживай склад. Сокращай потери.<br><i>Держи контроль.</i>",subtitle:"Современная ОС для ресторанного склада. Учет и автозаказы.",cta1:"Начать бесплатно",cta2:"Дашборд",label:"Модули — 12 шагов",m1:"Склад",m2:"Поставщики",m3:"Заказы",m4:"Потери",m5:"Рецепты",m6:"Расходы",m7:"Команда",m8:"Отчеты",m9:"Алерты",m10:"POS Синхрон",m11:"Сеть точек",m12:"API",d1:"Живой учет",d2:"Прямые заказы",d3:"Автозаказ",d4:"Минус 30%",d5:"Себестоимость блюд",d6:"Маржинальность",d7:"Роли и доступы",d8:"Ежедневная аналитика",d9:"Мало на складе",d10:"Square, Toast",d11:"Все точки",d12:"Интеграции"},
+en:{badge:"Restaurant Inventory OS · Beta",title:"Track stock. Cut waste.<br><i>Stay in control.</i>",subtitle:"The modern OS for restaurant inventory. Real-time tracking and automated reorders.",cta1:"Start Free Trial",cta2:"View Dashboard",label:"Core Modules — 12 steps to automation",m1:"Inventory",m2:"Suppliers",m3:"Orders",m4:"Waste",m5:"Recipes",m6:"Costs",m7:"Teams",m8:"Reports",m9:"Alerts",m10:"POS Sync",m11:"Multi-Unit",m12:"API",d1:"Real-time stock",d2:"Direct orders",d3:"Auto reorder",d4:"Reduce 30%",d5:"Dish costing",d6:"Margins",d7:"Roles & access",d8:"Daily insights",d9:"Low stock",d10:"Square, Toast",d11:"All locations",d12:"Integrations"}
+};
+function setLang(l){localStorage.setItem('alovos_lang',l);document.querySelectorAll('[data-i18n]').forEach(e=>{const k=e.getAttribute('data-i18n');if(dict[l][k])e.innerHTML=dict[l][k]});document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('active',b.dataset.lang===l))}
+document.querySelectorAll('.lang button').forEach(b=>b.addEventListener('click',()=>setLang(b.dataset.lang)));setLang(localStorage.getItem('alovos_lang')||'en');
+</script>
 </body>
-  </html>
+</html>
