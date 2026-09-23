@@ -12,8 +12,6 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;font-we
 .serif{font-family:'Cormorant Garamond',serif;font-weight:300}
 .mono{font-family:'JetBrains Mono',monospace;font-weight:300}
 .nav{max-width:1120px;margin:0 auto;padding:24px;display:flex;justify-content:space-between;align-items:center}
-.logo-text{font-family:'Cormorant Garamond',serif;font-size:30px;font-weight:300;letter-spacing:.02em}
-.logo-text em{font-style:normal;color:var(--copper)}
 .lang{display:flex;gap:4px;background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:999px;padding:4px}
 .lang button{background:0 0;border:0;color:var(--muted);font-size:11px;padding:6px 12px;border-radius:999px;cursor:pointer;letter-spacing:.1em}
 .lang button.active{background:var(--fg);color:#000}
@@ -25,7 +23,6 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;font-we
 .btn{padding:12px 22px;border-radius:999px;font-size:13px;text-decoration:none;display:inline-block;border:1px solid transparent}
 .btn-primary{background:var(--fg);color:#000}
 .btn-ghost{border-color:var(--border);color:var(--fg);margin-left:8px}
-/* GRID AS YOU WANTED */
 .grid-wrap{max-width:1120px;margin:0 auto;padding:18px 24px}
 .grid-label{font-size:10px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;display:flex;gap:10px;align-items:center}
 .grid-label:after{content:'';height:1px;flex:1;background:var(--border)}
@@ -41,9 +38,8 @@ footer{max-width:1120px;margin:40px auto 0;padding:20px 24px;border-top:1px soli
 </head>
 <body>
 <nav class="nav">
-<div class="logo" style="display:flex;align-items:center;gap:10px">
-  <img src="logo.png" alt="alovOS" style="height:32px;width:auto">
-  <div class="logo-text">al<span style="color:var(--copper)">o</span>vOS</div>
+<div class="logo">
+  <img src="logo.png" alt="alovOS" style="height:34px;width:auto;display:block">
 </div>
 <div class="lang"><button data-lang="az">AZ</button><button data-lang="ru">RU</button><button data-lang="en" class="active">EN</button></div>
 </nav>
@@ -70,7 +66,7 @@ footer{max-width:1120px;margin:40px auto 0;padding:20px 24px;border-top:1px soli
 <div class="card"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><b data-i18n="m12">API</b><span>Integrations</span></div>
 </div>
 </div>
-<footer><div>alovOS v0.13 · Built for modern kitchens</div><div><a href="#" style="color:inherit;text-decoration:none;margin-right:10px">Privacy</a><a href="#" style="color:inherit;text-decoration:none">WhatsApp</a></div></footer>
+<footer><div>alovOS v0.14 · Built for modern kitchens</div><div><a href="#" style="color:inherit;text-decoration:none;margin-right:10px">Privacy</a><a href="#" style="color:inherit;text-decoration:none">WhatsApp</a></div></footer>
 <script>
 const dict={
 az:{badge:"Restoran Anbar OS · Beta",title:"Stoku izlə. Tullantını azalt.<br><i>Nəzarətdə qal.</i>",subtitle:"Restoran anbarı üçün müasir OS. Real vaxt izləmə və avtomatik sifariş.",cta1:"Pulsuz Başla",cta2:"Panelə bax",label:"Əsas Modullar — 12 addım",m1:"Anbar",m2:"Təchizatçılar",m3:"Sifarişlər",m4:"Tullantı",m5:"Reseptlər",m6:"Xərclər",m7:"Komanda",m8:"Hesabat",m9:"Xəbərdarlıq",m10:"POS Sinxron",m11:"Çox Məkan",m12:"API"},
@@ -81,4 +77,4 @@ function setLang(l){localStorage.setItem('alovos_lang',l);document.querySelector
 document.querySelectorAll('.lang button').forEach(b=>b.addEventListener('click',()=>setLang(b.dataset.lang)));setLang(localStorage.getItem('alovos_lang')||'en');
 </script>
 </body>
-</html>
+  </html>
