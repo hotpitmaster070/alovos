@@ -4,32 +4,33 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>alovOS</title>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=JetBrains+Mono:wght@300&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#0a0a0a;--fg:#f6f3ef;--m:#8e8e8e;--m2:#5a5a5a;--b:rgba(255,255,255,.08);--card:#141414}
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;font-weight:300}
-.nav{max-width:1120px;margin:0 auto;padding:22px 16px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
-.logo-center{grid-column:2;justify-self:center;display:flex;align-items:center;gap:10px;font-size:32px;font-weight:400;letter-spacing:-.02em}
-.lang{grid-column:3;justify-self:end;display:flex;gap:2px;background:rgba(255,255,255,.06);border:1px solid var(--b);border-radius:999px;padding:2px}
+body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;font-weight:300;padding-bottom:30px}
+.nav{position:relative;display:flex;justify-content:center;align-items:center;padding:22px 16px;max-width:1120px;margin:0 auto}
+.logo-center{display:flex;align-items:center;gap:10px;font-size:32px;font-weight:400;letter-spacing:-.02em;line-height:1}
+.logo-center svg{width:34px;height:34px}
+.lang{position:absolute;right:16px;top:50%;transform:translateY(-50%);display:flex;gap:2px;background:rgba(255,255,255,.06);border:1px solid var(--b);border-radius:999px;padding:2px}
 .lang button{background:0 0;border:0;color:#5a5a5a;font-size:10px;padding:6px 11px;border-radius:999px;cursor:pointer}
 .lang button.active{background:#f6f3ef;color:#000}
-.hero{max-width:720px;margin:0 auto;padding:18px 16px 0;text-align:center}
+.hero{max-width:720px;margin:0 auto;padding:12px 16px 0;text-align:center}
 .badge{border:1px solid var(--b);border-radius:999px;padding:5px 12px;font-size:8.5px;letter-spacing:.18em;color:#8e8e8e;text-transform:uppercase;display:inline-block;background:rgba(255,255,255,.03)}
-.hero h1{font-size:clamp(30px,6.5vw,46px);line-height:.95;margin:16px 0 10px;font-weight:500}
+.hero h1{font-size:clamp(28px,6.5vw,44px);line-height:.95;margin:14px 0 10px;font-weight:500}
 .hero p{color:#8e8e8e;max-width:520px;margin:0 auto 18px;font-size:13px;line-height:1.5}
 .btns{display:flex;justify-content:center;gap:8px}
 .btn{padding:11px 20px;border-radius:999px;font-size:12.5px;text-decoration:none;font-weight:500;border:1px solid transparent}
 .btn-primary{background:#f6f3ef;color:#000}.btn-ghost{border-color:rgba(255,255,255,.08);color:#f6f3ef}
-.grid-wrap{max-width:720px;margin:22px auto 0;padding:0 12px}
+.grid-wrap{max-width:720px;margin:20px auto 0;padding:0 12px}
 .grid-label{font-size:8.5px;letter-spacing:.22em;color:#5a5a5a;text-transform:uppercase;margin:0 0 10px;display:flex;gap:10px;align-items:center}
 .grid-label:after{content:'';height:1px;flex:1;background:rgba(255,255,255,.08)}
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .card{border:1px solid rgba(255,255,255,.08);background:#141414;border-radius:10px;padding:12px 10px;min-height:74px}
 .card svg{width:16px;height:16px;stroke:#f6f3ef;stroke-width:1.2;fill:none;opacity:.7;margin-bottom:6px;display:block}
-.card b{font-size:10px;font-weight:500;display:block;color:#d8d8d8}
-.phone-wrap{max-width:720px;margin:20px auto 0;padding:0 16px;display:flex;justify-content:center}
-.phone{width:100%;max-width:320px;background:linear-gradient(180deg,#151515 0%,#0f0f0f 100%);border:1px solid rgba(255,255,255,.09);border-radius:28px;padding:8px 8px 12px;box-shadow:0 20px 60px rgba(0,0,0,.8)}
+.card b{font-size:10px;font-weight:500;display:block;color:#d8d8d8;line-height:1.3}
+.phone-wrap{max-width:720px;margin:18px auto 0;padding:0 16px;display:flex;justify-content:center}
+.phone{width:100%;max-width:320px;background:linear-gradient(180deg,#151515 0%,#0f0f0f 100%);border:1px solid rgba(255,255,255,.09);border-radius:28px;padding:8px 8px 12px}
 .phone-notch{width:72px;height:16px;background:#000;border-radius:0 0 10px 10px;margin:0 auto 8px}
 .phone-head{text-align:center;font-size:11px;color:#f6f3ef;padding:2px 0 10px;font-weight:500}
 .main{border:1px solid rgba(255,255,255,.08);background:#1a1a1a;border-radius:12px;padding:12px;text-align:center}
@@ -37,20 +38,18 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;font-we
 .row{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}
 .sm{border:1px solid rgba(255,255,255,.08);background:#161616;border-radius:10px;padding:8px}
 footer{max-width:720px;margin:18px auto 0;padding:14px 12px 20px;text-align:center;color:#5a5a5a;font-size:9px}
-@media(max-width:600px){.grid{grid-template-columns:repeat(3,1fr);gap:6px}.nav{padding:18px 12px}.logo-center{font-size:28px}}
 </style>
 </head>
 <body>
 <nav class="nav">
-<div></div>
 <div class="logo-center">
 <svg viewBox="0 0 32 32" fill="none"><path d="M16 2L4 9v14l12 7 12-7V9L16 2z" stroke="#f6f3ef" stroke-width="1.1"/><path d="M4 9l12 7 12-7" stroke="#f6f3ef" stroke-width="1.1"/><path d="M16 16v13" stroke="#f6f3ef" stroke-width="1.1" opacity=".4"/></svg>
 alovOS
 </div>
-<div class="lang"><button data-lang="az" class="active">AZ</button><button data-lang="ru">RU</button><button data-lang="en">EN</button></div>
+<div class="lang"><button data-lang="az">AZ</button><button data-lang="ru">RU</button><button data-lang="en" class="active">EN</button></div>
 </nav>
 <div class="hero">
-<div class="mono" style="border:1px solid rgba(255,255,255,.08);border-radius:999px;padding:5px 12px;font-size:8.5px;letter-spacing:.18em;color:#8e8e8e;display:inline-block">Restaurant Inventory OS · Now in beta</div>
+<div class="badge mono">Restaurant Inventory OS · Now in beta</div>
 <h1>Track stock. Cut waste.<br>Stay in control.</h1>
 <p>The modern operating system for restaurant inventory. Real-time tracking, automated reorders, and cost insights for modern kitchens.</p>
 <div class="btns"><a class="btn btn-primary" href="#">Get Started</a><a class="btn btn-ghost" href="#">See Roadmap</a></div>
@@ -62,8 +61,8 @@ alovOS
 <div class="card"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7-6 13-6 13S6 15 6 8z"/><circle cx="12" cy="8" r="2"/></svg><b>02 Low Stock Alerts</b></div>
 <div class="card"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 6v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg><b>03 Supplier Sync</b></div>
 <div class="card"><svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg><b>04 Cost Analysis</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><b>05 Waste Insights</b></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><b>06 Order Automation</b></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg><b>05 Waste Insights</b></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/></svg><b>06 Order Automation</b></div>
 <div class="card"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 12 7 12s7-7 7-12a7 7 0 0 0-7-7z"/></svg><b>07 Multi-Location</b></div>
 <div class="card"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 8h18"/></svg><b>08 Batch Expiry</b></div>
 <div class="card"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg><b>09 Recipe Costing</b></div>
