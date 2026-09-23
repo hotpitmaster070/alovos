@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>alov os — restaurant inventory OS</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>body{font-family:Inter;background:#080808;color:#fff}</style>
+</head>
+<body class="bg-[#080808]">
+<!-- HEADER -->
+<header class="flex items-center justify-between px-6 md:px-10 py-4 border-b border-white/[0.07] sticky top-0 bg-[#080808]/90 backdrop-blur z-20">
+  <div class="flex items-center gap-2.5">
+    <!-- ТВОЙ НОВЫЙ ОГОНЬ -->
+    <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M16 2C12 8 8 12 8 18C8 23 11 28 18 28C20 28 26 26 26 19C26 14 22 10 20 8C20 12 18 16 15 18C15 14 16 8 16 2Z" fill="#D4A574"/><path d="M20 10C20 13 19 15 17 17C18 16 20 14 20 10Z" fill="#E8B4A0"/></svg>
+    <span class="text-[20px] tracking-tight font-medium">alov os</span>
+  </div>
+  <nav class="hidden md:flex gap-6 text-sm text-white/40"><a>Features</a><a>Pricing</a><a>Integrations</a><a>Docs</a><a>Changelog</a></nav>
+  <div class="flex gap-2"><button class="hidden md:block px-4 py-2 rounded-lg border border-white/10 text-sm">Log in</button><button class="px-4 py-2 rounded-lg bg-white text-black text-sm font-semibold">Start Free Trial</button></div>
+</header>
+
+<main>
+<!-- HERO: на телефоне центр, на компе 2 колонки -->
+<section class="px-6 md:px-10 pt-12 md:pt-20 max-w-[1200px] mx-auto md:grid md:grid-cols-2 md:gap-12">
+  <div class="text-center md:text-left">
+    <div class="inline-block px-3 py-1 rounded-full border border-white/10 text-[10px] tracking-widest text-white/50 mb-6">NEW • RESTAURANT INVENTORY OS</div>
+    <h1 class="text-[34px] md:text-[52px] font-bold leading-[0.95] tracking-tight">Track stock.<br>Cut waste.<br>Stay in control.</h1>
+    <p class="text-white/50 mt-4 text-[14px] leading-relaxed">Live inventory, smart alerts, and simple workflows for kitchens, cafes, and multi-unit brands.</p>
+    <div class="flex flex-col md:flex-row gap-3 mt-7 justify-center md:justify-start">
+      <button class="px-6 py-3 rounded-xl bg-white text-black font-semibold text-sm">Start Free Trial — it's free</button>
+      <button class="px-6 py-3 rounded-xl border border-white/15 text-sm">▶ See how it works</button>
+    </div>
+  </div>
+  <!-- Телефон / Дашборд -->
+  <div class="mt-10 md:mt-0 bg-[#121212] border border-white/10 rounded-[24px] p-4 md:p-6">
+    <div class="flex justify-between items-center mb-5"><span class="text-sm font-medium">Inventory Overview</span><span class="text-[11px] px-2 py-1 bg-white/10 rounded-lg">Last 7 days</span></div>
+    <div class="grid grid-cols-2 gap-3">
+      <div class="bg-[#0A0A0A] border border-white/5 rounded-xl p-4"><div class="text-[11px] text-white/40">Current Stock</div><div class="text-xl mt-1">$24,380</div><div class="text-[10px] text-emerald-400 mt-1">+8.2%</div></div>
+      <div class="bg-[#0A0A0A] border border-white/5 rounded-xl p-4"><div class="text-[11px] text-white/40">Low Stock</div><div class="text-xl mt-1">3 items</div><div class="text-[10px] text-white/40">Flour • Salmon</div></div>
+      <div class="col-span-2 bg-[#0A0A0A] border border-white/5 rounded-xl p-4"><div class="text-xs">Recent Alerts</div><div class="text-[11px] text-white/60 mt-2">Tomato below threshold • 2h ago</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP 12 БЛОКОВ: на телефоне 3 колонки, на компе 4 -->
+<section class="px-6 md:px-10 mt-20 max-w-[1200px] mx-auto">
+  <h2 class="text-center md:text-left text-sm text-white/40 tracking-widest mb-6">12-MODULE ROADMAP</h2>
+  <div class="grid grid-cols-3 md:grid-cols-4 gap-3">
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Inventory</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Suppliers</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Orders</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Waste</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Recipes</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Costs</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Teams</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Reports</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Alerts</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">POS Sync</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">Multi-unit</div></div>
+    <div class="bg-[#121212] border border-white/10 rounded-xl p-4"><div class="w-7 h-7 bg-white/10 rounded-lg mb-3"></div><div class="text-[12px] font-medium">API</div></div>
+  </div>
+</section>
+</main>
+
+<footer class="text-center text-white/20 text-xs py-10 mt-10">© 2026 alov os</footer>
+</body>
+</html>
