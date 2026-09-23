@@ -32,15 +32,13 @@ body{background:var(--bg);color:var(--fg);font-family:'Inter',sans-serif;font-we
 .card svg{width:20px;height:20px;stroke:var(--fg);stroke-width:1.2;fill:none;opacity:.9;margin-bottom:8px}
 .card b{font-size:12px;font-weight:400;display:block;letter-spacing:.01em}
 .card span{font-size:10px;color:var(--muted)}
-footer{max-width:1120px;margin:40px auto 0;padding:20px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;color:var(--muted);font-size:10px;letter-spacing:.08em}
+footer{max-width:1120px;margin:40px auto 0;padding:22px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:10px;letter-spacing:.08em}
 @media(max-width:600px){.grid{grid-template-columns:repeat(3,1fr);gap:8px}.card{padding:12px 10px}.card b{font-size:11px}}
 </style>
 </head>
 <body>
 <nav class="nav">
-<div class="logo">
-  <img src="logo.png" alt="alovOS" style="height:52px;width:auto;display:block;filter:brightness(1.1)">
-</div>
+<div class="logo"><img src="logo.png" alt="alovOS" style="height:56px;width:auto;display:block"></div>
 <div class="lang"><button data-lang="az">AZ</button><button data-lang="ru">RU</button><button data-lang="en" class="active">EN</button></div>
 </nav>
 <div class="hero">
@@ -52,29 +50,29 @@ footer{max-width:1120px;margin:40px auto 0;padding:20px 24px;border-top:1px soli
 <div class="grid-wrap">
 <div class="grid-label mono" data-i18n="label">Core Modules — 12 steps to automation</div>
 <div class="grid">
-<div class="card"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v5c0 5 4.5 8 9 10 4.5-2 9-5 9-10V7L12 2z"/></svg><b data-i18n="m1">Inventory</b><span>Real-time stock</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 6v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg><b data-i18n="m2">Suppliers</b><span>Direct orders</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M6 2h12l4 6v14H2V8l4-6z"/><path d="M6 2v6h12V2"/><path d="M9 14h6"/></svg><b data-i18n="m3">Orders</b><span>Auto reorder</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 12 7 12s7-7 7-12a7 7 0 0 0-7-7z"/></svg><b data-i18n="m4">Waste</b><span>Reduce 30%</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><b data-i18n="m5">Recipes</b><span>Dish costing</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg><b data-i18n="m6">Costs</b><span>Margins</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg><b data-i18n="m7">Teams</b><span>Roles & access</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-6"/></svg><b data-i18n="m8">Reports</b><span>Daily insights</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7-6 13-6 13S6 15 6 8z"/><circle cx="12" cy="8" r="2"/></svg><b data-i18n="m9">Alerts</b><span>Low stock</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1" fill="white"/><circle cx="14" cy="12" r="1" fill="white"/><circle cx="10" cy="18" r="1" fill="white"/></svg><b data-i18n="m10">POS Sync</b><span>Square, Toast</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9l-2.1 2.1M7 17l-2.1 2.1"/></svg><b data-i18n="m11">Multi-Unit</b><span>All locations</span></div>
-<div class="card"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><b data-i18n="m12">API</b><span>Integrations</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v5c0 5 4.5 8 9 10 4.5-2 9-5 9-10V7L12 2z"/></svg><b data-i18n="m1">Inventory</b><span data-i18n="d1">Real-time stock</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 6v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg><b data-i18n="m2">Suppliers</b><span data-i18n="d2">Direct orders</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M6 2h12l4 6v14H2V8l4-6z"/><path d="M6 2v6h12V2"/><path d="M9 14h6"/></svg><b data-i18n="m3">Orders</b><span data-i18n="d3">Auto reorder</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 12 7 12s7-7 7-12a7 7 0 0 0-7-7z"/></svg><b data-i18n="m4">Waste</b><span data-i18n="d4">Reduce 30%</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg><b data-i18n="m5">Recipes</b><span data-i18n="d5">Dish costing</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg><b data-i18n="m6">Costs</b><span data-i18n="d6">Margins</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0 1 16 0"/></svg><b data-i18n="m7">Teams</b><span data-i18n="d7">Roles & access</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 16V9"/><path d="M12 16V5"/><path d="M17 16v-6"/></svg><b data-i18n="m8">Reports</b><span data-i18n="d8">Daily insights</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7-6 13-6 13S6 15 6 8z"/><circle cx="12" cy="8" r="2"/></svg><b data-i18n="m9">Alerts</b><span data-i18n="d9">Low stock</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1" fill="white"/><circle cx="14" cy="12" r="1" fill="white"/><circle cx="10" cy="18" r="1" fill="white"/></svg><b data-i18n="m10">POS Sync</b><span data-i18n="d10">Square, Toast</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9l-2.1 2.1M7 17l-2.1 2.1"/></svg><b data-i18n="m11">Multi-Unit</b><span data-i18n="d11">All locations</span></div>
+<div class="card"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><b data-i18n="m12">API</b><span data-i18n="d12">Integrations</span></div>
 </div>
 </div>
-<footer><div>alovOS v0.14 · Built for modern kitchens</div><div><a href="#" style="color:inherit;text-decoration:none;margin-right:10px">Privacy</a><a href="#" style="color:inherit;text-decoration:none">WhatsApp</a></div></footer>
+<footer><div>alovOS v0.15 · Built for modern kitchens · Baku, AZ</div><div style="display:flex;gap:14px"><a href="#" style="color:inherit;text-decoration:none">Privacy</a><a href="#" style="color:inherit;text-decoration:none">Terms</a><span style="opacity:.6">support@alovos.app — soon</span></div></footer>
 <script>
 const dict={
-az:{badge:"Restoran Anbar OS · Beta",title:"Stoku izlə. Tullantını azalt.<br><i>Nəzarətdə qal.</i>",subtitle:"Restoran anbarı üçün müasir OS. Real vaxt izləmə və avtomatik sifariş.",cta1:"Pulsuz Başla",cta2:"Panelə bax",label:"Əsas Modullar — 12 addım",m1:"Anbar",m2:"Təchizatçılar",m3:"Sifarişlər",m4:"Tullantı",m5:"Reseptlər",m6:"Xərclər",m7:"Komanda",m8:"Hesabat",m9:"Xəbərdarlıq",m10:"POS Sinxron",m11:"Çox Məkan",m12:"API"},
-ru:{badge:"Restaurant Inventory OS · Бета",title:"Отслеживай склад. Сокращай потери.<br><i>Держи контроль.</i>",subtitle:"Современная ОС для ресторанного склада. Учет и автозаказы.",cta1:"Начать бесплатно",cta2:"Дашборд",label:"Модули — 12 шагов",m1:"Склад",m2:"Поставщики",m3:"Заказы",m4:"Потери",m5:"Рецепты",m6:"Расходы",m7:"Команда",m8:"Отчеты",m9:"Алерты",m10:"POS Синхрон",m11:"Сеть точек",m12:"API"},
-en:{badge:"Restaurant Inventory OS · Beta",title:"Track stock. Cut waste.<br><i>Stay in control.</i>",subtitle:"The modern OS for restaurant inventory. Real-time tracking and automated reorders.",cta1:"Start Free Trial",cta2:"View Dashboard",label:"Core Modules — 12 steps to automation",m1:"Inventory",m2:"Suppliers",m3:"Orders",m4:"Waste",m5:"Recipes",m6:"Costs",m7:"Teams",m8:"Reports",m9:"Alerts",m10:"POS Sync",m11:"Multi-Unit",m12:"API"}
+az:{badge:"Restoran Anbar OS · Beta",title:"Stoku izlə. Tullantını azalt.<br><i>Nəzarətdə qal.</i>",subtitle:"Restoran anbarı üçün müasir OS. Real vaxt izləmə və avtomatik sifariş.",cta1:"Pulsuz Başla",cta2:"Panelə bax",label:"Əsas Modullar — 12 addım",m1:"Anbar",m2:"Təchizatçılar",m3:"Sifarişlər",m4:"Tullantı",m5:"Reseptlər",m6:"Xərclər",m7:"Komanda",m8:"Hesabat",m9:"Xəbərdarlıq",m10:"POS Sinxron",m11:"Çox Məkan",m12:"API",d1:"Canlı stok",d2:"Birbaşa sifariş",d3:"Avto sifariş",d4:"30% azalma",d5:"Yemək maya dəyəri",d6:"Marja",d7:"Rollar və giriş",d8:"Günlük analiz",d9:"Az stok",d10:"Square, Toast",d11:"Bütün məkanlar",d12:"İnteqrasiyalar"},
+ru:{badge:"Restaurant Inventory OS · Бета",title:"Отслеживай склад. Сокращай потери.<br><i>Держи контроль.</i>",subtitle:"Современная ОС для ресторанного склада. Учет и автозаказы.",cta1:"Начать бесплатно",cta2:"Дашборд",label:"Модули — 12 шагов",m1:"Склад",m2:"Поставщики",m3:"Заказы",m4:"Потери",m5:"Рецепты",m6:"Расходы",m7:"Команда",m8:"Отчеты",m9:"Алерты",m10:"POS Синхрон",m11:"Сеть точек",m12:"API",d1:"Живой учет",d2:"Прямые заказы",d3:"Автозаказ",d4:"Минус 30%",d5:"Себестоимость блюд",d6:"Маржинальность",d7:"Роли и доступы",d8:"Ежедневная аналитика",d9:"Мало на складе",d10:"Square, Toast",d11:"Все точки",d12:"Интеграции"},
+en:{badge:"Restaurant Inventory OS · Beta",title:"Track stock. Cut waste.<br><i>Stay in control.</i>",subtitle:"The modern OS for restaurant inventory. Real-time tracking and automated reorders.",cta1:"Start Free Trial",cta2:"View Dashboard",label:"Core Modules — 12 steps to automation",m1:"Inventory",m2:"Suppliers",m3:"Orders",m4:"Waste",m5:"Recipes",m6:"Costs",m7:"Teams",m8:"Reports",m9:"Alerts",m10:"POS Sync",m11:"Multi-Unit",m12:"API",d1:"Real-time stock",d2:"Direct orders",d3:"Auto reorder",d4:"Reduce 30%",d5:"Dish costing",d6:"Margins",d7:"Roles & access",d8:"Daily insights",d9:"Low stock",d10:"Square, Toast",d11:"All locations",d12:"Integrations"}
 };
 function setLang(l){localStorage.setItem('alovos_lang',l);document.querySelectorAll('[data-i18n]').forEach(e=>{const k=e.getAttribute('data-i18n');if(dict[l][k])e.innerHTML=dict[l][k]});document.querySelectorAll('.lang button').forEach(b=>b.classList.toggle('active',b.dataset.lang===l))}
 document.querySelectorAll('.lang button').forEach(b=>b.addEventListener('click',()=>setLang(b.dataset.lang)));setLang(localStorage.getItem('alovos_lang')||'en');
 </script>
 </body>
-  </html>
+</html>
