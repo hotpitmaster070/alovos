@@ -14,7 +14,6 @@ const config: Config = {
         card: "#151515",
         line: "#222222",
         beige: "#D9C5A5",
-        flame: "#FF4D00",
         edge: "#333333",
         muted: "#666666",
       },
