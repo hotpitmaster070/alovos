@@ -1,32 +1,27 @@
 import Link from "next/link";
+import LangSwitcher from "@/components/lang-switcher";
 import { BLOCKS, blockHref } from "@/lib/blocks";
-
-const languages = ["AZ", "RU", "EN"];
 
 function Logo() {
   return (
     <div
-      className="text-[26px] font-medium leading-none tracking-tight text-[#D9C5A5]"
+      className="text-[22px] font-bold leading-none tracking-tighter text-white"
       aria-label="alovOS"
     >
       al
       <svg
         aria-hidden="true"
+        viewBox="4 1 9 13"
+        fill="#FF4D00"
         style={{
           display: "inline-block",
           height: "0.85em",
-          width: "0.6em",
+          width: "0.59em",
           margin: "0 1px",
           verticalAlign: "baseline",
         }}
-        viewBox="0 0 24 34"
-        fill="none"
-        stroke="#D9C5A5"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
       >
-        <path d="M12 2 C 8 12, 4 16, 4 23 C 4 28, 7.6 32, 12 32 C 16.4 32, 20 28, 20 23 C 20 16, 16 12, 12 2Z" />
+        <path d="M12 2C8 6 6 9 8 13C5 12 3 8 12 2Z" />
       </svg>
       vOS
     </div>
@@ -35,37 +30,18 @@ function Logo() {
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-[#0A0A0A] px-4 pt-6">
-      <header className="mx-auto flex max-w-[390px] items-center justify-between">
+    <main className="min-h-screen bg-[#0A0A0A] px-4">
+      <header className="mx-auto flex max-w-[390px] items-center justify-between py-4">
         <Logo />
-        <div
-          className="flex items-center gap-1 rounded-full border border-[#222] p-1"
-          role="group"
-          aria-label="Dil"
-        >
-          {languages.map((lang, i) => (
-            <button
-              key={lang}
-              type="button"
-              aria-pressed={i === 0}
-              className={
-                i === 0
-                  ? "rounded-full bg-[#D9C5A5] px-3 py-1 text-xs font-medium text-black"
-                  : "rounded-full px-3 py-1 text-xs font-medium text-[#888] transition-colors hover:text-white"
-              }
-            >
-              {lang}
-            </button>
-          ))}
-        </div>
+        <LangSwitcher />
       </header>
 
       <section className="mx-auto mt-12 max-w-[390px] text-center">
-        <h1 className="font-serif text-[44px] font-bold leading-[1.1] tracking-tight text-white">
-          Mətbəx üçün OS
+        <h1 className="font-serif text-[32px] font-bold leading-[1.15] tracking-tight text-white">
+          Mətbəx üçün əməliyyat sistemi
         </h1>
-        <p className="mt-3 text-base text-[#888]">
-          Stok. Sifariş. Tullantı — bir yerdə.
+        <p className="mt-3 text-base text-white/60">
+          12 blok. Bir mətbəx əməliyyat sistemi.
         </p>
         <div className="mt-6 flex justify-center gap-3">
           <a
@@ -74,12 +50,12 @@ export default function Home() {
           >
             Pulsuz Başla
           </a>
-          <a
-            href="#"
+          <Link
+            href="/app/dashboard"
             className="rounded-full border border-[#D9C5A5] px-8 py-3 text-sm text-[#D9C5A5]"
           >
             Panelə bax
-          </a>
+          </Link>
         </div>
       </section>
 
@@ -104,9 +80,21 @@ export default function Home() {
         })}
       </section>
 
-      <footer className="mb-20 mt-12 text-center text-[18px] font-semibold text-white">
-        Hər şey daxil — 79 AZN/ay
-      </footer>
+      <div className="mx-auto mb-20 mt-12 max-w-[390px] text-center">
+        <p className="text-3xl font-bold text-white">79 AZN / ay</p>
+        <p className="mt-2 text-sm text-white">
+          Hər şey daxil. 14 gün pulsuz sınaq.
+        </p>
+        <Link
+          href="/app/dashboard"
+          className="mt-4 inline-block rounded-full border border-[#333] bg-black px-6 py-3 text-white"
+        >
+          Başla - pulsuz
+        </Link>
+        <p className="mt-3 text-[11px] text-[#666]">
+          Built for modern kitchens · Baku, AZ.
+        </p>
+      </div>
     </main>
   );
 }
