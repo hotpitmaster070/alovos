@@ -1,3 +1,4 @@
+import type { Lang } from "@/lib/i18n/dictionaries";
 import {
   BookOpen,
   Calculator,
@@ -17,7 +18,9 @@ import {
 export type Block = {
   id: number;
   slug: string;
-  label: string;
+  labelAZ: string;
+  labelRU?: string;
+  labelEN?: string;
   icon: LucideIcon;
   spec: string;
   killer: boolean;
@@ -34,7 +37,9 @@ export const BLOCKS: Block[] = [
   {
     id: 1,
     slug: "anbar",
-    label: "ANBAR",
+    labelAZ: "ANBAR",
+    labelRU: "СКЛАД",
+    labelEN: "STOCK",
     icon: Package,
     spec: "Inventory: products, barcodes, expiry, stock counts, transfers.",
     killer: false,
@@ -43,7 +48,9 @@ export const BLOCKS: Block[] = [
   {
     id: 2,
     slug: "techizat",
-    label: "TƏCHIZAT",
+    labelAZ: "TƏCHIZAT",
+    labelRU: "ПОСТАВКИ",
+    labelEN: "SUPPLY",
     icon: Truck,
     spec: "Suppliers, supplier price lists, purchase requests.",
     killer: false,
@@ -52,7 +59,9 @@ export const BLOCKS: Block[] = [
   {
     id: 3,
     slug: "hesablar",
-    label: "HESABLAR",
+    labelAZ: "HESABLAR",
+    labelRU: "СЧЕТА",
+    labelEN: "INVOICES",
     icon: ReceiptText,
     spec: "Invoices with AI scanning (ai_scan_json).",
     killer: true,
@@ -62,7 +71,9 @@ export const BLOCKS: Block[] = [
   {
     id: 4,
     slug: "reseptler",
-    label: "RESEPTLƏR",
+    labelAZ: "RESEPTLƏR",
+    labelRU: "РЕЦЕПТЫ",
+    labelEN: "RECIPES",
     icon: BookOpen,
     spec: "Recipes: gross/net/waste/yield, live cost, 14 allergens, KBJU.",
     killer: false,
@@ -72,7 +83,9 @@ export const BLOCKS: Block[] = [
   {
     id: 5,
     slug: "tullanti",
-    label: "TULLANTI",
+    labelAZ: "TULLANTI",
+    labelRU: "СПИСАНИЕ",
+    labelEN: "WASTE",
     icon: Trash2,
     spec: "Wastage log: reason, photo, weight, AI Tani.",
     killer: true,
@@ -82,7 +95,9 @@ export const BLOCKS: Block[] = [
   {
     id: 6,
     slug: "hazirliq",
-    label: "HAZIRLIQ",
+    labelAZ: "HAZIRLIQ",
+    labelRU: "ЗАГОТОВКИ",
+    labelEN: "PREP",
     icon: ChefHat,
     spec: "Prep planning and production.",
     killer: false,
@@ -91,7 +106,7 @@ export const BLOCKS: Block[] = [
   {
     id: 7,
     slug: "pos",
-    label: "POS",
+    labelAZ: "POS",
     icon: Calculator,
     spec: "POS sales sync.",
     killer: false,
@@ -100,7 +115,9 @@ export const BLOCKS: Block[] = [
   {
     id: 8,
     slug: "analitika",
-    label: "ANALITIKA",
+    labelAZ: "ANALITIKA",
+    labelRU: "АНАЛИТИКА",
+    labelEN: "ANALYTICS",
     icon: TrendingUp,
     spec: "Analytics reports, menu engineering, auto-advice.",
     killer: true,
@@ -110,7 +127,9 @@ export const BLOCKS: Block[] = [
   {
     id: 9,
     slug: "komanda",
-    label: "KOMANDA",
+    labelAZ: "KOMANDA",
+    labelRU: "КОМАНДА",
+    labelEN: "TEAM",
     icon: Users,
     spec: "Employees with QR and photo.",
     killer: false,
@@ -119,7 +138,7 @@ export const BLOCKS: Block[] = [
   {
     id: 10,
     slug: "haccp",
-    label: "HACCP",
+    labelAZ: "HACCP",
     icon: ShieldCheck,
     spec: "Temperature logs (manual + IoT Shelly) and checklists.",
     killer: true,
@@ -129,7 +148,9 @@ export const BLOCKS: Block[] = [
   {
     id: 11,
     slug: "ai-skaner",
-    label: "AI SKANER",
+    labelAZ: "AI SKANER",
+    labelRU: "AI СКАНЕР",
+    labelEN: "AI SCANNER",
     icon: ScanLine,
     spec: "AI scanner: invoices and waste bucket recognition.",
     killer: true,
@@ -138,13 +159,24 @@ export const BLOCKS: Block[] = [
   {
     id: 12,
     slug: "sebeke",
-    label: "ŞƏBƏKƏ",
+    labelAZ: "ŞƏBƏKƏ",
+    labelRU: "СЕТЬ",
+    labelEN: "NETWORK",
     icon: Network,
     spec: "Network and franchise management.",
     killer: false,
     killers: [],
   },
 ];
+
+const LABEL_KEYS = {
+  AZ: "labelAZ",
+  RU: "labelRU",
+  EN: "labelEN",
+} as const satisfies Record<Lang, keyof Block>;
+
+export const getBlockLabel = (block: Block, lang: Lang): string =>
+  block[LABEL_KEYS[lang]] ?? block.labelAZ;
 
 export const getBlock = (slug: string) => BLOCKS.find((b) => b.slug === slug);
 export const blockHref = (b: Block) => `/app/${b.slug}`;
