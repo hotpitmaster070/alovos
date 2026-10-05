@@ -44,13 +44,13 @@ export default function Sidebar() {
   return (
     <>
       <div className="flex items-center justify-between border-b border-line bg-bg px-4 py-3 lg:hidden">
-        <Link href="/" aria-label="alovOS">
+        <Link href="/">
           <Logo size="sm" />
         </Link>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          aria-label={open ? t.app.closeMenu : t.app.openMenu}
+          aria-label={open ? t.sidebar.closeMenu : t.sidebar.openMenu}
           aria-expanded={open}
           aria-controls="app-nav"
           className="rounded-[12px] border border-line p-2 text-beige"
@@ -69,7 +69,7 @@ export default function Sidebar() {
           open ? "block" : "hidden"
         } border-b border-line bg-bg p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:block lg:w-64 lg:overflow-y-auto lg:border-b-0 lg:border-r`}
       >
-        <Link href="/" className="mb-6 hidden px-3 lg:block" aria-label="alovOS">
+        <Link href="/" className="mb-6 hidden px-3 lg:block">
           <Logo size="sm" />
         </Link>
         <nav aria-label={t.modulesLabel} className="flex flex-col gap-1">
@@ -79,7 +79,7 @@ export default function Sidebar() {
             onNavigate={close}
           >
             <LayoutDashboard className={ICON_CLASSES} strokeWidth={1.5} aria-hidden="true" />
-            {t.app.dashboard}
+            {t.sidebar.dashboard}
           </NavItem>
           {BLOCKS.map((block) => {
             const Icon = block.icon;
@@ -90,7 +90,7 @@ export default function Sidebar() {
                 <span className="flex-1 whitespace-nowrap">{getBlockLabel(block, lang)}</span>
                 {block.killer && (
                   <span className="rounded-full border border-beige px-1.5 py-0.5 text-[8px] text-beige">
-                    {t.app.killer}
+                    {t.sidebar.killer}
                   </span>
                 )}
               </NavItem>

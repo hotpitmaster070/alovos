@@ -10,7 +10,7 @@ export default function DashboardView() {
   return (
     <>
       <h1 className="font-serif text-[32px] font-bold leading-[1.1] tracking-tight">
-        {t.app.dashboard}
+        {t.sidebar.dashboard}
       </h1>
       <p className="mt-3 text-base text-white/60">{t.hero.subtitle}</p>
       <section
