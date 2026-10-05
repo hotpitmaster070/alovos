@@ -1,35 +1,5 @@
-import {
-  BarChart3,
-  Banknote,
-  Bell,
-  BookOpen,
-  Calculator,
-  ClipboardList,
-  Code2,
-  MapPin,
-  Package,
-  Trash2,
-  TrendingUp,
-  Truck,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
-
-const modules: { label: string; icon: LucideIcon; className?: string }[] = [
-  { label: "Anbar", icon: Package },
-  { label: "Təchizatçılar", icon: Truck },
-  { label: "Sifarişlər", icon: ClipboardList },
-  { label: "Tullantı", icon: Trash2 },
-  { label: "Reseptlər", icon: BookOpen },
-  { label: "Xərclər", icon: Banknote },
-  { label: "Hesabat", icon: BarChart3 },
-  { label: "Xəbərdarlıq", icon: Bell },
-  { label: "POS Sinxron", icon: Calculator },
-  { label: "Çox Məkan", icon: MapPin },
-  { label: "Komanda", icon: Users },
-  { label: "API", icon: Code2 },
-  { label: "Analitika", icon: TrendingUp, className: "col-start-2" },
-];
+import Link from "next/link";
+import { BLOCKS, blockHref } from "@/lib/blocks";
 
 const languages = ["AZ", "RU", "EN"];
 
@@ -117,17 +87,21 @@ export default function Home() {
         aria-label="Modullar"
         className="mx-auto mt-10 grid max-w-[390px] grid-cols-3 gap-3"
       >
-        {modules.map(({ label, icon: Icon, className }) => (
-          <div
-            key={label}
-            className={`flex cursor-pointer flex-col items-center gap-2.5 rounded-[18px] border border-[#222] bg-[#151515] px-2 py-5 transition-colors hover:border-[#D9C5A5] ${className ?? ""}`}
-          >
-            <Icon size={28} strokeWidth={1.5} color="#D9C5A5" aria-hidden="true" />
-            <span className="whitespace-nowrap text-center text-[10px] font-medium uppercase tracking-widest text-white">
-              {label}
-            </span>
-          </div>
-        ))}
+        {BLOCKS.map((block) => {
+          const Icon = block.icon;
+          return (
+            <Link
+              key={block.slug}
+              href={blockHref(block)}
+              className="flex cursor-pointer flex-col items-center gap-2.5 rounded-[18px] border border-[#222] bg-[#151515] px-2 py-5 transition-colors hover:border-[#D9C5A5]"
+            >
+              <Icon size={28} strokeWidth={1.5} color="#D9C5A5" aria-hidden="true" />
+              <span className="whitespace-nowrap text-center text-[10px] font-medium uppercase tracking-widest text-white">
+                {block.label}
+              </span>
+            </Link>
+          );
+        })}
       </section>
 
       <footer className="mb-20 mt-12 text-center text-[18px] font-semibold text-white">
