@@ -8,13 +8,17 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Inter (`next/font`), `lucide-
 
 ```bash
 npm install
-cp .env.example .env.local   # optional: Supabase URL + anon key
+cp .env.example .env.local   # optional: Supabase URL + publishable key
 npm run dev -- -p 4317       # http://localhost:4317
 ```
 
 Production build: `npm run build && npm start -- -p 4317`. Lint: `npm run lint`.
 
-The app builds and runs without Supabase env vars (`lib/supabase.ts` returns `null` when they are missing). Apply `supabase/schema.sql` to a Supabase project to create the database (tables, enums, indexes, triggers, RLS).
+The landing and module pages do not import the Supabase client, so they run without env vars; importing `lib/supabase.ts` (auth client) requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+
+## Database
+
+`supabase/migrations/20261006120000_multitenant_rls.sql` is the source of truth: organizations, profiles and org-scoped data tables with RLS, plus a signup trigger that creates an organization and owner profile. Paste it into the Supabase SQL Editor (it is idempotent). `supabase/schema.sql` is legacy and ignored.
 
 ## The 12 BLOCKS FINAL
 
@@ -45,4 +49,4 @@ Single source of truth: `lib/blocks.ts` (landing page and app sidebar). Each blo
 
 ## Status
 
-The 12 module pages are placeholders ("spec implemented, UI next"). The schema, routing, navigation and Supabase client are in place.
+The 12 module pages are placeholders ("spec implemented, UI next"). Routing, navigation, the multitenant migration and the Supabase auth client are in place.
