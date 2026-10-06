@@ -25,3 +25,12 @@ export async function getSession(): Promise<Session | null> {
   if (error) throw error;
   return data.session;
 }
+
+export async function ensureMyOrganization(): Promise<string> {
+  const { data, error } = await supabase.rpc("ensure_my_organization");
+  if (error) throw error;
+  if (typeof data !== "string") {
+    throw new Error("ensure_my_organization returned no organization id");
+  }
+  return data;
+}

@@ -18,7 +18,7 @@ The landing and module pages do not import the Supabase client, so they run with
 
 ## Database
 
-The single source of truth is `supabase/migrations/20261006120000_multitenant_rls.sql` (organizations, profiles, org-scoped data tables, per-operation RLS, hardened signup trigger) plus `supabase/migrations/20261006120001_storage.sql` (private `invoices` bucket, objects must live under `<organization_id>/`). Paste both into the Supabase SQL Editor in that order; they are idempotent. The old draft schema is kept only as `supabase/_legacy/schema.sql.bak` and is not used.
+The single source of truth is `supabase/migrations/20261006120000_multitenant_rls.sql` (organizations, profiles, org-scoped data tables, per-operation RLS, hardened signup trigger) plus `supabase/migrations/20261006120001_storage.sql` (private `invoices` bucket, objects must live under `<organization_id>/`) and `supabase/migrations/20261006120002_ensure_org_rpc.sql` (`ensure_my_organization()` RPC that recovers users whose signup trigger failed). Paste them into the Supabase SQL Editor in that order; they are idempotent. The old draft schema is kept only as `supabase/_legacy/schema.sql.bak` and is not used.
 
 ## The 12 BLOCKS FINAL
 
