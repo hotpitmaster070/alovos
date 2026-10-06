@@ -1,36 +1,35 @@
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "@/lib/supabase";
+import { getBrowserClient } from "@/lib/supabase/client";
+
+export { getOrgId, OrgError, type OrgErrorCode } from "@/lib/org";
 
 export type Credentials = { email: string; password: string };
 
-export async function signUp({ email, password }: Credentials) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+export type SignUpResult =
+  | { status: "signed_in" }
+  | { status: "confirmation_required" }
+  | { status: "email_taken" };
+
+export async function signUp({ email, password }: Credentials): Promise<SignUpResult> {
+  const { data, error } = await getBrowserClient().auth.signUp({ email, password });
   if (error) throw error;
-  return data;
+  // Supabase answers an existing, confirmed address with a user that has no identities.
+  if (data.user && data.user.identities?.length === 0) return { status: "email_taken" };
+  return data.session ? { status: "signed_in" } : { status: "confirmation_required" };
 }
 
-export async function signIn({ email, password }: Credentials) {
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+export async function signIn({ email, password }: Credentials): Promise<void> {
+  const { error } = await getBrowserClient().auth.signInWithPassword({ email, password });
   if (error) throw error;
-  return data;
 }
 
 export async function signOut(): Promise<void> {
-  const { error } = await supabase.auth.signOut();
+  const { error } = await getBrowserClient().auth.signOut();
   if (error) throw error;
 }
 
 export async function getSession(): Promise<Session | null> {
-  const { data, error } = await supabase.auth.getSession();
+  const { data, error } = await getBrowserClient().auth.getSession();
   if (error) throw error;
   return data.session;
-}
-
-export async function ensureMyOrganization(): Promise<string> {
-  const { data, error } = await supabase.rpc("ensure_my_organization");
-  if (error) throw error;
-  if (typeof data !== "string") {
-    throw new Error("ensure_my_organization returned no organization id");
-  }
-  return data;
 }

@@ -14,11 +14,33 @@ npm run dev -- -p 4317       # http://localhost:4317
 
 Production build: `npm run build && npm start -- -p 4317`. Lint: `npm run lint`.
 
-The landing and module pages do not import the Supabase client, so they run without env vars; importing `lib/supabase.ts` (auth client) requires `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+The landing page runs without Supabase env vars; `/login`, `/app/*` and the middleware require `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 
 ## Database
 
-The single source of truth is `supabase/migrations/20261006120000_multitenant_rls.sql` (organizations, profiles, org-scoped data tables, per-operation RLS, hardened signup trigger) plus `supabase/migrations/20261006120001_storage.sql` (private `invoices` bucket, objects must live under `<organization_id>/`) and `supabase/migrations/20261006120002_ensure_org_rpc.sql` (`ensure_my_organization()` RPC that recovers users whose signup trigger failed). Paste them into the Supabase SQL Editor in that order; they are idempotent. The old draft schema is kept only as `supabase/_legacy/schema.sql.bak` and is not used.
+Run the migrations in `supabase/migrations/` in order in the Supabase SQL Editor (all are idempotent):
+
+1. `20261006120000_multitenant_rls.sql` - organizations, profiles, org-scoped data tables, per-operation RLS, hardened signup trigger.
+2. `20261006120001_storage.sql` - private `invoices` bucket; objects must live under `<organization_id>/`.
+3. `20261006120002_ensure_org_rpc.sql` - `ensure_my_organization()` recovery RPC.
+4. `20261006120003_move_stock.sql` - atomic `move_stock()` RPC and the indexes the ANBAR page needs.
+
+The old draft schema is kept only as `supabase/_legacy/schema.sql.bak` and is not used.
+
+## ANBAR (warehouse)
+
+`/app/anbar`: server-rendered, org-scoped inventory with barcode search (keyboard scanners and, where supported, camera), filters (location, expired, low stock, expiry), pagination (50 per page), expiry badges, add product/location and stock moves through the `move_stock` RPC. The organization id is resolved on the server from the verified session and is never taken from the URL, props or storage.
+
+Auth: the Supabase session lives in cookies (`lib/supabase/*`), `middleware.ts` refreshes it and redirects unauthenticated `/app/*` visits to `/login?next=...`. `@supabase/ssr` could not be installed offline, so `lib/supabase/cookie-codec.ts` implements the same cookie layout; swap it for the package when the network allows.
+
+## Checks
+
+```bash
+npm run lint && npx tsc --noEmit
+npm test                      # pure logic + org-scope + actions with a fake client
+npm run check:org-scope       # every products/locations query carries organization_id
+PGLITE_DIR=<dir with @electric-sql/pglite> node supabase/tests/move_stock.test.mjs
+```
 
 ## The 12 BLOCKS FINAL
 

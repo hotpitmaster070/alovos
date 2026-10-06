@@ -1,0 +1,28 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "target": "es2020",
+    "noEmit": false,
+    "incremental": false,
+    "isolatedModules": false,
+    "plugins": [],
+    "outDir": "../.test-out",
+    "rootDir": "..",
+    "baseUrl": "..",
+    "paths": { "@/*": ["./*"] }
+  },
+  "include": [],
+  "files": [
+    "../types/barcode-detector.d.ts",
+    "../lib/anbar/actions.ts",
+    "../lib/anbar/repository.ts",
+    "../lib/anbar/validation.ts",
+    "../lib/expiry.ts",
+    "../lib/auth-redirect.ts",
+    "../lib/auth-errors.ts",
+    "../lib/org.ts",
+    "../lib/supabase/cookie-codec.ts"
+  ]
+}

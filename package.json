@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "tsc -p scripts/tsconfig.test.json && node tests/run.cjs",
+    "check:org-scope": "node scripts/check-org-scope.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.2",

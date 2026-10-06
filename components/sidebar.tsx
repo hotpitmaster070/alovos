@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { LayoutDashboard, Menu, X } from "lucide-react";
+import { LayoutDashboard, LogOut, Menu, X } from "lucide-react";
 import Logo from "@/components/logo";
+import { signOut } from "@/lib/auth";
 import { BLOCKS, blockHref, getBlockLabel } from "@/lib/blocks";
 import { useT } from "@/lib/i18n/useT";
 
@@ -37,9 +38,20 @@ function NavItem({ href, active, onNavigate, children }: NavItemProps) {
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { t, lang } = useT();
   const [open, setOpen] = useState(false);
   const close = () => setOpen(false);
+
+  const onSignOut = async () => {
+    try {
+      await signOut();
+    } finally {
+      close();
+      router.replace("/login");
+      router.refresh();
+    }
+  };
 
   return (
     <>
@@ -97,6 +109,14 @@ export default function Sidebar() {
             );
           })}
         </nav>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="mt-4 flex w-full items-center gap-3 rounded-[12px] border border-transparent px-3 py-2.5 text-[11px] font-medium uppercase tracking-widest text-[#888] transition-colors hover:border-line hover:text-white"
+        >
+          <LogOut className={ICON_CLASSES} strokeWidth={1.5} aria-hidden="true" />
+          {t.sidebar.signOut}
+        </button>
       </aside>
     </>
   );
