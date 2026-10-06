@@ -1,7 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { DEFAULT_AFTER_LOGIN, LOGIN_PATH, safeNextPath } from "@/lib/auth-redirect";
-import { getSupabaseConfig } from "@/lib/supabase/config";
+import {
+  DEFAULT_AFTER_LOGIN,
+  isPublicAnbarPath,
+  LOGIN_PATH,
+  PATHNAME_HEADER,
+  safeNextPath,
+} from "@/lib/auth-redirect";
+import { getSupabaseConfig, isSupabaseConfigError } from "@/lib/supabase/config";
 import {
   COOKIE_MAX_AGE_SECONDS,
   isSessionStale,
@@ -12,11 +18,14 @@ import {
 } from "@/lib/supabase/cookie-codec";
 
 /**
- * Session middleware for /app/* and /login:
+ * Session middleware for /app/*, /onboarding and /login:
+ *  - when the public Supabase env is missing, responds with 503 and the names of the missing variables;
  *  - refreshes an expired access token (written to the request, so server components see it, and to
  *    the response, so the browser stores it); no network call unless the token is stale;
- *  - sends visitors without a session cookie from /app/* to /login?next=<path>;
- *  - sends users with a verified session from /login to /app/anbar (or a validated ?next=).
+ *  - sends visitors without a session cookie from /app/* and /onboarding to /login?next=<path>,
+ *    except /app/anbar, which stays reachable without a session;
+ *  - sends users with a verified session from /login to /app/anbar (or a validated ?next=);
+ *  - records the pathname so the app layout can redirect without a hardcoded path.
  * Pages and server actions still verify the user with auth.getUser(); the cookie is never trusted.
  */
 export async function middleware(request: NextRequest) {
@@ -43,7 +52,7 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    if (!session && !isLogin) {
+    if (!session && !isLogin && !isPublicAnbarPath(pathname)) {
       const login = new URL(LOGIN_PATH, request.url);
       login.searchParams.set("next", safeNextPath(`${pathname}${search}`));
       return NextResponse.redirect(login);
@@ -54,15 +63,29 @@ export async function middleware(request: NextRequest) {
       return withCookies(NextResponse.redirect(new URL(target, request.url)), refreshed, request);
     }
 
-    if (refreshed) {
-      for (const name of refreshed.remove) request.cookies.delete(name);
-      for (const cookie of refreshed.set) request.cookies.set(cookie.name, cookie.value);
-      return withCookies(NextResponse.next({ request }), refreshed, request);
+    return continueRequest(request, refreshed);
+  } catch (error) {
+    if (isSupabaseConfigError(error)) {
+      return new NextResponse(error.message, {
+        status: 503,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      });
     }
     return NextResponse.next();
-  } catch {
-    return NextResponse.next();
   }
+}
+
+function continueRequest(
+  request: NextRequest,
+  refreshed: { set: CookiePair[]; remove: string[] } | null,
+): NextResponse {
+  if (refreshed) {
+    for (const name of refreshed.remove) request.cookies.delete(name);
+    for (const cookie of refreshed.set) request.cookies.set(cookie.name, cookie.value);
+  }
+  const headers = new Headers(request.headers);
+  headers.set(PATHNAME_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
+  return withCookies(NextResponse.next({ request: { headers } }), refreshed, request);
 }
 
 async function isVerified(url: string, key: string, session: StoredSession): Promise<boolean> {
@@ -92,5 +115,5 @@ function withCookies(
 }
 
 export const config = {
-  matcher: ["/app/:path*", "/login"],
+  matcher: ["/app/:path*", "/login", "/onboarding"],
 };

@@ -10,6 +10,14 @@ export type BlockDetails = {
 
 export type AnbarDictionary = {
   title: string;
+  catalog: {
+    title: string;
+    open: string;
+    empty: string;
+    quantity: string;
+    branch: string;
+    noBranch: string;
+  };
   searchLabel: string;
   searchPlaceholder: string;
   searchButton: string;
@@ -122,6 +130,12 @@ export type LoginDictionary = {
   errors: Record<LoginErrorCode, string>;
 };
 
+export type OnboardingDictionary = {
+  title: string;
+  body: string;
+  retry: string;
+};
+
 export type Dictionary = {
   languageLabel: string;
   hero: {
@@ -155,6 +169,7 @@ export type Dictionary = {
   blockDetails: Record<BlockSlug, BlockDetails>;
   anbar: AnbarDictionary;
   login: LoginDictionary;
+  onboarding: OnboardingDictionary;
 };
 
 const AZ: Dictionary = {
@@ -239,6 +254,14 @@ const AZ: Dictionary = {
   },
   anbar: {
     title: "Anbar",
+    catalog: {
+      title: "Kataloq",
+      open: "Kataloq",
+      empty: "Kataloq boşdur",
+      quantity: "Miqdar",
+      branch: "Filial",
+      noBranch: "Filial yoxdur",
+    },
     searchLabel: "Barkod",
     searchPlaceholder: "Barkodu skan edin və ya yazın",
     searchButton: "Axtar",
@@ -369,6 +392,11 @@ const AZ: Dictionary = {
       unknown: "Alınmadı. Yenidən cəhd edin.",
     },
   },
+  onboarding: {
+    title: "Təşkilat tapılmadı",
+    body: "Bu hesaba təşkilat bağlamaq mümkün olmadı. Yenidən cəhd edin və ya başqa hesabla daxil olun.",
+    retry: "Yenidən cəhd et",
+  },
 };
 
 const RU: Dictionary = {
@@ -453,6 +481,14 @@ const RU: Dictionary = {
   },
   anbar: {
     title: "Склад",
+    catalog: {
+      title: "Каталог",
+      open: "Каталог",
+      empty: "В каталоге пока нет товаров",
+      quantity: "Количество",
+      branch: "Филиал",
+      noBranch: "Без филиала",
+    },
     searchLabel: "Штрихкод",
     searchPlaceholder: "Отсканируйте или введите штрихкод",
     searchButton: "Найти",
@@ -583,6 +619,11 @@ const RU: Dictionary = {
       unknown: "Не удалось. Повторите попытку.",
     },
   },
+  onboarding: {
+    title: "Организация не найдена",
+    body: "Не удалось привязать организацию к этому аккаунту. Повторите попытку или войдите в другой аккаунт.",
+    retry: "Повторить",
+  },
 };
 
 const EN: Dictionary = {
@@ -667,6 +708,14 @@ const EN: Dictionary = {
   },
   anbar: {
     title: "Stock",
+    catalog: {
+      title: "Catalog",
+      open: "Catalog",
+      empty: "The catalog is empty",
+      quantity: "Quantity",
+      branch: "Branch",
+      noBranch: "No branch",
+    },
     searchLabel: "Barcode",
     searchPlaceholder: "Scan or type a barcode",
     searchButton: "Search",
@@ -796,6 +845,11 @@ const EN: Dictionary = {
       network: "Network error. Check your connection and try again.",
       unknown: "Something went wrong. Try again.",
     },
+  },
+  onboarding: {
+    title: "No organization",
+    body: "This account has no organization yet. Try again, or sign in with a different account.",
+    retry: "Try again",
   },
 };
 

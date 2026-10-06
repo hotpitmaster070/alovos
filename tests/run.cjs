@@ -32,7 +32,8 @@ const load = (p) => require(path.join(OUT, p));
 const { getExpiryInfo, addDaysUtc } = load("lib/expiry.js");
 const { validateMoveQty, roundQty } = load("lib/anbar/move.js");
 const validation = load("lib/anbar/validation.js");
-const { safeNextPath } = load("lib/auth-redirect.js");
+const { safeNextPath, loginPath, onboardingPath, isPublicAnbarPath } = load("lib/auth-redirect.js");
+const { getSupabaseConfig, SupabaseConfigError } = load("lib/supabase/config.js");
 const { mapAuthError } = load("lib/auth-errors.js");
 const { mapRpcError } = load("lib/anbar/errors.js");
 const codec = load("lib/supabase/cookie-codec.js");
@@ -128,7 +129,10 @@ function makeClient({ rows = [], rpc = {} } = {}) {
   // ---- safe next
   ok("next: relative ok", safeNextPath("/app/anbar?page=2") === "/app/anbar?page=2");
   ok("next: absolute / protocol-relative / backslash / scheme rejected", ["https://evil.com", "//evil.com", "/\\evil.com", "javascript:alert(1)", "evil.com", "/%0d%0a/x".replace("%0d%0a", "\r\n"), ""].every((v) => safeNextPath(v) === "/app/anbar"));
+  ok("next: login and onboarding are not return targets", safeNextPath("/login") === "/app/anbar" && safeNextPath("/onboarding?next=/app/dashboard") === "/app/anbar");
   ok("next: default and array input", safeNextPath(undefined) === "/app/anbar" && safeNextPath(["/app/dashboard", "/x"]) === "/app/dashboard");
+  ok("next: login and onboarding paths", loginPath("/app/dashboard") === "/login?next=" + encodeURIComponent("/app/dashboard") && onboardingPath("/app/anbar?page=2") === "/onboarding?next=" + encodeURIComponent("/app/anbar?page=2"));
+  ok("anbar public path", isPublicAnbarPath("/app/anbar") && isPublicAnbarPath("/app/anbar/kataloq") && !isPublicAnbarPath("/app/dashboard") && !isPublicAnbarPath("/app/anbar-extra"));
 
   // ---- auth error mapping
   ok("authErr: mapped", mapAuthError({ code: "invalid_credentials" }) === "invalidCredentials" && mapAuthError({ code: "weak_password" }) === "weakPassword" && mapAuthError({ code: "user_already_exists" }) === "emailTaken" && mapAuthError({ code: "email_not_confirmed" }) === "emailNotConfirmed" && mapAuthError({ status: 429 }) === "rateLimited" && mapAuthError({ name: "AuthRetryableFetchError", status: 0 }) === "network" && mapAuthError(new TypeError("Failed to fetch")) === "network" && mapAuthError("x") === "unknown" && mapAuthError({ message: "Invalid login credentials" }) === "invalidCredentials");
@@ -198,12 +202,49 @@ function makeClient({ rows = [], rpc = {} } = {}) {
   ok("action: same location rejected before any RPC", r.result.error === "sameLocation" && r.cl.calls.length === 0);
   r = await run("unauthenticated", null, base);
   ok("action: unauthenticated", r.result.error === "unauthenticated");
+  r = await run("no_organization", null, base);
+  ok("action: no organization -> unauthenticated", r.result.error === "unauthenticated");
   r = await run("error", null, base);
   ok("action: org resolution error -> saveFailed", r.result.error === "saveFailed");
   r = await run("ok", { data: null, error: { message: "insufficient_stock" } }, base);
   ok("action: rpc insufficient_stock -> exceedsQty, no revalidate", r.result.error === "exceedsQty" && revalidated.length === 0);
   r = await run("ok", { data: null, error: { message: "location_not_found" } }, base);
   ok("action: rpc location_not_found mapped", r.result.error === "locationNotFound");
+
+  const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const prevKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const throwsConfig = () => {
+    try {
+      getSupabaseConfig();
+      return null;
+    } catch (error) {
+      return error;
+    }
+  };
+  delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  let configError = throwsConfig();
+  ok(
+    "config: missing keys",
+    configError instanceof SupabaseConfigError &&
+      configError.missing.includes("NEXT_PUBLIC_SUPABASE_URL") &&
+      configError.missing.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") &&
+      configError.message.includes(".env.local"),
+  );
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "   ";
+  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "key";
+  configError = throwsConfig();
+  ok("config: blank url is missing", configError instanceof SupabaseConfigError && configError.missing.includes("NEXT_PUBLIC_SUPABASE_URL"));
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "not-a-url";
+  configError = throwsConfig();
+  ok("config: non-http url rejected", configError instanceof SupabaseConfigError && configError.message.includes("http"));
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+  const config = getSupabaseConfig();
+  ok("config: valid env", config.url === "https://example.supabase.co" && config.publishableKey === "key" && config.storageKey === "sb-example-auth-token");
+  if (prevUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+  else process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl;
+  if (prevKey === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  else process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = prevKey;
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

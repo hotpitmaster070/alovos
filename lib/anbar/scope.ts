@@ -1,5 +1,6 @@
+import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getOrgId } from "@/lib/org";
+import { getOrgId, OrgError } from "@/lib/org";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /**
@@ -13,18 +14,26 @@ export type OrgScope = {
 
 export type ScopeResult =
   | { status: "unauthenticated" }
-  | { status: "error" }
+  | { status: "no_organization" }
+  | { status: "error"; cause: unknown }
   | { status: "ok"; scope: OrgScope };
 
-/** Resolves user + organization once per request/action. Never reads the org id from client input. */
-export async function resolveScope(): Promise<ScopeResult> {
+/**
+ * Resolves user + organization once per request. Never reads the org id from client input.
+ * A missing Supabase configuration is not an organization failure and is rethrown.
+ */
+export const resolveScope = cache(async (): Promise<ScopeResult> => {
+  const { supabase, userId } = await createServerSupabase();
+  if (!userId) return { status: "unauthenticated" };
+
   try {
-    const { supabase, userId } = await createServerSupabase();
-    if (!userId) return { status: "unauthenticated" };
     const orgId = await getOrgId(supabase);
     return { status: "ok", scope: { client: supabase, orgId } };
   } catch (error) {
+    if (error instanceof OrgError && error.code === "no_organization") {
+      return { status: "no_organization" };
+    }
     console.error("resolveScope failed", error instanceof Error ? error.message : "unknown");
-    return { status: "error" };
+    return { status: "error", cause: error };
   }
-}
+});

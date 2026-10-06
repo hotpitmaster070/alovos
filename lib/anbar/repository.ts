@@ -1,8 +1,8 @@
 import { PAGE_SIZE, LOW_STOCK_THRESHOLD } from "./constants";
 import { mapRpcError, type AnbarErrorCode } from "./errors";
-import { parseLocation, parseProduct, parseRows } from "./parse";
+import { parseCatalogItem, parseLocation, parseProduct, parseRows } from "./parse";
 import type { OrgScope } from "./scope";
-import type { Location, Product } from "./types";
+import type { CatalogItem, Location, Product } from "./types";
 import { addDaysUtc, toDateOnly } from "@/lib/expiry";
 import type { MoveInput, ProductFilters, ProductInput } from "./validation";
 
@@ -13,6 +13,21 @@ const PRODUCT_COLUMNS = "id, name, barcode, expiry_date, qty, unit, cost, locati
  * and carries .eq("organization_id", orgId) (inserts set organization_id explicitly); RLS is the
  * second line of defence, not the only one. Stock moves go through the move_stock RPC only.
  */
+
+const CATALOG_COLUMNS = "id, name, barcode, expiry_date, qty, branch";
+
+/** Catalog rows for block 1.1: barcode, expiry, quantity (`qty`) and branch. */
+export async function listCatalog(scope: OrgScope): Promise<CatalogItem[]> {
+  const { data, error } = await scope.client
+    .from("products")
+    .select(CATALOG_COLUMNS)
+    .eq("organization_id", scope.orgId)
+    .order("expiry_date", { ascending: true, nullsFirst: false })
+    .order("name")
+    .limit(500);
+  if (error) throw error;
+  return parseRows(data, parseCatalogItem);
+}
 
 export async function listLocations(scope: OrgScope): Promise<Location[]> {
   const { data, error } = await scope.client

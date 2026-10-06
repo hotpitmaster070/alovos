@@ -3,6 +3,15 @@ export type Location = {
   name: string;
 };
 
+export type CatalogItem = {
+  id: string;
+  name: string;
+  barcode: string | null;
+  expiryDate: string | null;
+  quantity: number;
+  branch: string | null;
+};
+
 export type Product = {
   id: string;
   name: string;

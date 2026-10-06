@@ -14,7 +14,9 @@ export async function moveStockAction(data: FormData): Promise<ActionResult> {
   if (!input.ok) return failure(input.error);
 
   const resolved = await resolveScope();
-  if (resolved.status === "unauthenticated") return failure("unauthenticated");
+  if (resolved.status === "unauthenticated" || resolved.status === "no_organization") {
+    return failure("unauthenticated");
+  }
   if (resolved.status === "error") return failure("saveFailed");
 
   const error = await moveStockRpc(resolved.scope, input.value);
@@ -29,7 +31,9 @@ export async function addProductAction(data: FormData): Promise<ActionResult> {
   if (!input.ok) return failure(input.error);
 
   const resolved = await resolveScope();
-  if (resolved.status === "unauthenticated") return failure("unauthenticated");
+  if (resolved.status === "unauthenticated" || resolved.status === "no_organization") {
+    return failure("unauthenticated");
+  }
   if (resolved.status === "error") return failure("saveFailed");
 
   const { scope } = resolved;
@@ -53,7 +57,9 @@ export async function addLocationAction(data: FormData): Promise<ActionResult> {
   if (!input.ok) return failure(input.error);
 
   const resolved = await resolveScope();
-  if (resolved.status === "unauthenticated") return failure("unauthenticated");
+  if (resolved.status === "unauthenticated" || resolved.status === "no_organization") {
+    return failure("unauthenticated");
+  }
   if (resolved.status === "error") return failure("saveFailed");
 
   const error = await insertLocation(resolved.scope, input.name);

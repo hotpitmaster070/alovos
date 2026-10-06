@@ -1,4 +1,4 @@
-import type { Location, Product } from "./types";
+import type { CatalogItem, Location, Product } from "./types";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -19,6 +19,21 @@ export function parseLocation(row: unknown): Location | null {
   const id = asString(row.id);
   const name = asString(row.name);
   return id && name !== null ? { id, name } : null;
+}
+
+export function parseCatalogItem(row: unknown): CatalogItem | null {
+  if (!isRecord(row)) return null;
+  const id = asString(row.id);
+  const name = asString(row.name);
+  if (!id || name === null) return null;
+  return {
+    id,
+    name,
+    barcode: asString(row.barcode),
+    expiryDate: asString(row.expiry_date),
+    quantity: asNumber(row.quantity) ?? asNumber(row.qty) ?? 0,
+    branch: asString(row.branch),
+  };
 }
 
 export function parseProduct(row: unknown): Product | null {

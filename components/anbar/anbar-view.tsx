@@ -7,6 +7,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import type { Location, Product } from "@/lib/anbar/types";
 import { filtersToSearch, type ProductFilters } from "@/lib/anbar/validation";
+import { ANBAR_CATALOG_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
 import AddLocationDialog from "./add-location-dialog";
 import AddProductDialog from "./add-product-dialog";
@@ -40,6 +41,9 @@ export default function AnbarView({ products, locations, filters, hasNext, nowIs
       <div className="flex items-start justify-between gap-3">
         <h1 className="font-serif text-[32px] font-bold leading-[1.1] tracking-tight">{copy.title}</h1>
         <div className="flex flex-wrap justify-end gap-2">
+          <Link href={ANBAR_CATALOG_PATH} className={buttonVariants("outline", "sm")}>
+            {copy.catalog.open}
+          </Link>
           <Button variant="outline" size="sm" onClick={() => setAddingLocation(true)}>
             <MapPin className="h-3.5 w-3.5" strokeWidth={1.5} aria-hidden="true" />
             {copy.addLocation.open}
