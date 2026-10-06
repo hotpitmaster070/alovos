@@ -12,13 +12,6 @@ export default async function AnbarPage({ searchParams }: { searchParams: RawSea
   const filters = parseFilters(searchParams);
   const now = new Date();
   const resolved = await resolveScope();
-
-  if (resolved.status === "unauthenticated") {
-    return (
-      <AnbarView products={[]} locations={[]} filters={filters} hasNext={false} nowIso={now.toISOString()} />
-    );
-  }
-
   const gated = redirectIfNoOrg(resolved, ANBAR_APP_PATH);
   if (gated.status === "error") {
     throw gated.cause instanceof Error ? gated.cause : new Error("Organization lookup failed");

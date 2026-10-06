@@ -14,13 +14,14 @@ const PRODUCT_COLUMNS = "id, name, barcode, expiry_date, qty, unit, cost, locati
  * second line of defence, not the only one. Stock moves go through the move_stock RPC only.
  */
 
-const CATALOG_COLUMNS = "id, name, barcode, expiry_date, qty, branch";
+const CATALOG_COLUMNS = "id, name, barcode, expiry_date, quantity, branch:branches(name)";
 
-/** Catalog rows for block 1.1: barcode, expiry, quantity (`qty`) and branch. */
+/** Catalog rows for block 1.1: barcode, expiry, quantity and the product's branch. */
 export async function listCatalog(scope: OrgScope): Promise<CatalogItem[]> {
   const { data, error } = await scope.client
     .from("products")
     .select(CATALOG_COLUMNS)
+    .eq("tenant_id", scope.tenantId)
     .eq("organization_id", scope.orgId)
     .order("expiry_date", { ascending: true, nullsFirst: false })
     .order("name")
@@ -65,6 +66,7 @@ export async function listProducts(
   let query = scope.client
     .from("products")
     .select(PRODUCT_COLUMNS)
+    .eq("tenant_id", scope.tenantId)
     .eq("organization_id", scope.orgId);
 
   if (filters.barcode) query = query.eq("barcode", filters.barcode);
@@ -99,6 +101,7 @@ export async function insertLocation(scope: OrgScope, name: string): Promise<Anb
 export async function insertProduct(scope: OrgScope, input: ProductInput): Promise<AnbarErrorCode | null> {
   const { error } = await scope.client.from("products").insert({
     organization_id: scope.orgId,
+    tenant_id: scope.tenantId,
     name: input.name,
     barcode: input.barcode,
     expiry_date: input.expiryDate,

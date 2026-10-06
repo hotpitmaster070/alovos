@@ -32,12 +32,12 @@ const load = (p) => require(path.join(OUT, p));
 const { getExpiryInfo, addDaysUtc } = load("lib/expiry.js");
 const { validateMoveQty, roundQty } = load("lib/anbar/move.js");
 const validation = load("lib/anbar/validation.js");
-const { safeNextPath, loginPath, onboardingPath, isPublicAnbarPath } = load("lib/auth-redirect.js");
+const { safeNextPath, loginPath, onboardingPath } = load("lib/auth-redirect.js");
 const { getSupabaseConfig, SupabaseConfigError } = load("lib/supabase/config.js");
 const { mapAuthError } = load("lib/auth-errors.js");
 const { mapRpcError } = load("lib/anbar/errors.js");
 const codec = load("lib/supabase/cookie-codec.js");
-const { getOrgId, OrgError } = load("lib/org.js");
+const { getOrgId, getTenantId, OrgError } = load("lib/org.js");
 const repo = load("lib/anbar/repository.js");
 const actions = load("lib/anbar/actions.js");
 
@@ -132,7 +132,6 @@ function makeClient({ rows = [], rpc = {} } = {}) {
   ok("next: login and onboarding are not return targets", safeNextPath("/login") === "/app/anbar" && safeNextPath("/onboarding?next=/app/dashboard") === "/app/anbar");
   ok("next: default and array input", safeNextPath(undefined) === "/app/anbar" && safeNextPath(["/app/dashboard", "/x"]) === "/app/dashboard");
   ok("next: login and onboarding paths", loginPath("/app/dashboard") === "/login?next=" + encodeURIComponent("/app/dashboard") && onboardingPath("/app/anbar?page=2") === "/onboarding?next=" + encodeURIComponent("/app/anbar?page=2"));
-  ok("anbar public path", isPublicAnbarPath("/app/anbar") && isPublicAnbarPath("/app/anbar/kataloq") && !isPublicAnbarPath("/app/dashboard") && !isPublicAnbarPath("/app/anbar-extra"));
 
   // ---- auth error mapping
   ok("authErr: mapped", mapAuthError({ code: "invalid_credentials" }) === "invalidCredentials" && mapAuthError({ code: "weak_password" }) === "weakPassword" && mapAuthError({ code: "user_already_exists" }) === "emailTaken" && mapAuthError({ code: "email_not_confirmed" }) === "emailNotConfirmed" && mapAuthError({ status: 429 }) === "rateLimited" && mapAuthError({ name: "AuthRetryableFetchError", status: 0 }) === "network" && mapAuthError(new TypeError("Failed to fetch")) === "network" && mapAuthError("x") === "unknown" && mapAuthError({ message: "Invalid login credentials" }) === "invalidCredentials");
@@ -158,16 +157,22 @@ function makeClient({ rows = [], rpc = {} } = {}) {
   ok("getOrgId: not authenticated error code", await getOrgId(c).then(() => false, (e) => e instanceof OrgError && e.code === "not_authenticated"));
   c = orgClient({ data: null, error: null }, { data: null, error: null });
   ok("getOrgId: empty id -> no_organization", await getOrgId(c).then(() => false, (e) => e.code === "no_organization"));
+  const tenantClient = (current, ensure) => makeClient({ rpc: { current_tenant_id: () => current, ensure_my_organization: () => ensure } });
+  c = tenantClient({ data: ORG, error: null }, { data: "other", error: null });
+  ok("getTenantId: existing tenant, ensure not called", (await getTenantId(c)) === ORG && c.calls.length === 1);
+  c = tenantClient({ data: null, error: null }, { data: ORG, error: null });
+  ok("getTenantId: null tenant -> ensure_my_organization", (await getTenantId(c)) === ORG && c.calls.map((x) => x.rpc).join() === "current_tenant_id,ensure_my_organization");
 
   // ---- repository: org scope on every statement
   const rows = Array.from({ length: 51 }, (_, i) => ({ id: `cccccccc-0000-0000-0000-${String(i).padStart(12, "0")}`, name: `P${i}`, qty: 1, unit: "kg" }));
   const client = makeClient({ rows });
-  const scope = { client, orgId: ORG };
+  const scope = { client, orgId: ORG, tenantId: ORG };
   const filters = validation.parseFilters({ barcode: "123", location: L1, expired: "1", low: "1", expiry: "month", page: "2" });
   const page = await repo.listProducts(scope, filters, now);
   const call = client.calls[0];
   const has = (op, col, val) => call.filters.some(([o, c2, v]) => o === op && c2 === col && (val === undefined || v === val));
   ok("repo.listProducts: organization_id eq first-class filter", has("eq", "organization_id", ORG));
+  ok("repo.listProducts: tenant_id eq", has("eq", "tenant_id", ORG));
   ok("repo.listProducts: barcode eq + location + low stock + expired + expiry range", has("eq", "barcode", "123") && has("eq", "location_id", L1) && has("lt", "qty", 5) && has("lt", "expiry_date", "2026-10-06") && has("lt", "expiry_date", "2026-11-05"));
   ok("repo.listProducts: page 2 -> range(50,100), 51 rows -> hasNext and 50 returned", call.range[0] === 50 && call.range[1] === 100 && page.hasNext && page.products.length === 50);
   const okOnly = validation.parseFilters({ expiry: "ok" });
@@ -179,14 +184,15 @@ function makeClient({ rows = [], rpc = {} } = {}) {
   await repo.insertLocation(scope, "Bar");
   await repo.insertProduct(scope, { name: "T", barcode: null, expiryDate: null, qty: 1, unit: "kg", cost: null, locationId: null });
   ok("repo: inserts carry organization_id from scope", client.calls.slice(-2).every((x) => x.op === "insert" && x.payload.organization_id === ORG));
+  ok("repo: product insert carries tenant_id", client.calls[client.calls.length - 1].payload.tenant_id === ORG);
   const mover = makeClient();
-  await repo.moveStockRpc({ client: mover, orgId: ORG }, { productId: P1, fromLocationId: L1, toLocationId: L2, qty: 2 });
+  await repo.moveStockRpc({ client: mover, orgId: ORG, tenantId: ORG }, { productId: P1, fromLocationId: L1, toLocationId: L2, qty: 2 });
   ok("repo.moveStockRpc: calls move_stock with named args, no table writes", mover.calls.length === 1 && mover.calls[0].rpc === "move_stock" && mover.calls[0].args.p_product_id === P1 && mover.calls[0].args.p_from_location === L1 && mover.calls[0].args.p_to_location === L2 && mover.calls[0].args.p_qty === 2);
 
   // ---- actions
   const run = async (status, rpcResult, input) => {
     const cl = makeClient({ rpc: { move_stock: () => rpcResult } });
-    scopeResult = status === "ok" ? { status, scope: { client: cl, orgId: ORG } } : { status };
+    scopeResult = status === "ok" ? { status, scope: { client: cl, orgId: ORG, tenantId: ORG } } : { status };
     revalidated.length = 0;
     const result = await actions.moveStockAction(fd(input));
     return { result, cl };
@@ -212,7 +218,7 @@ function makeClient({ rows = [], rpc = {} } = {}) {
   ok("action: rpc location_not_found mapped", r.result.error === "locationNotFound");
 
   const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const prevKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  const prevKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const throwsConfig = () => {
     try {
       getSupabaseConfig();
@@ -222,17 +228,17 @@ function makeClient({ rows = [], rpc = {} } = {}) {
     }
   };
   delete process.env.NEXT_PUBLIC_SUPABASE_URL;
-  delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   let configError = throwsConfig();
   ok(
     "config: missing keys",
     configError instanceof SupabaseConfigError &&
       configError.missing.includes("NEXT_PUBLIC_SUPABASE_URL") &&
-      configError.missing.includes("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY") &&
+      configError.missing.includes("NEXT_PUBLIC_SUPABASE_ANON_KEY") &&
       configError.message.includes(".env.local"),
   );
   process.env.NEXT_PUBLIC_SUPABASE_URL = "   ";
-  process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "key";
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "key";
   configError = throwsConfig();
   ok("config: blank url is missing", configError instanceof SupabaseConfigError && configError.missing.includes("NEXT_PUBLIC_SUPABASE_URL"));
   process.env.NEXT_PUBLIC_SUPABASE_URL = "not-a-url";
@@ -240,11 +246,11 @@ function makeClient({ rows = [], rpc = {} } = {}) {
   ok("config: non-http url rejected", configError instanceof SupabaseConfigError && configError.message.includes("http"));
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
   const config = getSupabaseConfig();
-  ok("config: valid env", config.url === "https://example.supabase.co" && config.publishableKey === "key" && config.storageKey === "sb-example-auth-token");
+  ok("config: valid env", config.url === "https://example.supabase.co" && config.anonKey === "key" && config.storageKey === "sb-example-auth-token");
   if (prevUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
   else process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl;
-  if (prevKey === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  else process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = prevKey;
+  if (prevKey === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  else process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = prevKey;
 
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

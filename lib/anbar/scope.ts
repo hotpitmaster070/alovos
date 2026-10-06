@@ -1,6 +1,6 @@
 import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getOrgId, OrgError } from "@/lib/org";
+import { getTenantId, OrgError } from "@/lib/org";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /**
@@ -10,6 +10,7 @@ import { createServerSupabase } from "@/lib/supabase/server";
 export type OrgScope = {
   readonly client: SupabaseClient;
   readonly orgId: string;
+  readonly tenantId: string;
 };
 
 export type ScopeResult =
@@ -19,16 +20,16 @@ export type ScopeResult =
   | { status: "ok"; scope: OrgScope };
 
 /**
- * Resolves user + organization once per request. Never reads the org id from client input.
- * A missing Supabase configuration is not an organization failure and is rethrown.
+ * Resolves user + tenant once per request. Never reads the tenant id from client input.
+ * A missing Supabase configuration is not a tenant failure and is rethrown.
  */
 export const resolveScope = cache(async (): Promise<ScopeResult> => {
   const { supabase, userId } = await createServerSupabase();
   if (!userId) return { status: "unauthenticated" };
 
   try {
-    const orgId = await getOrgId(supabase);
-    return { status: "ok", scope: { client: supabase, orgId } };
+    const tenantId = await getTenantId(supabase);
+    return { status: "ok", scope: { client: supabase, orgId: tenantId, tenantId } };
   } catch (error) {
     if (error instanceof OrgError && error.code === "no_organization") {
       return { status: "no_organization" };

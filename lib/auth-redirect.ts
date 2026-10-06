@@ -4,11 +4,6 @@ export const DEFAULT_AFTER_LOGIN = ANBAR_APP_PATH;
 export const LOGIN_PATH = "/login";
 export const ONBOARDING_PATH = "/onboarding";
 
-/** Warehouse routes render without a session so the catalog can be opened in a browser test. */
-export function isPublicAnbarPath(pathname: string): boolean {
-  return pathname === ANBAR_APP_PATH || pathname.startsWith(`${ANBAR_APP_PATH}/`);
-}
-
 /** Request header set by middleware so server layouts know the path they are rendering. */
 export const PATHNAME_HEADER = "x-alovos-path";
 

@@ -8,13 +8,13 @@ Next.js 14 (App Router), TypeScript, Tailwind CSS, Inter (`next/font`), `lucide-
 
 ```bash
 npm install
-cp .env.example .env.local   # optional: Supabase URL + publishable key
+cp .env.example .env.local   # optional: Supabase URL + anon key
 npm run dev -- -p 4317       # http://localhost:4317
 ```
 
 Production build: `npm run build && npm start -- -p 4317`. Lint: `npm run lint`.
 
-The landing page runs without Supabase env vars; `/login`, `/app/*` and the middleware require `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+The landing page runs without Supabase env vars; `/login`, `/app/*` and the middleware require `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 
 ## Database
 
@@ -24,6 +24,7 @@ Run the migrations in `supabase/migrations/` in order in the Supabase SQL Editor
 2. `20261006120001_storage.sql` - private `invoices` bucket; objects must live under `<organization_id>/`.
 3. `20261006120002_ensure_org_rpc.sql` - `ensure_my_organization()` recovery RPC.
 4. `20261006120003_move_stock.sql` - atomic `move_stock()` RPC and the indexes the ANBAR page needs.
+5. `20261006120004_anbar_catalog.sql` - tenants, branches, `tenant_id` on anbar tables, `quantity`, stock ledger trigger, RLS.
 
 The old draft schema is kept only as `supabase/_legacy/schema.sql.bak` and is not used.
 
@@ -31,7 +32,7 @@ The old draft schema is kept only as `supabase/_legacy/schema.sql.bak` and is no
 
 `/app/anbar`: server-rendered, org-scoped inventory with barcode search (keyboard scanners and, where supported, camera), filters (location, expired, low stock, expiry), pagination (50 per page), expiry badges, add product/location and stock moves through the `move_stock` RPC. The organization id is resolved on the server from the verified session and is never taken from the URL, props or storage.
 
-Auth: the Supabase session lives in cookies (`lib/supabase/*`), `middleware.ts` refreshes it and redirects unauthenticated `/app/*` visits to `/login?next=...`. `@supabase/ssr` could not be installed offline, so `lib/supabase/cookie-codec.ts` implements the same cookie layout; swap it for the package when the network allows.
+Auth: `middleware.ts` and server components use `@supabase/ssr` (`createServerClient`) and the request cookies. A visit to `/app/anbar` without a session is redirected to `/login?next=...`. The browser client still stores the session in that same cookie layout.
 
 ## Checks
 

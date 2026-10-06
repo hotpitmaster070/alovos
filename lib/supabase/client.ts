@@ -11,8 +11,8 @@ let instance: SupabaseClient | null = null;
  */
 export function getBrowserClient(): SupabaseClient {
   if (!instance) {
-    const { url, publishableKey, storageKey } = getSupabaseConfig();
-    instance = createClient(url, publishableKey, {
+    const { url, anonKey, storageKey } = getSupabaseConfig();
+    instance = createClient(url, anonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,

@@ -21,6 +21,11 @@ export function parseLocation(row: unknown): Location | null {
   return id && name !== null ? { id, name } : null;
 }
 
+function branchName(value: unknown): string | null {
+  if (!isRecord(value)) return null;
+  return asString(value.name);
+}
+
 export function parseCatalogItem(row: unknown): CatalogItem | null {
   if (!isRecord(row)) return null;
   const id = asString(row.id);
@@ -31,8 +36,8 @@ export function parseCatalogItem(row: unknown): CatalogItem | null {
     name,
     barcode: asString(row.barcode),
     expiryDate: asString(row.expiry_date),
-    quantity: asNumber(row.quantity) ?? asNumber(row.qty) ?? 0,
-    branch: asString(row.branch),
+    quantity: asNumber(row.quantity) ?? 0,
+    branch: branchName(row.branch),
   };
 }
 

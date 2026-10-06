@@ -1,7 +1,7 @@
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseConfig } from "./config";
-import { readSession } from "./cookie-codec";
 
 export type ServerSupabase = {
   supabase: SupabaseClient;
@@ -10,21 +10,30 @@ export type ServerSupabase = {
 };
 
 /**
- * Per-request client for server components and server actions. It sends the user's access token
- * from the session cookie, so PostgREST applies RLS as that user. It never writes cookies, so it
- * is safe to call from Server Components; middleware.ts refreshes the session before rendering.
+ * Per-request client for server components and server actions.
+ * The session comes from the request cookies via @supabase/ssr, so PostgREST applies RLS
+ * as that user. Cookie writes are attempted for route handlers; Server Components ignore
+ * the refresh write because middleware already stored it.
  */
 export async function createServerSupabase(): Promise<ServerSupabase> {
-  const { url, publishableKey, storageKey } = getSupabaseConfig();
-  const session = readSession(storageKey, cookies().getAll());
+  const cookieStore = cookies();
+  const { url, anonKey } = getSupabaseConfig();
 
-  const supabase = createClient(url, publishableKey, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
-    global: session ? { headers: { Authorization: `Bearer ${session.access_token}` } } : {},
+  const supabase = createServerClient(url, anonKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options));
+        } catch {
+          // Server Components cannot set cookies. middleware.ts refreshes the session.
+        }
+      },
+    },
   });
 
-  if (!session) return { supabase, userId: null };
-
-  const { data, error } = await supabase.auth.getUser(session.access_token);
+  const { data, error } = await supabase.auth.getUser();
   return { supabase, userId: error || !data.user ? null : data.user.id };
 }

@@ -36,3 +36,24 @@ export async function getOrgId(client: SupabaseClient): Promise<string> {
   if (!created) throw new OrgError("no_organization", "ensure_my_organization returned no id");
   return created;
 }
+
+/**
+ * Returns the caller's tenant id: profiles.tenant_id for auth.uid().
+ * When the profile has no tenant yet, ensure_my_organization() creates one and returns its id.
+ */
+export async function getTenantId(client: SupabaseClient): Promise<string> {
+  const current = await client.rpc("current_tenant_id");
+  if (current.error) throw new OrgError("rpc_failed", current.error.message);
+
+  const existing = asId(current.data);
+  if (existing) return existing;
+
+  const ensured = await client.rpc("ensure_my_organization");
+  if (ensured.error) {
+    const notAuthenticated = ensured.error.message.includes("not authenticated");
+    throw new OrgError(notAuthenticated ? "not_authenticated" : "rpc_failed", ensured.error.message);
+  }
+  const created = asId(ensured.data);
+  if (!created) throw new OrgError("no_organization", "ensure_my_organization returned no id");
+  return created;
+}

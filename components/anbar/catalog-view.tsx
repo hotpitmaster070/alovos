@@ -10,6 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { buttonVariants } from "@/components/ui/button";
 import type { CatalogItem } from "@/lib/anbar/types";
 import { ANBAR_APP_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
@@ -22,13 +23,13 @@ export default function CatalogView({ items }: { items: CatalogItem[] }) {
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-3">
         <h1 className="font-serif text-[32px] font-bold leading-[1.1] tracking-tight">{copy.catalog.title}</h1>
-        <Link href={ANBAR_APP_PATH} className="text-sm text-beige underline underline-offset-4">
+        <Link href={ANBAR_APP_PATH} className={buttonVariants("outline", "sm")}>
           {copy.title}
         </Link>
       </div>
 
       {items.length === 0 ? (
-        <Card className="text-center">
+        <Card>
           <CardTitle>{copy.catalog.empty}</CardTitle>
         </Card>
       ) : (
@@ -46,8 +47,8 @@ export default function CatalogView({ items }: { items: CatalogItem[] }) {
             {items.map((item) => (
               <TableRow key={item.id}>
                 <TableCell>{item.name}</TableCell>
-                <TableCell>{item.barcode ?? copy.fields.noBarcode}</TableCell>
-                <TableCell>{item.expiryDate ?? copy.fields.noExpiry}</TableCell>
+                <TableCell>{item.barcode ?? "—"}</TableCell>
+                <TableCell>{item.expiryDate ?? "—"}</TableCell>
                 <TableCell>{item.quantity}</TableCell>
                 <TableCell>{item.branch ?? copy.catalog.noBranch}</TableCell>
               </TableRow>

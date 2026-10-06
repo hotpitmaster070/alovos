@@ -9,11 +9,9 @@ export const metadata = { title: "alovos" };
 
 export default async function CatalogPage() {
   const resolved = await resolveScope();
-  if (resolved.status === "unauthenticated") return <CatalogView items={[]} />;
-
   const gated = redirectIfNoOrg(resolved, ANBAR_CATALOG_PATH);
   if (gated.status === "error") {
-    throw gated.cause instanceof Error ? gated.cause : new Error("Organization lookup failed");
+    throw gated.cause instanceof Error ? gated.cause : new Error("Tenant lookup failed");
   }
 
   const items = await listCatalog(gated.scope);

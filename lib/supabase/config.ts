@@ -1,11 +1,11 @@
 export type SupabaseConfig = {
   url: string;
-  publishableKey: string;
+  anonKey: string;
   storageKey: string;
 };
 
 export const SUPABASE_URL_ENV = "NEXT_PUBLIC_SUPABASE_URL";
-export const SUPABASE_PUBLISHABLE_KEY_ENV = "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY";
+export const SUPABASE_ANON_KEY_ENV = "NEXT_PUBLIC_SUPABASE_ANON_KEY";
 
 /** Thrown when the public Supabase env is absent or not a usable URL. Callers must not turn this into an organization error. */
 export class SupabaseConfigError extends Error {
@@ -42,10 +42,10 @@ const parseHttpUrl = (value: string): URL | null => {
 
 export function getSupabaseConfig(): SupabaseConfig {
   const url = readEnv(SUPABASE_URL_ENV);
-  const publishableKey = readEnv(SUPABASE_PUBLISHABLE_KEY_ENV);
+  const anonKey = readEnv(SUPABASE_ANON_KEY_ENV);
   const missing = [
     url ? null : SUPABASE_URL_ENV,
-    publishableKey ? null : SUPABASE_PUBLISHABLE_KEY_ENV,
+    anonKey ? null : SUPABASE_ANON_KEY_ENV,
   ].filter((name): name is string => name !== null);
 
   if (missing.length > 0) {
@@ -63,5 +63,5 @@ export function getSupabaseConfig(): SupabaseConfig {
     );
   }
 
-  return { url, publishableKey, storageKey: getStorageKey(url) };
+  return { url, anonKey, storageKey: getStorageKey(url) };
 }

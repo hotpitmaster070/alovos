@@ -22,6 +22,9 @@ for (const file of files) {
     const end = source.indexOf(";", match.index);
     const statement = source.slice(match.index, end === -1 ? undefined : end);
     checked += 1;
+    if (match[1] === "products" && !/tenant_id/.test(statement)) {
+      violations.push(`${file}: .from("${match[1]}") without tenant_id`);
+    }
     if (!/organization_id/.test(statement)) {
       violations.push(`${file}: .from("${match[1]}") without organization_id`);
     }
