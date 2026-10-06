@@ -25,7 +25,6 @@ export default function Home() {
           <h1 className="font-serif text-[32px] font-bold leading-[1.15] tracking-tight text-white">
             {hero.title}
           </h1>
-          <p className="mt-3 text-base text-white/60">{hero.subtitle}</p>
           <div className="mt-6 flex justify-center gap-3">
             <Link
               href="/app/dashboard"
