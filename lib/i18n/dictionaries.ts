@@ -84,10 +84,21 @@ export type AnbarDictionary = {
     title: string;
     hint: string;
     close: string;
-    denied: string;
-    failed: string;
     button: string;
     torch: string;
+    manual: string;
+    manualPlaceholder: string;
+    manualSubmit: string;
+    retry: string;
+    errors: {
+      insecure: string;
+      inApp: string;
+      unsupported: string;
+      denied: string;
+      notFound: string;
+      busy: string;
+      failed: string;
+    };
   };
   barcode: {
     search: string;
@@ -495,10 +506,23 @@ const AZ: Dictionary = {
       title: "Barkodu skan edin",
       hint: "Kameranı barkoda yönəldin.",
       close: "Bağla",
-      denied: "Kameraya icazə verilmədi.",
-      failed: "Kameranı işə salmaq mümkün olmadı.",
       button: "Skaner",
       torch: "Fənər",
+      manual: "Əl ilə daxil et",
+      manualPlaceholder: "Barkod və ya ALO kodu",
+      manualSubmit: "Tap",
+      retry: "Yenidən cəhd et",
+      errors: {
+        insecure: "Kamera yalnız HTTPS ilə işləyir. Saytı https:// ünvanı ilə açın.",
+        inApp:
+          "Bu brauzer kameranı açmır. Saytı Instagram, WhatsApp və ya Telegram daxilində yox, Safari (iPhone) və ya Chrome (Android) ilə açın.",
+        unsupported: "Bu brauzer kameranı dəstəkləmir. Safari (iPhone) və ya Chrome (Android) ilə açın.",
+        denied:
+          "Kameraya icazə verilmədi. iPhone: Ayarlar → Safari → Kamera → İcazə ver. Android: ünvan sətrindəki kilid → İcazələr → Kamera.",
+        notFound: "Kamera tapılmadı. Arxa kamerası olan telefonda açın.",
+        busy: "Kamera başqa tətbiq tərəfindən istifadə olunur. Kameradan istifadə edən tətbiqləri bağlayın və yenidən cəhd edin.",
+        failed: "Kameranı işə salmaq mümkün olmadı. Səhifəni yeniləyin və ya kodu əl ilə daxil edin.",
+      },
     },
     barcode: {
       search: "Ad, barkod və ya ALO kodu",
@@ -890,10 +914,23 @@ const RU: Dictionary = {
       title: "Сканирование штрихкода",
       hint: "Наведите камеру на штрихкод.",
       close: "Закрыть",
-      denied: "Нет доступа к камере.",
-      failed: "Не удалось запустить камеру.",
       button: "Сканер",
       torch: "Фонарик",
+      manual: "Ввести вручную",
+      manualPlaceholder: "Штрихкод или код ALO",
+      manualSubmit: "Найти",
+      retry: "Повторить",
+      errors: {
+        insecure: "Камера работает только по HTTPS. Откройте сайт по адресу с https://.",
+        inApp:
+          "Этот браузер не даёт доступ к камере. Откройте сайт в Safari (iPhone) или Chrome (Android), а не внутри Instagram, WhatsApp или Telegram.",
+        unsupported: "Этот браузер не поддерживает камеру. Откройте сайт в Safari (iPhone) или Chrome (Android).",
+        denied:
+          "Доступ к камере запрещён. iPhone: Настройки → Safari → Камера → Разрешить. Android: замок в адресной строке → Разрешения → Камера.",
+        notFound: "Камера не найдена. Откройте сайт на телефоне с задней камерой.",
+        busy: "Камера занята другим приложением. Закройте приложения, которые используют камеру, и нажмите «Повторить».",
+        failed: "Не удалось запустить камеру. Обновите страницу или введите код вручную.",
+      },
     },
     barcode: {
       search: "Название, штрихкод или код ALO",
@@ -1285,10 +1322,23 @@ const EN: Dictionary = {
       title: "Scan a barcode",
       hint: "Point the camera at the barcode.",
       close: "Close",
-      denied: "Camera access was denied.",
-      failed: "Could not start the camera.",
       button: "Scanner",
       torch: "Flashlight",
+      manual: "Enter manually",
+      manualPlaceholder: "Barcode or ALO code",
+      manualSubmit: "Find",
+      retry: "Try again",
+      errors: {
+        insecure: "The camera only works over HTTPS. Open the site with an https:// address.",
+        inApp:
+          "This browser does not allow camera access. Open the site in Safari (iPhone) or Chrome (Android), not inside Instagram, WhatsApp or Telegram.",
+        unsupported: "This browser does not support the camera. Open the site in Safari (iPhone) or Chrome (Android).",
+        denied:
+          "Camera access is blocked. iPhone: Settings → Safari → Camera → Allow. Android: lock icon in the address bar → Permissions → Camera.",
+        notFound: "No camera found. Open the site on a phone with a rear camera.",
+        busy: "The camera is in use by another app. Close apps that use the camera and tap “Try again”.",
+        failed: "Could not start the camera. Reload the page or enter the code manually.",
+      },
     },
     barcode: {
       search: "Name, barcode or ALO code",
