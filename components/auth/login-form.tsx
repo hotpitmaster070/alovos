@@ -106,7 +106,7 @@ export default function LoginForm({ next, initialMode = "signIn" }: { next: stri
     setFeedback(null);
     try {
       await signIn({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
-      finish(APP_HOME);
+      finish(next);
     } catch (error) {
       if (needsEmailConfirm(error)) {
         setFeedback({ kind: "confirm" });

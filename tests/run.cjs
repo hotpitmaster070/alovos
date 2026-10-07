@@ -128,9 +128,10 @@ function makeClient({ rows = [], rpc = {} } = {}) {
 
   // ---- safe next
   ok("next: relative ok", safeNextPath("/app/anbar?page=2") === "/app/anbar?page=2");
-  ok("next: absolute / protocol-relative / backslash / scheme rejected", ["https://evil.com", "//evil.com", "/\\evil.com", "javascript:alert(1)", "evil.com", "/%0d%0a/x".replace("%0d%0a", "\r\n"), ""].every((v) => safeNextPath(v) === "/app/anbar"));
-  ok("next: login and onboarding are not return targets", safeNextPath("/login") === "/app/anbar" && safeNextPath("/onboarding?next=/app/dashboard") === "/app/anbar");
-  ok("next: default and array input", safeNextPath(undefined) === "/app/anbar" && safeNextPath(["/app/dashboard", "/x"]) === "/app/dashboard");
+  ok("next: absolute / protocol-relative / backslash / scheme rejected", ["https://evil.com", "//evil.com", "/\\evil.com", "javascript:alert(1)", "evil.com", "/%0d%0a/x".replace("%0d%0a", "\r\n"), ""].every((v) => safeNextPath(v) === "/app/anbar/kataloq"));
+  ok("next: login and onboarding are not return targets", safeNextPath("/login") === "/app/anbar/kataloq" && safeNextPath("/onboarding?next=/app/dashboard") === "/app/anbar/kataloq");
+  ok("next: default and array input", safeNextPath(undefined) === "/app/anbar/kataloq" && safeNextPath(["/app/dashboard", "/x"]) === "/app/dashboard");
+  ok("next: catalog with query survives the login round trip", loginPath("/app/anbar/kataloq?branch=b1") === "/login?next=" + encodeURIComponent("/app/anbar/kataloq?branch=b1"));
   ok("next: login and onboarding paths", loginPath("/app/dashboard") === "/login?next=" + encodeURIComponent("/app/dashboard") && onboardingPath("/app/anbar?page=2") === "/onboarding?next=" + encodeURIComponent("/app/anbar?page=2"));
 
   // ---- auth error mapping

@@ -1,10 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { loginPath } from "@/lib/auth-redirect";
 
 const PUBLIC_AUTH_PATHS = new Set(["/login", "/register"]);
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, search } = req.nextUrl;
+  const toLogin = () => NextResponse.redirect(new URL(loginPath(`${pathname}${search}`), req.url));
 
   // Login and registration never require a session. Do not call getUser() here.
   if (PUBLIC_AUTH_PATHS.has(pathname)) {
@@ -19,7 +21,7 @@ export async function middleware(req: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
     console.error("MISSING ENV:", { url: !!url, key: !!key });
-    return NextResponse.redirect(new URL("/login", req.url));
+    return toLogin();
   }
 
   const res = NextResponse.next();
@@ -36,7 +38,7 @@ export async function middleware(req: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return toLogin();
   }
   return res;
 }
