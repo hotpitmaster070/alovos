@@ -37,3 +37,9 @@ next-env.d.ts
 
 # test build output
 .test-out
+
+# local git artifacts
+anbar.bundle
+h
+h origin main
+*.bundle

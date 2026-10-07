@@ -1,5 +1,8 @@
 export const ANBAR_APP_PATH = "/app/anbar";
 export const ANBAR_CATALOG_PATH = `${ANBAR_APP_PATH}/kataloq`;
+export const ANBAR_MOVEMENTS_PATH = `${ANBAR_APP_PATH}/movements`;
+export const ANBAR_COUNT_PATH = `${ANBAR_APP_PATH}/sayim`;
+export const ANBAR_RECEIPT_PATH = `${ANBAR_APP_PATH}/qebul`;
 export const DEFAULT_AFTER_LOGIN = ANBAR_APP_PATH;
 export const LOGIN_PATH = "/login";
 export const ONBOARDING_PATH = "/onboarding";

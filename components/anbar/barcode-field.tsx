@@ -1,13 +1,10 @@
 "use client";
 
-import { ScanLine } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { BARCODE_MAX_LENGTH } from "@/lib/anbar/constants";
-import { useT } from "@/lib/i18n/useT";
-import ScannerDialog from "./scanner-dialog";
+import BarcodeScanner from "./barcode-scanner";
 
 type BarcodeFieldProps = {
   id: string;
@@ -22,8 +19,7 @@ type BarcodeFieldProps = {
 
 /**
  * Text input for barcodes. USB/Bluetooth scanners type like a keyboard and finish with Enter,
- * which submits the surrounding form natively. A camera button appears only where the
- * BarcodeDetector API exists.
+ * which submits the surrounding form natively. The camera button opens the phone scanner.
  */
 export default function BarcodeField({
   id,
@@ -34,17 +30,9 @@ export default function BarcodeField({
   autoFocus = false,
   submitOnScan = false,
 }: BarcodeFieldProps) {
-  const { t } = useT();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [cameraSupported, setCameraSupported] = useState(false);
-  const [scanning, setScanning] = useState(false);
 
-  useEffect(() => {
-    setCameraSupported("BarcodeDetector" in window && Boolean(navigator.mediaDevices?.getUserMedia));
-  }, []);
-
-  const onDetected = (value: string) => {
-    setScanning(false);
+  const onScan = (value: string) => {
     const input = inputRef.current;
     if (!input) return;
     input.value = value.slice(0, BARCODE_MAX_LENGTH);
@@ -67,21 +55,8 @@ export default function BarcodeField({
           defaultValue={defaultValue}
           placeholder={placeholder}
         />
-        {cameraSupported && (
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setScanning(true)}
-            aria-label={t.anbar.scan.open}
-            title={t.anbar.scan.open}
-          >
-            <ScanLine className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
-          </Button>
-        )}
+        <BarcodeScanner iconOnly onScan={onScan} />
       </div>
-      {cameraSupported && (
-        <ScannerDialog open={scanning} onOpenChange={setScanning} onDetected={onDetected} />
-      )}
     </div>
   );
 }

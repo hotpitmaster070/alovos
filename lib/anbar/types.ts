@@ -3,14 +3,29 @@ export type Location = {
   name: string;
 };
 
-export type CatalogItem = {
+export type CatalogProduct = {
   id: string;
   name: string;
   barcode: string | null;
+  internalCode: string;
+  photoUrl: string | null;
+  unit: string;
+  pricePerUnit: number | null;
+  /** products.expiry_date; the catalog shows the nearest lot expiry when stock exists. */
   expiryDate: string | null;
-  quantity: number;
-  branch: string | null;
+  branchId: string | null;
+  branchName: string | null;
 };
+
+export type CatalogLine = CatalogProduct & {
+  stock: number;
+  nearestExpiry: string | null;
+  value: number;
+};
+
+export type Branch = { id: string; name: string };
+
+export type StorageLocation = { id: string; name: string; type: string; branchId: string | null };
 
 export type Product = {
   id: string;

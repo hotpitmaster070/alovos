@@ -25,6 +25,18 @@ Run the migrations in `supabase/migrations/` in order in the Supabase SQL Editor
 3. `20261006120002_ensure_org_rpc.sql` - `ensure_my_organization()` recovery RPC.
 4. `20261006120003_move_stock.sql` - atomic `move_stock()` RPC and the indexes the ANBAR page needs.
 5. `20261006120004_anbar_catalog.sql` - tenants, branches, `tenant_id` on anbar tables, `quantity`, stock ledger trigger, RLS.
+6. `20261007120000_kitchen_stock.sql` - storage locations, product stocks, kitchen tasks.
+7. `20261007140000_restaurant_os.sql` - tenant settings, branches, restaurant OS tables.
+8. `20261007180000_wastage.sql` - wastage logs.
+9. `20261007190000_invoice_scans.sql` - invoice scans and inventory transactions.
+10. `20261007195000_fix_auth.sql` - signup grants and RLS for tenants/profiles.
+11. `20261007200000_add_missing_column.sql` - `products.tenant_id` for databases that skipped step 5.
+12. `20261007205000_enforce_tenant_trusted_callers.sql` - `enforce_tenant_id()` trusts the explicit tenant_id of callers without a user JWT (signup trigger, SQL Editor, service_role).
+13. `20261007210000_auto_tenant_on_signup.sql` - signup trigger: organization, tenant, owner profile, main branch.
+14. `20261007210001_backfill_tenants.sql` - provisions a tenant for existing users without one.
+15. `20261007220000_fix_missing_branches.sql` - Main Branch for tenants that have no branch.
+
+Tenants are created only by the signup trigger; never insert them by hand.
 
 The old draft schema is kept only as `supabase/_legacy/schema.sql.bak` and is not used.
 

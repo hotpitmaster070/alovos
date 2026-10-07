@@ -1,7 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getSupabaseConfig } from "./config";
 
 export type ServerSupabase = {
   supabase: SupabaseClient;
@@ -9,17 +8,22 @@ export type ServerSupabase = {
   userId: string | null;
 };
 
-/**
- * Per-request client for server components and server actions.
- * The session comes from the request cookies via @supabase/ssr, so PostgREST applies RLS
- * as that user. Cookie writes are attempted for route handlers; Server Components ignore
- * the refresh write because middleware already stored it.
- */
-export async function createServerSupabase(): Promise<ServerSupabase> {
-  const cookieStore = cookies();
-  const { url, anonKey } = getSupabaseConfig();
+function readPublicEnv(): { url: string; key: string } {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !key) {
+    console.error("MISSING ENV:", { url: !!url, key: !!key });
+    throw new Error("Supabase env is missing. Check .env.local has NEXT_PUBLIC_SUPABASE_URL and ANON_KEY");
+  }
+  return { url, key };
+}
 
-  const supabase = createServerClient(url, anonKey, {
+/** Per-request client. Session cookies are the ones @supabase/ssr writes, so RLS sees the same user. */
+export function createClient() {
+  const { url, key } = readPublicEnv();
+  const cookieStore = cookies();
+
+  return createServerClient(url, key, {
     cookies: {
       getAll() {
         return cookieStore.getAll();
@@ -33,7 +37,10 @@ export async function createServerSupabase(): Promise<ServerSupabase> {
       },
     },
   });
+}
 
+export async function createServerSupabase(): Promise<ServerSupabase> {
+  const supabase = createClient();
   const { data, error } = await supabase.auth.getUser();
   return { supabase, userId: error || !data.user ? null : data.user.id };
 }

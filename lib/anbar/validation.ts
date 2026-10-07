@@ -12,7 +12,7 @@ const first = (raw: string | string[] | undefined): string => {
   return typeof value === "string" ? value.trim() : "";
 };
 
-const isRealDate = (value: string): boolean => {
+export const isRealDate = (value: string): boolean => {
   if (!DATE_PATTERN.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
@@ -117,6 +117,98 @@ export function validateProductInput(
       locationId: locationId === "" ? null : locationId,
     },
   };
+}
+
+/** A scanned or typed code: factory barcode or our internal code (ALO-1001). */
+export function normalizeCode(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const code = raw.trim();
+  return code === "" || code.length > BARCODE_MAX_LENGTH ? null : code;
+}
+
+export type BarcodeProductInput = {
+  name: string;
+  barcode: string | null;
+  unit: Unit;
+  pricePerUnit: number | null;
+  expiryDate: string | null;
+  branchId: string | null;
+};
+
+export function validateBarcodeProductInput(
+  data: FormData,
+): { ok: true; value: BarcodeProductInput } | { ok: false; error: "invalidInput" } {
+  const name = field(data, "name");
+  const barcode = field(data, "barcode");
+  const unit = field(data, "unit") || "kg";
+  const expiryDate = field(data, "expiryDate");
+  const branchId = field(data, "branchId");
+  const pricePerUnit = optionalNonNegative(field(data, "pricePerUnit"));
+
+  if (
+    name === "" ||
+    name.length > NAME_MAX_LENGTH ||
+    barcode.length > BARCODE_MAX_LENGTH ||
+    !isUnit(unit) ||
+    (expiryDate !== "" && !isRealDate(expiryDate)) ||
+    (branchId !== "" && !isUuid(branchId)) ||
+    pricePerUnit === undefined
+  ) {
+    return { ok: false, error: "invalidInput" };
+  }
+
+  return {
+    ok: true,
+    value: {
+      name,
+      barcode: barcode === "" ? null : barcode,
+      unit,
+      pricePerUnit,
+      expiryDate: expiryDate === "" ? null : expiryDate,
+      branchId: branchId === "" ? null : branchId,
+    },
+  };
+}
+
+export type ReceiptInput = {
+  productId: string;
+  locationId: string;
+  qty: number;
+  expiryDate: string | null;
+  pricePerUnit: number | null;
+};
+
+export function validateReceiptInput(
+  data: FormData,
+): { ok: true; value: ReceiptInput } | { ok: false; error: "invalidInput" | "invalidQty" | "locationNotFound" } {
+  const productId = field(data, "productId");
+  const locationId = field(data, "locationId");
+  const expiryDate = field(data, "expiryDate");
+  const qty = Number(field(data, "qty"));
+  const pricePerUnit = optionalNonNegative(field(data, "pricePerUnit"));
+
+  if (!isUuid(productId)) return { ok: false, error: "invalidInput" };
+  if (!isUuid(locationId)) return { ok: false, error: "locationNotFound" };
+  if (!Number.isFinite(qty) || qty <= 0) return { ok: false, error: "invalidQty" };
+  if ((expiryDate !== "" && !isRealDate(expiryDate)) || pricePerUnit === undefined) {
+    return { ok: false, error: "invalidInput" };
+  }
+
+  return {
+    ok: true,
+    value: { productId, locationId, qty, expiryDate: expiryDate === "" ? null : expiryDate, pricePerUnit },
+  };
+}
+
+export function validateExpiryInput(
+  data: FormData,
+): { ok: true; value: { productId: string; expiryDate: string | null } } | { ok: false; error: "invalidInput" } {
+  const productId = field(data, "productId");
+  const expiryDate = field(data, "expiryDate");
+  if (!isUuid(productId) || (expiryDate !== "" && !isRealDate(expiryDate))) {
+    return { ok: false, error: "invalidInput" };
+  }
+  return { ok: true, value: { productId, expiryDate: expiryDate === "" ? null : expiryDate } };
 }
 
 export function validateLocationName(

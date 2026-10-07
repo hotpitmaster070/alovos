@@ -222,7 +222,7 @@ begin
     end if;
   end if;
 
-  if tg_table_name in ('stock_movements', 'stock') then
+  if tg_table_name = 'stock' then
     if not exists (
       select 1 from public.products where id = new.product_id and tenant_id = v_tenant
     ) then
@@ -308,10 +308,8 @@ $$;
 
 revoke execute on function public.record_stock_ledger() from public, anon, authenticated;
 
+-- Kitchen stock (20261007120000) owns stock_movements. Do not attach the branch ledger here.
 drop trigger if exists stock_movements_ledger on public.stock_movements;
-create trigger stock_movements_ledger
-  after insert on public.stock_movements
-  for each row execute function public.record_stock_ledger();
 
 -- ---------------------------------------------------------------------------
 -- Signup and recovery also create the tenant and stamp profiles.tenant_id.

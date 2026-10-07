@@ -26,8 +26,17 @@ export const isSupabaseConfigError = (error: unknown): error is SupabaseConfigEr
 export const getStorageKey = (url: string): string =>
   `sb-${new URL(url).hostname.split(".")[0]}-auth-token`;
 
+/**
+ * Static property access is required. Next.js only inlines NEXT_PUBLIC_* into the browser
+ * bundle for direct reads; process.env[name] is empty on the client even when .env.local is loaded.
+ */
 const readEnv = (name: string): string => {
-  const value = process.env[name];
+  const value =
+    name === SUPABASE_URL_ENV
+      ? process.env.NEXT_PUBLIC_SUPABASE_URL
+      : name === SUPABASE_ANON_KEY_ENV
+        ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+        : undefined;
   return typeof value === "string" ? value.trim() : "";
 };
 

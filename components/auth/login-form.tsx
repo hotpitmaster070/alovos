@@ -8,26 +8,68 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { signIn, signUp } from "@/lib/auth";
-import { mapAuthError, type LoginErrorCode } from "@/lib/auth-errors";
+import { DEMO_EMAIL, DEMO_PASSWORD, isValidEmail, signIn, signUp, type SignUpResult } from "@/lib/auth";
 import { useT } from "@/lib/i18n/useT";
 
 type Mode = "signIn" | "signUp";
-type Feedback = { kind: "error"; code: LoginErrorCode } | { kind: "confirm" } | null;
+type Feedback = { kind: "error"; message: string } | { kind: "confirm" } | null;
 
 const MIN_PASSWORD_LENGTH = 6;
+const APP_HOME = "/app";
+const INVALID_EMAIL_MESSAGE = "Email qəbul edilmir, real email yazın.";
+const RATE_LIMIT_MESSAGE =
+  "Çox cəhd etdiniz. 10 dəqiqə gözləyin və ya başqa email ilə yoxlayın. Supabase email limiti doldu.";
 
-export default function LoginForm({ next }: { next: string }) {
+function rawMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim() !== "") return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = error.message;
+    if (typeof message === "string" && message.trim() !== "") return message;
+  }
+  return "";
+}
+
+function errorStatus(error: unknown): number | undefined {
+  if (typeof error === "object" && error !== null && "status" in error && typeof error.status === "number") {
+    return error.status;
+  }
+  return undefined;
+}
+
+function authMessage(error: unknown): string {
+  const message = rawMessage(error);
+  const lower = message.toLowerCase();
+  if (lower.includes("rate limit") || errorStatus(error) === 429) return RATE_LIMIT_MESSAGE;
+  if (lower.includes("is invalid")) return INVALID_EMAIL_MESSAGE;
+  return message;
+}
+
+function isMissingDemoUser(error: unknown): boolean {
+  const message = rawMessage(error).toLowerCase();
+  return message.includes("invalid login credentials") || message.includes("invalid credentials") || message.includes("user not found");
+}
+
+function needsEmailConfirm(error: unknown): boolean {
+  return rawMessage(error).toLowerCase().includes("not confirmed");
+}
+
+export default function LoginForm({ next, initialMode = "signIn" }: { next: string; initialMode?: Mode }) {
   const { t } = useT();
   const router = useRouter();
-  const [mode, setMode] = useState<Mode>("signIn");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
   const copy = t.login;
 
-  const finish = () => {
-    router.replace(next);
+  const finish = (path: string) => {
+    router.replace(path);
     router.refresh();
+  };
+
+  const applySignUp = (result: SignUpResult) => {
+    if (result.status === "signed_in") finish(APP_HOME);
+    else if (result.status === "email_taken") setFeedback({ kind: "error", message: copy.errors.emailTaken });
+    else setFeedback({ kind: "confirm" });
   };
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -37,21 +79,50 @@ export default function LoginForm({ next }: { next: string }) {
       email: String(data.get("email") ?? "").trim(),
       password: String(data.get("password") ?? ""),
     };
+    if (!isValidEmail(credentials.email)) {
+      setFeedback({ kind: "error", message: INVALID_EMAIL_MESSAGE });
+      return;
+    }
 
     setPending(true);
     setFeedback(null);
     try {
       if (mode === "signIn") {
         await signIn(credentials);
-        finish();
+        finish(next);
         return;
       }
-      const result = await signUp(credentials);
-      if (result.status === "signed_in") finish();
-      else if (result.status === "email_taken") setFeedback({ kind: "error", code: "emailTaken" });
-      else setFeedback({ kind: "confirm" });
+      applySignUp(await signUp(credentials));
+    } catch (err: unknown) {
+      const fallback = mode === "signUp" ? "Qeydiyyat alınmadı" : copy.errors.unknown;
+      setFeedback({ kind: "error", message: authMessage(err) || fallback });
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const onDemo = async () => {
+    setPending(true);
+    setFeedback(null);
+    try {
+      await signIn({ email: DEMO_EMAIL, password: DEMO_PASSWORD });
+      finish(APP_HOME);
     } catch (error) {
-      setFeedback({ kind: "error", code: mapAuthError(error) });
+      if (needsEmailConfirm(error)) {
+        setFeedback({ kind: "confirm" });
+        setPending(false);
+        return;
+      }
+      if (!isMissingDemoUser(error)) {
+        setFeedback({ kind: "error", message: authMessage(error) || copy.errors.unknown });
+        setPending(false);
+        return;
+      }
+      try {
+        applySignUp(await signUp({ email: DEMO_EMAIL, password: DEMO_PASSWORD }));
+      } catch (err: unknown) {
+        setFeedback({ kind: "error", message: authMessage(err) || "Qeydiyyat alınmadı" });
+      }
     } finally {
       setPending(false);
     }
@@ -95,7 +166,7 @@ export default function LoginForm({ next }: { next: string }) {
 
             {feedback?.kind === "error" && (
               <p role="alert" className="text-sm text-red-400">
-                {copy.errors[feedback.code]}
+                {feedback.message}
               </p>
             )}
             {feedback?.kind === "confirm" && (
@@ -106,6 +177,9 @@ export default function LoginForm({ next }: { next: string }) {
 
             <Button type="submit" disabled={pending}>
               {pending ? copy.working : mode === "signIn" ? copy.signIn : copy.signUp}
+            </Button>
+            <Button type="button" variant="outline" disabled={pending} onClick={onDemo}>
+              {copy.demo}
             </Button>
           </form>
         </Card>

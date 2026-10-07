@@ -1,9 +1,18 @@
 import type { Session } from "@supabase/supabase-js";
-import { getBrowserClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 
 export { getOrgId, OrgError, type OrgErrorCode } from "@/lib/org";
 
 export type Credentials = { email: string; password: string };
+
+export const DEMO_EMAIL = "test@alovos.az";
+export const DEMO_PASSWORD = "Alovos123!";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function isValidEmail(email: string): boolean {
+  return EMAIL_PATTERN.test(email);
+}
 
 export type SignUpResult =
   | { status: "signed_in" }
@@ -11,7 +20,8 @@ export type SignUpResult =
   | { status: "email_taken" };
 
 export async function signUp({ email, password }: Credentials): Promise<SignUpResult> {
-  const { data, error } = await getBrowserClient().auth.signUp({ email, password });
+  if (!isValidEmail(email)) throw new Error("Email address is invalid");
+  const { data, error } = await createClient().auth.signUp({ email, password });
   if (error) throw error;
   // Supabase answers an existing, confirmed address with a user that has no identities.
   if (data.user && data.user.identities?.length === 0) return { status: "email_taken" };
@@ -19,17 +29,18 @@ export async function signUp({ email, password }: Credentials): Promise<SignUpRe
 }
 
 export async function signIn({ email, password }: Credentials): Promise<void> {
-  const { error } = await getBrowserClient().auth.signInWithPassword({ email, password });
+  if (!isValidEmail(email)) throw new Error("Email address is invalid");
+  const { error } = await createClient().auth.signInWithPassword({ email, password });
   if (error) throw error;
 }
 
 export async function signOut(): Promise<void> {
-  const { error } = await getBrowserClient().auth.signOut();
+  const { error } = await createClient().auth.signOut();
   if (error) throw error;
 }
 
 export async function getSession(): Promise<Session | null> {
-  const { data, error } = await getBrowserClient().auth.getSession();
+  const { data, error } = await createClient().auth.getSession();
   if (error) throw error;
   return data.session;
 }

@@ -18,6 +18,64 @@ export type AnbarDictionary = {
     branch: string;
     noBranch: string;
   };
+  kitchen: {
+    movements: string;
+    place: string;
+    places: { all: string; sklad: string; holodilnik: string; morozilka: string };
+    qty: string;
+    writeOff: string;
+    transfer: string;
+    receipt: string;
+    empty: string;
+    dialogTitle: string;
+    type: string;
+    types: {
+      prihod: string;
+      spisanie: string;
+      peremeshchenie: string;
+      waste: string;
+      task: string;
+    };
+    from: string;
+    to: string;
+    reason: string;
+    choose: string;
+    submit: string;
+    working: string;
+    cancel: string;
+    branch: string;
+    storage: string;
+    total: string;
+    updated: string;
+    units: { kg: string; litr: string; sht: string };
+    errors: {
+      invalid_input: string;
+      unauthenticated: string;
+      no_tenant: string;
+      product_not_found: string;
+      location_not_found: string;
+      insufficient_stock: string;
+      save_failed: string;
+    };
+    date: string;
+    allTypes: string;
+    apply: string;
+    noMovements: string;
+    when: string;
+    who: string;
+    what: string;
+  };
+  sayim: {
+    title: string;
+    open: string;
+    blind: string;
+    groupKey: string;
+    groupHint: string;
+    location: string;
+    counted: string;
+    submit: string;
+    empty: string;
+  };
   searchLabel: string;
   searchPlaceholder: string;
   searchButton: string;
@@ -28,6 +86,48 @@ export type AnbarDictionary = {
     close: string;
     denied: string;
     failed: string;
+    button: string;
+    torch: string;
+  };
+  barcode: {
+    search: string;
+    add: string;
+    allBranches: string;
+    sharedBranch: string;
+    internalCode: string;
+    stock: string;
+    value: string;
+    noPhoto: string;
+    empty: string;
+    noMatch: string;
+    found: string;
+    notFound: (code: string) => string;
+    createTitle: string;
+    createWithCode: string;
+    name: string;
+    unit: string;
+    price: string;
+    branch: string;
+    create: string;
+    updateExpiry: string;
+    save: string;
+    saved: string;
+    close: string;
+    receive: string;
+  };
+  qebul: {
+    title: string;
+    open: string;
+    hint: string;
+    scanAgain: string;
+    qty: string;
+    expiry: string;
+    price: string;
+    location: string;
+    choose: string;
+    submit: string;
+    done: (name: string) => string;
+    noLocations: string;
   };
   filters: {
     title: string;
@@ -115,6 +215,70 @@ export type AnbarDictionary = {
   errors: Record<AnbarErrorCode, string>;
 };
 
+export type WasteReasonKey = "spoiled" | "overcooked" | "dropped" | "expired" | "theft" | "other";
+
+export type WasteDictionary = {
+  title: string;
+  writeOff: string;
+  today: string;
+  empty: string;
+  noStock: string;
+  product: string;
+  quantity: string;
+  reason: string;
+  photo: string;
+  photoTheft: string;
+  who: string;
+  total: string;
+  submit: string;
+  working: string;
+  cancel: string;
+  choose: string;
+  saved: string;
+  reasons: Record<WasteReasonKey, string>;
+  errors: {
+    invalid_input: string;
+    unauthenticated: string;
+    no_tenant: string;
+    product_not_found: string;
+    location_not_found: string;
+    insufficient_stock: string;
+    photo_required: string;
+    save_failed: string;
+  };
+};
+
+export type ScannerDictionary = {
+  title: string;
+  recognize: string;
+  receive: string;
+  drop: string;
+  browse: string;
+  back: string;
+  name: string;
+  qty: string;
+  unit: string;
+  price: string;
+  product: string;
+  search: string;
+  create: string;
+  pickLocation: string;
+  empty: string;
+  working: string;
+  saved: string;
+  selected: string;
+  errors: {
+    invalid_input: string;
+    unauthenticated: string;
+    no_tenant: string;
+    location_not_found: string;
+    photo_required: string;
+    scan_failed: string;
+    no_items: string;
+    save_failed: string;
+  };
+};
+
 export type LoginDictionary = {
   title: string;
   subtitle: string;
@@ -127,6 +291,7 @@ export type LoginDictionary = {
   noAccount: string;
   working: string;
   confirmEmail: string;
+  demo: string;
   errors: Record<LoginErrorCode, string>;
 };
 
@@ -168,6 +333,8 @@ export type Dictionary = {
   };
   blockDetails: Record<BlockSlug, BlockDetails>;
   anbar: AnbarDictionary;
+  waste: WasteDictionary;
+  scanner: ScannerDictionary;
   login: LoginDictionary;
   onboarding: OnboardingDictionary;
 };
@@ -262,6 +429,64 @@ const AZ: Dictionary = {
       branch: "Filial",
       noBranch: "Filial yoxdur",
     },
+    kitchen: {
+      movements: "Hərəkətlər",
+      place: "Yer",
+      places: { all: "Hamısı", sklad: "Anbar", holodilnik: "Soyuducu", morozilka: "Dondurucu" },
+      qty: "Miqdar",
+      writeOff: "Sil",
+      transfer: "Köçür",
+      receipt: "Mədaxil",
+      empty: "Məhsul yoxdur",
+      dialogTitle: "Anbar hərəkəti",
+      type: "Növ",
+      types: {
+        prihod: "Mədaxil",
+        spisanie: "Silinmə",
+        peremeshchenie: "Köçürmə",
+        waste: "Tullantı",
+        task: "Tapşırıq",
+      },
+      from: "Haradan",
+      to: "Hara",
+      reason: "Səbəb / tapşırıq",
+      choose: "Seçin",
+      submit: "Saxla",
+      working: "Gözləyin",
+      cancel: "Bağla",
+      branch: "Filial",
+      storage: "Saxlama yeri",
+      total: "Anbar məbləği",
+      updated: "Qalıq yeniləndi",
+      units: { kg: "kq", litr: "litr", sht: "əd" },
+      errors: {
+        invalid_input: "Məlumat səhvdir",
+        unauthenticated: "Giriş lazımdır",
+        no_tenant: "Restoran tapılmadı",
+        product_not_found: "Məhsul tapılmadı",
+        location_not_found: "Yer tapılmadı",
+        insufficient_stock: "Qalıq çatmır",
+        save_failed: "Saxlamaq olmadı",
+      },
+      date: "Tarix",
+      allTypes: "Bütün növlər",
+      apply: "Göstər",
+      noMovements: "Hərəkət yoxdur",
+      when: "Vaxt",
+      who: "Kim",
+      what: "Nə",
+    },
+    sayim: {
+      title: "Kor sayım",
+      open: "Sayım",
+      blind: "Sistem qalığı göstərilmir.",
+      groupKey: "Qrup açarı",
+      groupHint: "Bir neçə nəfər eyni açarı yazır.",
+      location: "Saxlama yeri",
+      counted: "Sayılan",
+      submit: "Saxla",
+      empty: "Məhsul yoxdur",
+    },
     searchLabel: "Barkod",
     searchPlaceholder: "Barkodu skan edin və ya yazın",
     searchButton: "Axtar",
@@ -272,6 +497,48 @@ const AZ: Dictionary = {
       close: "Bağla",
       denied: "Kameraya icazə verilmədi.",
       failed: "Kameranı işə salmaq mümkün olmadı.",
+      button: "Skaner",
+      torch: "Fənər",
+    },
+    barcode: {
+      search: "Ad, barkod və ya ALO kodu",
+      add: "Əlavə et",
+      allBranches: "Bütün filiallar",
+      sharedBranch: "Ümumi",
+      internalCode: "Daxili kod",
+      stock: "Qalıq",
+      value: "Dəyər",
+      noPhoto: "Foto yoxdur",
+      empty: "Kataloq boşdur. İlk məhsulu əlavə edin və ya skan edin.",
+      noMatch: "Heç nə tapılmadı",
+      found: "Məhsul tapıldı",
+      notFound: (code) => `${code} kodu ilə məhsul yoxdur`,
+      createTitle: "Yeni məhsul",
+      createWithCode: "Bu barkodla yeni məhsul yarat",
+      name: "Məhsulun adı",
+      unit: "Vahid",
+      price: "Vahid qiyməti",
+      branch: "Filial",
+      create: "Yarat",
+      updateExpiry: "Son istifadə tarixi",
+      save: "Saxla",
+      saved: "Saxlanıldı",
+      close: "Bağla",
+      receive: "Qəbul et",
+    },
+    qebul: {
+      title: "Mal qəbulu",
+      open: "Qəbul",
+      hint: "Barkodu skan edin və ya yazın. Barkodsuz məhsul üçün daxili ALO kodundan istifadə edin.",
+      scanAgain: "Növbəti məhsul",
+      qty: "Miqdar",
+      expiry: "Son istifadə tarixi",
+      price: "Vahid qiyməti",
+      location: "Saxlama yeri",
+      choose: "Seçin",
+      submit: "Anbara al",
+      done: (name) => `${name} anbara alındı`,
+      noLocations: "Saxlama yeri yoxdur. Əvvəlcə filial və saxlama yeri yaradın.",
     },
     filters: {
       title: "Filtrlər",
@@ -370,6 +637,73 @@ const AZ: Dictionary = {
       saveFailed: "Yadda saxlamaq mümkün olmadı.",
     },
   },
+  waste: {
+    title: "Tullantı",
+    writeOff: "Sil",
+    today: "Bu gün",
+    empty: "Bu gün silinmə yoxdur",
+    noStock: "Bu yerdə məhsul yoxdur",
+    product: "Məhsul",
+    quantity: "Miqdar",
+    reason: "Səbəb",
+    photo: "Foto",
+    photoTheft: "Oğurluq üçün foto mütləqdir.",
+    who: "Kim",
+    total: "Günün məbləği",
+    submit: "Saxla",
+    working: "Saxlanılır",
+    cancel: "Bağla",
+    choose: "Seçin",
+    saved: "Silindi və anbardan çıxarıldı",
+    reasons: {
+      spoiled: "Xarab",
+      overcooked: "Artıq bişmiş",
+      dropped: "Düşüb",
+      expired: "Vaxtı keçib",
+      theft: "Oğurluq",
+      other: "Digər",
+    },
+    errors: {
+      invalid_input: "Məlumat səhvdir",
+      unauthenticated: "Giriş lazımdır",
+      no_tenant: "Restoran tapılmadı",
+      product_not_found: "Məhsul tapılmadı",
+      location_not_found: "Yer tapılmadı",
+      insufficient_stock: "Qalıq çatmır",
+      photo_required: "Oğurluq üçün foto mütləqdir",
+      save_failed: "Saxlamaq olmadı",
+    },
+  },
+  scanner: {
+    title: "Skaner",
+    recognize: "Tanı",
+    receive: "Anbara al",
+    drop: "Qaimə və ya çek şəklini bura atın",
+    browse: "Fayl seç",
+    back: "Geri",
+    name: "Ad",
+    qty: "Miqdar",
+    unit: "Vahid",
+    price: "Qiymət",
+    product: "Məhsul",
+    search: "Axtar",
+    create: "Yeni məhsul",
+    pickLocation: "Saxlama yerini seçin",
+    empty: "Sətir tapılmadı",
+    working: "Gözləyin",
+    saved: "Anbara alındı",
+    selected: "Seçildi",
+    errors: {
+      invalid_input: "Məlumat səhvdir",
+      unauthenticated: "Giriş lazımdır",
+      no_tenant: "Restoran tapılmadı",
+      location_not_found: "Yer tapılmadı",
+      photo_required: "Foto lazımdır",
+      scan_failed: "Tanımaq olmadı",
+      no_items: "Sətir tapılmadı",
+      save_failed: "Saxlamaq olmadı",
+    },
+  },
   login: {
     title: "Daxil ol",
     subtitle: "alovos hesabınıza daxil olun və ya yeni hesab yaradın.",
@@ -381,7 +715,8 @@ const AZ: Dictionary = {
     haveAccount: "Hesabınız var? Daxil olun",
     noAccount: "Hesabınız yoxdur? Qeydiyyatdan keçin",
     working: "Gözləyin",
-    confirmEmail: "Hesab yaradıldı. Təsdiq üçün e-poçtunuzu yoxlayın.",
+    confirmEmail: "E-poçtunuzu yoxlayın.",
+    demo: "Demo kimi daxil ol",
     errors: {
       invalidCredentials: "E-poçt və ya şifrə yanlışdır.",
       weakPassword: "Şifrə çox zəifdir. Daha uzun və mürəkkəb şifrə seçin.",
@@ -489,6 +824,64 @@ const RU: Dictionary = {
       branch: "Филиал",
       noBranch: "Без филиала",
     },
+    kitchen: {
+      movements: "Движения",
+      place: "Место",
+      places: { all: "Все", sklad: "Склад", holodilnik: "Холодильник", morozilka: "Морозилка" },
+      qty: "Количество",
+      writeOff: "Списать",
+      transfer: "Переместить",
+      receipt: "Приход",
+      empty: "Продуктов нет",
+      dialogTitle: "Движение склада",
+      type: "Тип",
+      types: {
+        prihod: "Приход",
+        spisanie: "Списание",
+        peremeshchenie: "Перемещение",
+        waste: "Списание в отход",
+        task: "Задача",
+      },
+      from: "Откуда",
+      to: "Куда",
+      reason: "Причина / задача",
+      choose: "Выберите",
+      submit: "Сохранить",
+      working: "Сохраняем",
+      cancel: "Закрыть",
+      branch: "Филиал",
+      storage: "Место хранения",
+      total: "Сумма склада",
+      updated: "Остаток обновлен",
+      units: { kg: "кг", litr: "литр", sht: "шт" },
+      errors: {
+        invalid_input: "Проверьте поля",
+        unauthenticated: "Нужен вход",
+        no_tenant: "Ресторан не найден",
+        product_not_found: "Продукт не найден",
+        location_not_found: "Место не найдено",
+        insufficient_stock: "Не хватает остатка",
+        save_failed: "Не удалось сохранить",
+      },
+      date: "Дата",
+      allTypes: "Все типы",
+      apply: "Показать",
+      noMovements: "Движений нет",
+      when: "Когда",
+      who: "Кто",
+      what: "Что",
+    },
+    sayim: {
+      title: "Слепой подсчёт",
+      open: "Подсчёт",
+      blind: "Системный остаток не показывается.",
+      groupKey: "Ключ группы",
+      groupHint: "Несколько человек вводят один и тот же ключ.",
+      location: "Место хранения",
+      counted: "Посчитано",
+      submit: "Сохранить",
+      empty: "Продуктов нет",
+    },
     searchLabel: "Штрихкод",
     searchPlaceholder: "Отсканируйте или введите штрихкод",
     searchButton: "Найти",
@@ -499,6 +892,48 @@ const RU: Dictionary = {
       close: "Закрыть",
       denied: "Нет доступа к камере.",
       failed: "Не удалось запустить камеру.",
+      button: "Сканер",
+      torch: "Фонарик",
+    },
+    barcode: {
+      search: "Название, штрихкод или код ALO",
+      add: "Добавить",
+      allBranches: "Все филиалы",
+      sharedBranch: "Общий",
+      internalCode: "Внутренний код",
+      stock: "Остаток",
+      value: "Стоимость",
+      noPhoto: "Нет фото",
+      empty: "Каталог пуст. Добавьте или отсканируйте первый товар.",
+      noMatch: "Ничего не найдено",
+      found: "Товар найден",
+      notFound: (code) => `Товара с кодом ${code} нет`,
+      createTitle: "Новый товар",
+      createWithCode: "Создать новый товар с этим штрихкодом",
+      name: "Название товара",
+      unit: "Единица",
+      price: "Цена за единицу",
+      branch: "Филиал",
+      create: "Создать",
+      updateExpiry: "Срок годности",
+      save: "Сохранить",
+      saved: "Сохранено",
+      close: "Закрыть",
+      receive: "Принять",
+    },
+    qebul: {
+      title: "Приёмка",
+      open: "Приёмка",
+      hint: "Отсканируйте или введите штрихкод. Для товара без штрихкода используйте внутренний код ALO.",
+      scanAgain: "Следующий товар",
+      qty: "Количество",
+      expiry: "Срок годности",
+      price: "Цена за единицу",
+      location: "Место хранения",
+      choose: "Выберите",
+      submit: "Оприходовать",
+      done: (name) => `${name} оприходован`,
+      noLocations: "Нет мест хранения. Сначала создайте филиал и место хранения.",
     },
     filters: {
       title: "Фильтры",
@@ -597,6 +1032,73 @@ const RU: Dictionary = {
       saveFailed: "Не удалось сохранить.",
     },
   },
+  waste: {
+    title: "Списание",
+    writeOff: "Списать",
+    today: "Сегодня",
+    empty: "Сегодня списаний нет",
+    noStock: "В этом месте нет продуктов",
+    product: "Продукт",
+    quantity: "Количество",
+    reason: "Причина",
+    photo: "Фото",
+    photoTheft: "Для кражи фото обязательно.",
+    who: "Кто списал",
+    total: "Сумма за день",
+    submit: "Сохранить",
+    working: "Сохраняем",
+    cancel: "Закрыть",
+    choose: "Выберите",
+    saved: "Списано и снято со склада",
+    reasons: {
+      spoiled: "Испорчено",
+      overcooked: "Переготовлено",
+      dropped: "Уронили",
+      expired: "Просрочено",
+      theft: "Кража",
+      other: "Другое",
+    },
+    errors: {
+      invalid_input: "Проверьте поля",
+      unauthenticated: "Нужен вход",
+      no_tenant: "Ресторан не найден",
+      product_not_found: "Продукт не найден",
+      location_not_found: "Место не найдено",
+      insufficient_stock: "Не хватает остатка",
+      photo_required: "Для кражи нужно фото",
+      save_failed: "Не удалось сохранить",
+    },
+  },
+  scanner: {
+    title: "Сканер",
+    recognize: "Распознать",
+    receive: "Оприходовать",
+    drop: "Перетащите фото накладной или чека",
+    browse: "Выбрать файл",
+    back: "Назад",
+    name: "Название",
+    qty: "Количество",
+    unit: "Единица",
+    price: "Цена",
+    product: "Товар",
+    search: "Поиск",
+    create: "Новый товар",
+    pickLocation: "Выберите место хранения",
+    empty: "Строки не найдены",
+    working: "Подождите",
+    saved: "Оприходовано",
+    selected: "Выбран",
+    errors: {
+      invalid_input: "Проверьте поля",
+      unauthenticated: "Нужен вход",
+      no_tenant: "Ресторан не найден",
+      location_not_found: "Место не найдено",
+      photo_required: "Нужно фото",
+      scan_failed: "Не удалось распознать",
+      no_items: "Строки не найдены",
+      save_failed: "Не удалось сохранить",
+    },
+  },
   login: {
     title: "Вход",
     subtitle: "Войдите в аккаунт alovos или создайте новый.",
@@ -608,7 +1110,8 @@ const RU: Dictionary = {
     haveAccount: "Уже есть аккаунт? Войти",
     noAccount: "Нет аккаунта? Зарегистрироваться",
     working: "Подождите",
-    confirmEmail: "Аккаунт создан. Проверьте почту для подтверждения.",
+    confirmEmail: "Проверьте почту",
+    demo: "Войти как демо",
     errors: {
       invalidCredentials: "Неверная почта или пароль.",
       weakPassword: "Слишком простой пароль. Выберите более длинный и сложный.",
@@ -716,6 +1219,64 @@ const EN: Dictionary = {
       branch: "Branch",
       noBranch: "No branch",
     },
+    kitchen: {
+      movements: "Movements",
+      place: "Place",
+      places: { all: "All", sklad: "Storeroom", holodilnik: "Fridge", morozilka: "Freezer" },
+      qty: "Quantity",
+      writeOff: "Write off",
+      transfer: "Move",
+      receipt: "Receive",
+      empty: "No products",
+      dialogTitle: "Stock movement",
+      type: "Type",
+      types: {
+        prihod: "Receipt",
+        spisanie: "Write-off",
+        peremeshchenie: "Transfer",
+        waste: "Waste",
+        task: "Task",
+      },
+      from: "From",
+      to: "To",
+      reason: "Reason / task",
+      choose: "Choose",
+      submit: "Save",
+      working: "Saving",
+      cancel: "Close",
+      branch: "Branch",
+      storage: "Storage location",
+      total: "Stock value",
+      updated: "Stock updated",
+      units: { kg: "kg", litr: "litre", sht: "pcs" },
+      errors: {
+        invalid_input: "Check the fields",
+        unauthenticated: "Sign in required",
+        no_tenant: "Restaurant not found",
+        product_not_found: "Product not found",
+        location_not_found: "Place not found",
+        insufficient_stock: "Not enough stock",
+        save_failed: "Could not save",
+      },
+      date: "Date",
+      allTypes: "All types",
+      apply: "Show",
+      noMovements: "No movements",
+      when: "When",
+      who: "Who",
+      what: "What",
+    },
+    sayim: {
+      title: "Blind count",
+      open: "Count",
+      blind: "System quantity stays hidden.",
+      groupKey: "Group key",
+      groupHint: "Several people enter the same key.",
+      location: "Storage location",
+      counted: "Counted",
+      submit: "Save",
+      empty: "No products",
+    },
     searchLabel: "Barcode",
     searchPlaceholder: "Scan or type a barcode",
     searchButton: "Search",
@@ -726,6 +1287,48 @@ const EN: Dictionary = {
       close: "Close",
       denied: "Camera access was denied.",
       failed: "Could not start the camera.",
+      button: "Scanner",
+      torch: "Flashlight",
+    },
+    barcode: {
+      search: "Name, barcode or ALO code",
+      add: "Add",
+      allBranches: "All branches",
+      sharedBranch: "Shared",
+      internalCode: "Internal code",
+      stock: "Stock",
+      value: "Value",
+      noPhoto: "No photo",
+      empty: "The catalog is empty. Add or scan your first product.",
+      noMatch: "Nothing found",
+      found: "Product found",
+      notFound: (code) => `No product with code ${code}`,
+      createTitle: "New product",
+      createWithCode: "Create a new product with this barcode",
+      name: "Product name",
+      unit: "Unit",
+      price: "Price per unit",
+      branch: "Branch",
+      create: "Create",
+      updateExpiry: "Expiry date",
+      save: "Save",
+      saved: "Saved",
+      close: "Close",
+      receive: "Receive",
+    },
+    qebul: {
+      title: "Goods receipt",
+      open: "Receipt",
+      hint: "Scan or type a barcode. For products without a barcode use the internal ALO code.",
+      scanAgain: "Next product",
+      qty: "Quantity",
+      expiry: "Expiry date",
+      price: "Price per unit",
+      location: "Storage location",
+      choose: "Choose",
+      submit: "Receive into stock",
+      done: (name) => `${name} received`,
+      noLocations: "No storage locations. Create a branch and a storage location first.",
     },
     filters: {
       title: "Filters",
@@ -824,6 +1427,73 @@ const EN: Dictionary = {
       saveFailed: "Could not save.",
     },
   },
+  waste: {
+    title: "Waste",
+    writeOff: "Write off",
+    today: "Today",
+    empty: "Nothing written off today",
+    noStock: "No products at this place",
+    product: "Product",
+    quantity: "Quantity",
+    reason: "Reason",
+    photo: "Photo",
+    photoTheft: "A photo is required for theft.",
+    who: "Written off by",
+    total: "Today's total",
+    submit: "Save",
+    working: "Saving",
+    cancel: "Close",
+    choose: "Choose",
+    saved: "Written off and removed from stock",
+    reasons: {
+      spoiled: "Spoiled",
+      overcooked: "Overcooked",
+      dropped: "Dropped",
+      expired: "Expired",
+      theft: "Theft",
+      other: "Other",
+    },
+    errors: {
+      invalid_input: "Check the fields",
+      unauthenticated: "Sign in required",
+      no_tenant: "Restaurant not found",
+      product_not_found: "Product not found",
+      location_not_found: "Place not found",
+      insufficient_stock: "Not enough stock",
+      photo_required: "Theft requires a photo",
+      save_failed: "Could not save",
+    },
+  },
+  scanner: {
+    title: "Scanner",
+    recognize: "Read",
+    receive: "Receive",
+    drop: "Drop a photo of the invoice or receipt",
+    browse: "Choose file",
+    back: "Back",
+    name: "Name",
+    qty: "Quantity",
+    unit: "Unit",
+    price: "Price",
+    product: "Product",
+    search: "Search",
+    create: "New product",
+    pickLocation: "Choose a storage location",
+    empty: "No lines found",
+    working: "Please wait",
+    saved: "Received into stock",
+    selected: "Selected",
+    errors: {
+      invalid_input: "Check the fields",
+      unauthenticated: "Sign in required",
+      no_tenant: "Restaurant not found",
+      location_not_found: "Place not found",
+      photo_required: "A photo is required",
+      scan_failed: "Could not read the photo",
+      no_items: "No lines found",
+      save_failed: "Could not save",
+    },
+  },
   login: {
     title: "Sign in",
     subtitle: "Sign in to your alovos account or create a new one.",
@@ -835,7 +1505,8 @@ const EN: Dictionary = {
     haveAccount: "Already have an account? Sign in",
     noAccount: "No account yet? Sign up",
     working: "Please wait",
-    confirmEmail: "Account created. Check your email to confirm it.",
+    confirmEmail: "Check your email.",
+    demo: "Sign in as demo",
     errors: {
       invalidCredentials: "Wrong email or password.",
       weakPassword: "That password is too weak. Choose a longer, stronger one.",
