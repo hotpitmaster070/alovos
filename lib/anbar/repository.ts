@@ -23,7 +23,7 @@ const PRODUCT_COLUMNS = "id, name, barcode, expiry_date, qty, unit, cost, locati
  */
 
 const CATALOG_COLUMNS =
-  "id, name, barcode, internal_code, photo_url, unit, cost, expiry_date, branch_id, branch:branches(name)";
+  "id, name, barcode, internal_code, photo_url, category, unit, cost, shelf_life_days, min_stock, expiry_date, branch_id, branch:branches(name)";
 
 /**
  * Catalog for block 1.1. Products of the branch (or shared ones without a branch) with their
@@ -106,8 +106,11 @@ export async function createProductWithBarcode(
       tenant_id: scope.tenantId,
       name: input.name,
       barcode: input.barcode,
+      category: input.category,
       unit: input.unit,
       cost: input.pricePerUnit,
+      shelf_life_days: input.shelfLifeDays,
+      min_stock: input.minStock,
       expiry_date: input.expiryDate,
       branch_id: input.branchId,
     })

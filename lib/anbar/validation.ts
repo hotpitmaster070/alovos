@@ -1,4 +1,12 @@
-import { BARCODE_MAX_LENGTH, EXPIRY_FILTERS, MAX_PAGE, NAME_MAX_LENGTH, type ExpiryFilter } from "./constants";
+import {
+  BARCODE_MAX_LENGTH,
+  CATEGORY_MAX_LENGTH,
+  EXPIRY_FILTERS,
+  MAX_PAGE,
+  NAME_MAX_LENGTH,
+  SHELF_LIFE_MAX_DAYS,
+  type ExpiryFilter,
+} from "./constants";
 import { validateMoveQty, type MoveQtyError } from "./move";
 import { isUnit, type Unit } from "./types";
 
@@ -129,10 +137,19 @@ export function normalizeCode(raw: unknown): string | null {
 export type BarcodeProductInput = {
   name: string;
   barcode: string | null;
+  category: string | null;
   unit: Unit;
   pricePerUnit: number | null;
+  shelfLifeDays: number | null;
+  minStock: number | null;
   expiryDate: string | null;
   branchId: string | null;
+};
+
+const optionalShelfLife = (raw: string): number | null | undefined => {
+  if (raw === "") return null;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed >= 0 && parsed <= SHELF_LIFE_MAX_DAYS ? parsed : undefined;
 };
 
 export function validateBarcodeProductInput(
@@ -140,19 +157,25 @@ export function validateBarcodeProductInput(
 ): { ok: true; value: BarcodeProductInput } | { ok: false; error: "invalidInput" } {
   const name = field(data, "name");
   const barcode = field(data, "barcode");
+  const category = field(data, "category");
   const unit = field(data, "unit") || "kg";
   const expiryDate = field(data, "expiryDate");
   const branchId = field(data, "branchId");
   const pricePerUnit = optionalNonNegative(field(data, "pricePerUnit"));
+  const shelfLifeDays = optionalShelfLife(field(data, "shelfLifeDays"));
+  const minStock = optionalNonNegative(field(data, "minStock"));
 
   if (
     name === "" ||
     name.length > NAME_MAX_LENGTH ||
     barcode.length > BARCODE_MAX_LENGTH ||
+    category.length > CATEGORY_MAX_LENGTH ||
     !isUnit(unit) ||
     (expiryDate !== "" && !isRealDate(expiryDate)) ||
     (branchId !== "" && !isUuid(branchId)) ||
-    pricePerUnit === undefined
+    pricePerUnit === undefined ||
+    shelfLifeDays === undefined ||
+    minStock === undefined
   ) {
     return { ok: false, error: "invalidInput" };
   }
@@ -162,8 +185,11 @@ export function validateBarcodeProductInput(
     value: {
       name,
       barcode: barcode === "" ? null : barcode,
+      category: category === "" ? null : category,
       unit,
       pricePerUnit,
+      shelfLifeDays,
+      minStock,
       expiryDate: expiryDate === "" ? null : expiryDate,
       branchId: branchId === "" ? null : branchId,
     },

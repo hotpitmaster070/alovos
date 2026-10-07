@@ -9,8 +9,13 @@ export type CatalogProduct = {
   barcode: string | null;
   internalCode: string;
   photoUrl: string | null;
+  category: string | null;
   unit: string;
   pricePerUnit: number | null;
+  /** Days a fresh delivery keeps; pre-fills the expiry date on goods receipt. */
+  shelfLifeDays: number | null;
+  /** Reorder threshold in the product unit. */
+  minStock: number | null;
   /** products.expiry_date; the catalog shows the nearest lot expiry when stock exists. */
   expiryDate: string | null;
   branchId: string | null;

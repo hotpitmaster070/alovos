@@ -126,6 +126,24 @@ export type AnbarDictionary = {
     close: string;
     receive: string;
   };
+  shelf: {
+    products: (count: number) => string;
+    scan: string;
+    category: string;
+    categoryPlaceholder: string;
+    uncategorized: string;
+    shelfLifeDays: string;
+    minStock: string;
+    optional: string;
+    days: (count: number) => string;
+    expiresIn: (days: number) => string;
+    expiresToday: string;
+    expired: (days: number) => string;
+    noExpiry: string;
+    lowStock: string;
+    codes: string;
+    newProduct: string;
+  };
   qebul: {
     title: string;
     open: string;
@@ -350,6 +368,15 @@ export type Dictionary = {
   onboarding: OnboardingDictionary;
 };
 
+function ruPlural(count: number, one: string, few: string, many: string): string {
+  const n = Math.abs(count) % 100;
+  const last = n % 10;
+  if (n >= 11 && n <= 14) return many;
+  if (last === 1) return one;
+  if (last >= 2 && last <= 4) return few;
+  return many;
+}
+
 const AZ: Dictionary = {
   languageLabel: "Dil",
   hero: {
@@ -549,6 +576,24 @@ const AZ: Dictionary = {
       saved: "Saxlanıldı",
       close: "Bağla",
       receive: "Qəbul et",
+    },
+    shelf: {
+      products: (count) => `${count} məhsul`,
+      scan: "Barkodu skan et",
+      category: "Kateqoriya",
+      categoryPlaceholder: "Məs. Süd məhsulları",
+      uncategorized: "Kateqoriyasız",
+      shelfLifeDays: "Saxlama müddəti, gün",
+      minStock: "Minimum qalıq",
+      optional: "istəyə görə",
+      days: (count) => `${count} gün`,
+      expiresIn: (days) => `${days} gün qalıb`,
+      expiresToday: "Bu gün bitir",
+      expired: (days) => `${days} gün əvvəl bitib`,
+      noExpiry: "Son tarix yoxdur",
+      lowStock: "Az qalıb",
+      codes: "Kodlar",
+      newProduct: "Yeni məhsul",
     },
     qebul: {
       title: "Mal qəbulu",
@@ -958,6 +1003,24 @@ const RU: Dictionary = {
       close: "Закрыть",
       receive: "Принять",
     },
+    shelf: {
+      products: (count) => `${count} ${ruPlural(count, "товар", "товара", "товаров")}`,
+      scan: "Сканировать штрихкод",
+      category: "Категория",
+      categoryPlaceholder: "Напр. Молочные продукты",
+      uncategorized: "Без категории",
+      shelfLifeDays: "Срок хранения, дней",
+      minStock: "Минимальный остаток",
+      optional: "необязательно",
+      days: (count) => `${count} ${ruPlural(count, "день", "дня", "дней")}`,
+      expiresIn: (days) => `Осталось ${days} ${ruPlural(days, "день", "дня", "дней")}`,
+      expiresToday: "Истекает сегодня",
+      expired: (days) => `Просрочено ${days} ${ruPlural(days, "день", "дня", "дней")} назад`,
+      noExpiry: "Без срока годности",
+      lowStock: "Мало на складе",
+      codes: "Коды",
+      newProduct: "Новый товар",
+    },
     qebul: {
       title: "Приёмка",
       open: "Приёмка",
@@ -1365,6 +1428,24 @@ const EN: Dictionary = {
       saved: "Saved",
       close: "Close",
       receive: "Receive",
+    },
+    shelf: {
+      products: (count) => `${count} ${count === 1 ? "product" : "products"}`,
+      scan: "Scan barcode",
+      category: "Category",
+      categoryPlaceholder: "e.g. Dairy",
+      uncategorized: "Uncategorized",
+      shelfLifeDays: "Shelf life, days",
+      minStock: "Minimum stock",
+      optional: "optional",
+      days: (count) => `${count} ${count === 1 ? "day" : "days"}`,
+      expiresIn: (days) => `${days} ${days === 1 ? "day" : "days"} left`,
+      expiresToday: "Expires today",
+      expired: (days) => `Expired ${days} ${days === 1 ? "day" : "days"} ago`,
+      noExpiry: "No expiry date",
+      lowStock: "Low stock",
+      codes: "Codes",
+      newProduct: "New product",
     },
     qebul: {
       title: "Goods receipt",

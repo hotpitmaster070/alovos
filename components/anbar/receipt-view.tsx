@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { lookupCodeAction, receiveStockAction } from "@/lib/anbar/actions";
+import { receiptExpiryDefault } from "@/lib/anbar/catalog-status";
 import { BARCODE_MAX_LENGTH } from "@/lib/anbar/constants";
 import type { AnbarErrorCode } from "@/lib/anbar/errors";
 import { isUnit, type Branch, type CatalogProduct, type StorageLocation } from "@/lib/anbar/types";
@@ -87,7 +88,12 @@ function ReceiptForm({
       </div>
       <div className="col-span-2">
         <Label htmlFor="receipt-expiry">{copy.expiry}</Label>
-        <Input id="receipt-expiry" name="expiryDate" type="date" defaultValue={product.expiryDate ?? ""} />
+        <Input
+          id="receipt-expiry"
+          name="expiryDate"
+          type="date"
+          defaultValue={receiptExpiryDefault(product, new Date()) ?? ""}
+        />
       </div>
       <div className="col-span-2">
         <Label htmlFor="receipt-location">{copy.location}</Label>

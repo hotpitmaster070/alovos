@@ -3,5 +3,7 @@ export const MAX_PAGE = 10000;
 export const LOW_STOCK_THRESHOLD = 5;
 export const BARCODE_MAX_LENGTH = 64;
 export const NAME_MAX_LENGTH = 120;
+export const CATEGORY_MAX_LENGTH = 60;
+export const SHELF_LIFE_MAX_DAYS = 3650;
 export const EXPIRY_FILTERS = ["week", "month", "ok"] as const;
 export type ExpiryFilter = (typeof EXPIRY_FILTERS)[number];

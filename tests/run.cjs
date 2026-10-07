@@ -32,6 +32,7 @@ const load = (p) => require(path.join(OUT, p));
 const { getExpiryInfo, addDaysUtc } = load("lib/expiry.js");
 const { validateMoveQty, roundQty } = load("lib/anbar/move.js");
 const validation = load("lib/anbar/validation.js");
+const status = load("lib/anbar/catalog-status.js");
 const { safeNextPath, loginPath, onboardingPath } = load("lib/auth-redirect.js");
 const { getSupabaseConfig, SupabaseConfigError } = load("lib/supabase/config.js");
 const { mapAuthError } = load("lib/auth-errors.js");
@@ -125,6 +126,20 @@ function makeClient({ rows = [], rpc = {} } = {}) {
     return !validation.validateProductInput(fd({ name: "T", [k]: bad })).ok;
   }));
   ok("locationName: empty rejected", !validation.validateLocationName(fd({ name: "  " })).ok && validation.validateLocationName(fd({ name: " Bar " })).name === "Bar");
+
+  // ---- catalog product input (block 1.1)
+  const cp = validation.validateBarcodeProductInput(fd({ name: " Milk ", barcode: "4600000000001", category: " Dairy ", unit: "l", pricePerUnit: "2.5", shelfLifeDays: "7", minStock: "10" }));
+  ok("catalogInput: new fields parsed", cp.ok && cp.value.category === "Dairy" && cp.value.shelfLifeDays === 7 && cp.value.minStock === 10 && cp.value.name === "Milk");
+  const cpEmpty = validation.validateBarcodeProductInput(fd({ name: "Beef" }));
+  ok("catalogInput: optional fields default to null", cpEmpty.ok && cpEmpty.value.category === null && cpEmpty.value.shelfLifeDays === null && cpEmpty.value.minStock === null && cpEmpty.value.barcode === null);
+  ok("catalogInput: bad shelf life / min stock / long category rejected", [{ shelfLifeDays: "1.5" }, { shelfLifeDays: "-1" }, { shelfLifeDays: "3651" }, { minStock: "-2" }, { minStock: "abc" }, { category: "x".repeat(61) }].every((bad) => !validation.validateBarcodeProductInput(fd({ name: "T", ...bad })).ok));
+
+  // ---- catalog status dots
+  ok("status: red for expired and under 7 days", status.expiryStatus("2026-10-05", now).dot === "red" && status.expiryStatus("2026-10-12", now).dot === "red");
+  ok("status: yellow under 30, green later, none without date", status.expiryStatus("2026-10-13", now).dot === "yellow" && status.expiryStatus("2026-11-05", now).dot === "green" && status.expiryStatus(null, now).dot === null);
+  ok("status: daysLeft kept for the label", status.expiryStatus("2026-10-05", now).daysLeft === -1 && status.expiryStatus("2026-10-06", now).daysLeft === 0);
+  ok("status: low stock only below a positive minimum", status.isLowStock(3, 5) && !status.isLowStock(5, 5) && !status.isLowStock(0, null) && !status.isLowStock(0, 0));
+  ok("status: receipt expiry from shelf life, else product date", status.receiptExpiryDefault({ shelfLifeDays: 7, expiryDate: "2027-01-01" }, now) === "2026-10-13" && status.receiptExpiryDefault({ shelfLifeDays: null, expiryDate: "2027-01-01" }, now) === "2027-01-01");
 
   // ---- safe next
   ok("next: relative ok", safeNextPath("/app/anbar?page=2") === "/app/anbar?page=2");

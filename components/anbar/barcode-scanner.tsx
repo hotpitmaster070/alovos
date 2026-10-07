@@ -1,7 +1,7 @@
 "use client";
 
 import { Camera, Flashlight, FlashlightOff, Keyboard, RotateCcw, X } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import type { Html5Qrcode } from "html5-qrcode";
 import { Button } from "@/components/ui/button";
@@ -375,12 +375,16 @@ function ScannerOverlay({
   );
 }
 
+export type ScannerTrigger = { open: () => void; disabled: boolean; label: string };
+
 type BarcodeScannerProps = {
   onScan: (code: string) => void;
   /** Square camera button without text, for use next to an input. */
   iconOnly?: boolean;
   className?: string;
   disabled?: boolean;
+  /** Custom trigger instead of the default outline button. */
+  renderTrigger?: (trigger: ScannerTrigger) => ReactNode;
 };
 
 /**
@@ -388,7 +392,13 @@ type BarcodeScannerProps = {
  * torch where the device exposes it, manual entry as a fallback. Works in iOS Safari and Android
  * Chrome over HTTPS; in-app browsers (Instagram, WhatsApp) get a hint to open the real browser.
  */
-export default function BarcodeScanner({ onScan, iconOnly = false, className, disabled }: BarcodeScannerProps) {
+export default function BarcodeScanner({
+  onScan,
+  iconOnly = false,
+  className,
+  disabled = false,
+  renderTrigger,
+}: BarcodeScannerProps) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
   const [audio, setAudio] = useState<AudioContext | null>(null);
@@ -411,18 +421,22 @@ export default function BarcodeScanner({ onScan, iconOnly = false, className, di
 
   return (
     <>
-      <Button
-        variant="outline"
-        size={iconOnly ? "icon" : "default"}
-        onClick={openScanner}
-        disabled={disabled}
-        aria-label={t.anbar.scan.open}
-        title={t.anbar.scan.open}
-        className={cn("inline-flex shrink-0 items-center justify-center gap-2", className)}
-      >
-        <Camera className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
-        {!iconOnly && t.anbar.scan.button}
-      </Button>
+      {renderTrigger ? (
+        renderTrigger({ open: openScanner, disabled, label: t.anbar.scan.open })
+      ) : (
+        <Button
+          variant="outline"
+          size={iconOnly ? "icon" : "default"}
+          onClick={openScanner}
+          disabled={disabled}
+          aria-label={t.anbar.scan.open}
+          title={t.anbar.scan.open}
+          className={cn("inline-flex shrink-0 items-center justify-center gap-2", className)}
+        >
+          <Camera className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
+          {!iconOnly && t.anbar.scan.button}
+        </Button>
+      )}
       {open &&
         createPortal(
           <ScannerOverlay

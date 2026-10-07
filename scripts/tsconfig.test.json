@@ -19,6 +19,7 @@
     "../lib/anbar/actions.ts",
     "../lib/anbar/repository.ts",
     "../lib/anbar/validation.ts",
+    "../lib/anbar/catalog-status.ts",
     "../lib/expiry.ts",
     "../lib/auth-redirect.ts",
     "../lib/supabase/config.ts",
