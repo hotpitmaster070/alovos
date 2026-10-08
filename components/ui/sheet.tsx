@@ -15,8 +15,8 @@ type SheetProps = {
 };
 
 /**
- * Light iOS-style bottom sheet on the native <dialog>: slides up from the bottom edge, focus is
- * trapped, Escape and a tap on the backdrop close it. On wide screens it floats as a card.
+ * Dark bottom sheet on the native <dialog>: slides up from the bottom edge, focus is trapped,
+ * Escape and a tap on the backdrop close it. On wide screens it floats as a card.
  * Content is mounted only while open, so forms reset every time.
  */
 export function Sheet({ open, onOpenChange, title, description, closeLabel, children, className }: SheetProps) {
@@ -36,25 +36,28 @@ export function Sheet({ open, onOpenChange, title, description, closeLabel, chil
       ref={ref}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      onClose={() => onOpenChange(false)}
+      onClose={(event) => {
+        // React bubbles `close` from dialogs portalled out of this one; only our own close counts.
+        if (event.target === event.currentTarget) onOpenChange(false);
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) onOpenChange(false);
       }}
       className={cn(
-        "mx-auto mb-0 mt-auto max-h-[92dvh] w-full max-w-none overflow-y-auto rounded-t-[28px] border-0 bg-white p-0 font-system text-[#1d1d1f] antialiased shadow-[0_-12px_48px_rgba(0,0,0,0.14)] backdrop:bg-black/25 backdrop:animate-fade-in open:animate-sheet-up sm:mb-6 sm:max-w-lg sm:rounded-[28px]",
+        "mx-auto mb-0 mt-auto max-h-[92dvh] w-full max-w-none overflow-y-auto rounded-t-[28px] border border-line bg-card p-0 text-white antialiased [color-scheme:dark] backdrop:bg-black/80 backdrop:animate-fade-in open:animate-sheet-up sm:mb-6 sm:max-w-lg sm:rounded-[28px]",
         className,
       )}
     >
       {open && (
         <div className="px-6 pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-2.5">
-          <div className="mx-auto mb-5 h-[5px] w-9 rounded-full bg-black/15 sm:hidden" aria-hidden="true" />
+          <div className="mx-auto mb-5 h-[5px] w-9 rounded-full bg-white/20 sm:hidden" aria-hidden="true" />
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <h2 id={titleId} className="text-[22px] font-semibold leading-tight tracking-[-0.02em]">
+              <h2 id={titleId} className="font-serif text-xl font-bold tracking-tight">
                 {title}
               </h2>
               {description && (
-                <p id={descriptionId} className="mt-1 text-[15px] text-neutral-500">
+                <p id={descriptionId} className="mt-1 text-sm text-white/60">
                   {description}
                 </p>
               )}
@@ -63,9 +66,9 @@ export function Sheet({ open, onOpenChange, title, description, closeLabel, chil
               type="button"
               onClick={() => onOpenChange(false)}
               aria-label={closeLabel}
-              className="shrink-0 rounded-full bg-black/5 p-2 text-neutral-500 transition-colors hover:bg-black/10 hover:text-neutral-900"
+              className="shrink-0 rounded-full border border-line p-2 text-white/70 transition-colors hover:text-white"
             >
-              <X className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
+              <X className="h-4 w-4" strokeWidth={1.5} aria-hidden="true" />
             </button>
           </div>
           <div className="mt-6">{children}</div>

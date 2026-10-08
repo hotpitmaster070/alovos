@@ -23,7 +23,6 @@ export async function POST(request: Request) {
     .from("products")
     .select("id, name, barcode, expiry_date")
     .eq("tenant_id", current.tenantId)
-    .eq("organization_id", current.tenantId)
     .eq("barcode", barcode)
     .maybeSingle();
   if (product.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });

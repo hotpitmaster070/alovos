@@ -28,12 +28,14 @@ function ReceiptForm({
   product,
   branches,
   locations,
+  timezone,
   onDone,
   onCancel,
 }: {
   product: CatalogProduct;
   branches: Branch[];
   locations: StorageLocation[];
+  timezone: string;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -92,14 +94,21 @@ function ReceiptForm({
           id="receipt-expiry"
           name="expiryDate"
           type="date"
-          defaultValue={receiptExpiryDefault(product, new Date()) ?? ""}
+          defaultValue={receiptExpiryDefault(product, new Date(), { timezone }) ?? ""}
         />
       </div>
       <div className="col-span-2">
         <Label htmlFor="receipt-location">{copy.location}</Label>
-        <Select id="receipt-location" name="locationId" required defaultValue={ordered[0]?.id ?? ""}>
+        <Select
+          id="receipt-location"
+          name="locationId"
+          required
+          defaultValue={
+            ordered.find((location) => location.id === product.storageLocationId)?.id ?? ordered[0]?.id ?? ""
+          }
+        >
           {ordered.map((location) => {
-            const branch = location.branchId ? branchName.get(location.branchId) : null;
+            const branch = branchName.get(location.branchId);
             return (
               <option key={location.id} value={location.id}>
                 {branch ? `${branch} · ${location.name}` : location.name}
@@ -127,10 +136,12 @@ export default function ReceiptView({
   branches,
   locations,
   initialCode,
+  timezone,
 }: {
   branches: Branch[];
   locations: StorageLocation[];
   initialCode: string | null;
+  timezone: string;
 }) {
   const { t } = useT();
   const copy = t.anbar.qebul;
@@ -223,6 +234,7 @@ export default function ReceiptView({
             product={step.product}
             branches={branches}
             locations={locations}
+            timezone={timezone}
             onCancel={() => setStep({ kind: "scan" })}
             onDone={() => {
               setDone(step.product.name);

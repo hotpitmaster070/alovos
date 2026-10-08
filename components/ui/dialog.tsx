@@ -44,7 +44,10 @@ export function Dialog({
       ref={ref}
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
-      onClose={() => onOpenChange(false)}
+      onClose={(event) => {
+        // React bubbles `close` from dialogs portalled out of this one; only our own close counts.
+        if (event.target === event.currentTarget) onOpenChange(false);
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) onOpenChange(false);
       }}

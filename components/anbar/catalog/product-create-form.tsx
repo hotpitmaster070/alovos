@@ -1,17 +1,20 @@
 "use client";
 
 import { useId, useState, useTransition, type FormEvent } from "react";
+import { buttonVariants } from "@/components/ui/button";
 import { createBarcodeProductAction } from "@/lib/anbar/actions";
 import { BARCODE_MAX_LENGTH, CATEGORY_MAX_LENGTH, NAME_MAX_LENGTH, SHELF_LIFE_MAX_DAYS } from "@/lib/anbar/constants";
 import type { AnbarErrorCode } from "@/lib/anbar/errors";
-import { UNITS, type Branch, type CatalogProduct } from "@/lib/anbar/types";
+import { UNITS, type Branch, type CatalogProduct, type StorageLocation } from "@/lib/anbar/types";
 import { useT } from "@/lib/i18n/useT";
+import AddStorageLocation from "../add-storage-location";
 import { ErrorText, LightInput, LightLabel, LightSelect, PRIMARY_BUTTON } from "./primitives";
 
-/** New catalog product in the light sheet. The scanned code arrives pre-filled. */
+/** New catalog product in the dark sheet. The scanned code arrives pre-filled. */
 export default function ProductCreateForm({
   code,
   branches,
+  locations,
   categories,
   defaultBranchId,
   onCreated,
@@ -19,6 +22,7 @@ export default function ProductCreateForm({
 }: {
   code: string | null;
   branches: Branch[];
+  locations: StorageLocation[];
   categories: string[];
   defaultBranchId: string | null;
   onCreated: (product: CatalogProduct) => void;
@@ -30,6 +34,11 @@ export default function ProductCreateForm({
   const categoryListId = useId();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<AnbarErrorCode | null>(null);
+  const [branchId, setBranchId] = useState(defaultBranchId ?? "");
+  const [list, setList] = useState(locations);
+  const [locationId, setLocationId] = useState("");
+  const branchName = new Map(branches.map((branch) => [branch.id, branch.name]));
+  const visibleLocations = branchId ? list.filter((location) => location.branchId === branchId) : list;
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -128,7 +137,16 @@ export default function ProductCreateForm({
 
       <div>
         <LightLabel htmlFor="create-branch">{copy.branch}</LightLabel>
-        <LightSelect id="create-branch" name="branchId" defaultValue={defaultBranchId ?? ""}>
+        <LightSelect
+          id="create-branch"
+          name="branchId"
+          value={branchId}
+          onChange={(event) => {
+            const next = event.target.value;
+            setBranchId(next);
+            if (next && list.find((location) => location.id === locationId)?.branchId !== next) setLocationId("");
+          }}
+        >
           <option value="">{copy.sharedBranch}</option>
           {branches.map((branch) => (
             <option key={branch.id} value={branch.id}>
@@ -136,6 +154,40 @@ export default function ProductCreateForm({
             </option>
           ))}
         </LightSelect>
+      </div>
+
+      <div className="col-span-2">
+        <LightLabel htmlFor="create-storage" hint={shelf.optional}>
+          {t.anbar.qebul.location}
+        </LightLabel>
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <LightSelect
+              id="create-storage"
+              name="storageLocationId"
+              value={locationId}
+              onChange={(event) => setLocationId(event.target.value)}
+            >
+              <option value="">{t.anbar.storage.none}</option>
+              {visibleLocations.map((location) => (
+                <option key={location.id} value={location.id}>
+                  {!branchId && branches.length > 1
+                    ? `${branchName.get(location.branchId) ?? ""} · ${location.name}`
+                    : location.name}
+                </option>
+              ))}
+            </LightSelect>
+          </div>
+          <AddStorageLocation
+            branches={branches}
+            branchId={branchId || null}
+            onCreated={(location) => {
+              setList((current) => [...current, location].sort((a, b) => a.name.localeCompare(b.name)));
+              if (branchId && branchId !== location.branchId) setBranchId(location.branchId);
+              setLocationId(location.id);
+            }}
+          />
+        </div>
       </div>
 
       {error && (
@@ -151,7 +203,7 @@ export default function ProductCreateForm({
         <button
           type="button"
           onClick={onCancel}
-          className="h-11 rounded-full text-[15px] font-medium text-neutral-500 transition-colors hover:text-neutral-900"
+          className={buttonVariants("ghost")}
         >
           {t.anbar.addProduct.cancel}
         </button>

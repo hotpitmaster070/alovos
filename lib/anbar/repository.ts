@@ -1,108 +1,189 @@
-import { PAGE_SIZE, LOW_STOCK_THRESHOLD } from "./constants";
+import { PAGE_SIZE, pageRange } from "@/lib/pagination";
+import { fetchAll } from "@/lib/supabase/fetch-all";
+import { lotCosts, productPrices } from "./costs";
 import { mapRpcError, type AnbarErrorCode } from "./errors";
-import {
-  parseBranch,
-  parseCatalogProduct,
-  parseLocation,
-  parseProduct,
-  parseRows,
-  parseStockLot,
-  parseStorageLocation,
-} from "./parse";
-import type { OrgScope } from "./scope";
-import type { Branch, CatalogLine, CatalogProduct, Location, Product, StorageLocation } from "./types";
-import { addDaysUtc, toDateOnly } from "@/lib/expiry";
-import type { BarcodeProductInput, MoveInput, ProductFilters, ProductInput, ReceiptInput } from "./validation";
-
-const PRODUCT_COLUMNS = "id, name, barcode, expiry_date, qty, unit, cost, location_id";
+import { parseBranch, parseCatalogProduct, parseRows, parseStockLot, parseStorageLocation } from "./parse";
+import type { TenantScope } from "./scope";
+import type { Branch, CatalogLine, CatalogProduct, StorageLocation } from "./types";
+import type { BarcodeProductInput, ReceiptInput, StorageLocationInput } from "./validation";
 
 /**
- * All reads and writes of products/locations live here. Every statement is built from an OrgScope
- * and carries .eq("organization_id", orgId) (inserts set organization_id explicitly); RLS is the
- * second line of defence, not the only one. Stock moves go through the move_stock RPC only.
+ * All catalog and storage reads and writes live here. Every statement is built from a TenantScope and
+ * carries .eq("tenant_id", tenantId) (inserts set tenant_id explicitly); RLS is the second line of
+ * defence, not the only one. Stock changes only through stock_movements.
  */
 
 const CATALOG_COLUMNS =
-  "id, name, barcode, internal_code, photo_url, category, unit, cost, shelf_life_days, min_stock, expiry_date, branch_id, branch:branches(name)";
+  "id, name, barcode, internal_code, photo_url, category, unit, shelf_life_days, min_stock, expiry_date, branch_id, storage_location_id, branch:branches(name)";
 
-/**
- * Catalog for block 1.1. Products of the branch (or shared ones without a branch) with their
- * stock from product_stocks: total quantity, nearest lot expiry and value.
- */
-export async function listCatalog(scope: OrgScope, branchId: string | null): Promise<CatalogLine[]> {
-  let products = scope.client
-    .from("products")
-    .select(CATALOG_COLUMNS)
-    .eq("tenant_id", scope.tenantId)
-    .eq("organization_id", scope.orgId);
-  if (branchId) products = products.or(`branch_id.eq.${branchId},branch_id.is.null`);
+const withPrice = (product: CatalogProduct, prices: Map<string, number>): CatalogProduct => ({
+  ...product,
+  pricePerUnit: prices.get(product.id) ?? null,
+});
 
-  let lots = scope.client
-    .from("product_stocks")
-    .select("product_id, quantity, expiry_date, cost_per_unit")
-    .eq("tenant_id", scope.tenantId)
-    .gt("quantity", 0);
-  if (branchId) lots = lots.eq("branch_id", branchId);
+export type CatalogFilters = {
+  branchId: string | null;
+  search: string | null;
+  category: string | null;
+  lowOnly: boolean;
+};
 
-  const [productRows, lotRows] = await Promise.all([products.order("name").limit(500), lots.limit(5000)]);
+export const NO_CATALOG_FILTERS: CatalogFilters = { branchId: null, search: null, category: null, lowOnly: false };
+
+type CatalogPageRow = { id: string; stock: number; nearestExpiry: string | null; total: number };
+
+function parseCatalogPageRow(row: unknown): CatalogPageRow | null {
+  if (typeof row !== "object" || row === null) return null;
+  const record = row as Record<string, unknown>;
+  const stock = Number(record.stock);
+  const total = Number(record.total_count);
+  if (typeof record.id !== "string" || !Number.isFinite(stock) || !Number.isFinite(total)) return null;
+  return {
+    id: record.id,
+    stock,
+    nearestExpiry: typeof record.nearest_expiry === "string" ? record.nearest_expiry : null,
+    total,
+  };
+}
+
+/** Filtering, low-stock rule, ordering and the total count run in catalog_page. */
+async function catalogPage(
+  scope: TenantScope,
+  filters: CatalogFilters,
+  offset: number,
+  limit: number,
+  productId: string | null = null,
+): Promise<CatalogPageRow[]> {
+  const { data, error } = await scope.client.rpc("catalog_page", {
+    p_branch_id: filters.branchId,
+    p_search: filters.search,
+    p_category: filters.category,
+    p_low_only: filters.lowOnly,
+    p_product_id: productId,
+    p_offset: offset,
+    p_limit: limit,
+  });
+  if (error) throw error;
+  return parseRows(data, parseCatalogPageRow);
+}
+
+/** Product details, price and stock value for the rows of one page, in page order. */
+async function catalogLines(scope: TenantScope, branchId: string | null, rows: CatalogPageRow[]): Promise<CatalogLine[]> {
+  if (rows.length === 0) return [];
+  const ids = rows.map((row) => row.id);
+  const [productRows, lots, prices, costs] = await Promise.all([
+    scope.client.from("products").select(CATALOG_COLUMNS).eq("tenant_id", scope.tenantId).in("id", ids),
+    fetchAll((from, to) => {
+      let query = scope.client
+        .from("product_stocks")
+        .select("id, product_id, quantity, expiry_date")
+        .eq("tenant_id", scope.tenantId)
+        .in("product_id", ids)
+        .gt("quantity", 0);
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query.order("id").range(from, to);
+    }),
+    productPrices(scope, ids),
+    lotCosts(scope, { productIds: ids, branchId }),
+  ]);
   if (productRows.error) throw productRows.error;
-  if (lotRows.error) throw lotRows.error;
 
-  const byProduct = new Map<string, { stock: number; nearestExpiry: string | null; value: number }>();
-  for (const lot of parseRows(lotRows.data, parseStockLot)) {
-    const entry = byProduct.get(lot.productId) ?? { stock: 0, nearestExpiry: null, value: 0 };
-    entry.stock += lot.quantity;
-    entry.value += lot.quantity * (lot.costPerUnit ?? 0);
-    if (lot.expiryDate && (!entry.nearestExpiry || lot.expiryDate < entry.nearestExpiry)) {
-      entry.nearestExpiry = lot.expiryDate;
-    }
-    byProduct.set(lot.productId, entry);
+  const values = new Map<string, number>();
+  for (const lot of parseRows(lots, parseStockLot)) {
+    values.set(lot.productId, (values.get(lot.productId) ?? 0) + lot.quantity * (costs.get(lot.id) ?? 0));
   }
+  const products = new Map(parseRows(productRows.data, parseCatalogProduct).map((product) => [product.id, product]));
 
-  return parseRows(productRows.data, parseCatalogProduct).map((product) => {
-    const entry = byProduct.get(product.id);
-    return {
-      ...product,
-      stock: entry?.stock ?? 0,
-      nearestExpiry: entry?.nearestExpiry ?? product.expiryDate,
-      value: entry && entry.value > 0 ? entry.value : (entry?.stock ?? 0) * (product.pricePerUnit ?? 0),
-    };
+  return rows.flatMap((row) => {
+    const found = products.get(row.id);
+    if (!found) return [];
+    const product = withPrice(found, prices);
+    const value = values.get(row.id) ?? 0;
+    return [
+      {
+        ...product,
+        stock: row.stock,
+        nearestExpiry: row.nearestExpiry,
+        value: value > 0 ? value : row.stock * (product.pricePerUnit ?? 0),
+      },
+    ];
   });
 }
 
+/**
+ * One page of the catalog for block 1.1: products of the branch (or shared ones without a branch)
+ * with stock, nearest lot expiry and value, plus the number of products matching the filters.
+ */
+export async function listCatalog(
+  scope: TenantScope,
+  filters: CatalogFilters,
+  page: number,
+): Promise<{ lines: CatalogLine[]; total: number }> {
+  const { from } = pageRange(page);
+  const rows = await catalogPage(scope, filters, from, PAGE_SIZE);
+  if (rows.length === 0) {
+    const total = from > 0 ? ((await catalogPage(scope, filters, 0, 1))[0]?.total ?? 0) : 0;
+    return { lines: [], total };
+  }
+  return { lines: await catalogLines(scope, filters.branchId, rows), total: rows[0].total };
+}
+
+/** One catalog line, e.g. a scanned product that is not on the current page. */
+export async function getCatalogLine(
+  scope: TenantScope,
+  productId: string,
+  branchId: string | null,
+): Promise<CatalogLine | null> {
+  const rows = await catalogPage(scope, { ...NO_CATALOG_FILTERS, branchId }, 0, 1, productId);
+  return (await catalogLines(scope, branchId, rows))[0] ?? null;
+}
+
+export async function listCatalogCategories(scope: TenantScope, branchId: string | null): Promise<string[]> {
+  const rows = await fetchAll((from, to) =>
+    scope.client.rpc("catalog_categories", { p_branch_id: branchId }).order("category").range(from, to),
+  );
+  return rows.flatMap((row) =>
+    typeof row === "object" && row !== null && typeof (row as { category?: unknown }).category === "string"
+      ? [(row as { category: string }).category]
+      : [],
+  );
+}
+
+async function withProductPrice(scope: TenantScope, product: CatalogProduct | undefined): Promise<CatalogProduct | null> {
+  if (!product) return null;
+  return withPrice(product, await productPrices(scope, [product.id]));
+}
+
 /** Looks a scanned code up as a factory barcode first, then as our internal code. */
-export async function findProductByBarcode(scope: OrgScope, code: string): Promise<CatalogProduct | null> {
+export async function findProductByBarcode(scope: TenantScope, code: string): Promise<CatalogProduct | null> {
   const byBarcode = await scope.client
     .from("products")
     .select(CATALOG_COLUMNS)
     .eq("tenant_id", scope.tenantId)
-    .eq("organization_id", scope.orgId)
     .eq("barcode", code)
     .order("created_at")
     .limit(1);
   if (byBarcode.error) throw byBarcode.error;
   const found = parseRows(byBarcode.data, parseCatalogProduct)[0];
-  if (found) return found;
+  if (found) return withProductPrice(scope, found);
 
   const byInternal = await scope.client
     .from("products")
     .select(CATALOG_COLUMNS)
     .eq("tenant_id", scope.tenantId)
-    .eq("organization_id", scope.orgId)
     .eq("internal_code", code)
     .limit(1);
   if (byInternal.error) throw byInternal.error;
-  return parseRows(byInternal.data, parseCatalogProduct)[0] ?? null;
+  return withProductPrice(scope, parseRows(byInternal.data, parseCatalogProduct)[0]);
 }
 
 export async function createProductWithBarcode(
-  scope: OrgScope,
+  scope: TenantScope,
   input: BarcodeProductInput,
 ): Promise<{ ok: true; product: CatalogProduct } | { ok: false; error: AnbarErrorCode }> {
   const { data, error } = await scope.client
     .from("products")
     .insert({
-      organization_id: scope.orgId,
       tenant_id: scope.tenantId,
       name: input.name,
       barcode: input.barcode,
@@ -113,16 +194,17 @@ export async function createProductWithBarcode(
       min_stock: input.minStock,
       expiry_date: input.expiryDate,
       branch_id: input.branchId,
+      storage_location_id: input.storageLocationId,
     })
     .select(CATALOG_COLUMNS)
     .single();
   if (error) return { ok: false, error: mapRpcError(error) };
-  const product = parseCatalogProduct(data);
+  const product = await withProductPrice(scope, parseCatalogProduct(data) ?? undefined);
   return product ? { ok: true, product } : { ok: false, error: "saveFailed" };
 }
 
 export async function updateExpiry(
-  scope: OrgScope,
+  scope: TenantScope,
   productId: string,
   expiryDate: string | null,
 ): Promise<AnbarErrorCode | null> {
@@ -133,42 +215,85 @@ export async function updateExpiry(
   return error ? mapRpcError(error) : null;
 }
 
-export async function listBranches(scope: OrgScope): Promise<Branch[]> {
-  const { data, error } = await scope.client
-    .from("branches")
-    .select("id, name")
-    .eq("tenant_id", scope.tenantId)
-    .order("name")
-    .limit(200);
-  if (error) throw error;
-  return parseRows(data, parseBranch);
+export async function listBranches(scope: TenantScope): Promise<Branch[]> {
+  const rows = await fetchAll((from, to) =>
+    scope.client.from("branches").select("id, name").eq("tenant_id", scope.tenantId).order("name").order("id").range(from, to),
+  );
+  return parseRows(rows, parseBranch);
 }
 
-export async function listStorageLocations(scope: OrgScope): Promise<StorageLocation[]> {
+export const STORAGE_COLUMNS = "id, name, type, branch_id, is_active";
+
+/** Active locations of one branch, or of every branch when branchId is null. */
+export async function listStorageLocations(
+  scope: TenantScope,
+  { branchId = null, includeInactive = false }: { branchId?: string | null; includeInactive?: boolean } = {},
+): Promise<StorageLocation[]> {
+  const rows = await fetchAll((from, to) => {
+    let query = scope.client.from("storage_locations").select(STORAGE_COLUMNS).eq("tenant_id", scope.tenantId);
+    if (branchId) query = query.eq("branch_id", branchId);
+    if (!includeInactive) query = query.eq("is_active", true);
+    return query.order("name").order("id").range(from, to);
+  });
+  return parseRows(rows, parseStorageLocation);
+}
+
+const storageError = (error: { code?: unknown; message?: unknown }): AnbarErrorCode =>
+  error.code === "23505" ? "duplicateLocation" : mapRpcError(error);
+
+export async function insertStorageLocation(
+  scope: TenantScope,
+  input: StorageLocationInput,
+): Promise<{ ok: true; location: StorageLocation } | { ok: false; error: AnbarErrorCode }> {
+  const branch = await scope.client
+    .from("branches")
+    .select("id")
+    .eq("tenant_id", scope.tenantId)
+    .eq("id", input.branchId)
+    .maybeSingle();
+  if (branch.error) return { ok: false, error: "saveFailed" };
+  if (!branch.data) return { ok: false, error: "invalidInput" };
+
   const { data, error } = await scope.client
     .from("storage_locations")
-    .select("id, name, type, branch_id")
+    .insert({ tenant_id: scope.tenantId, branch_id: input.branchId, name: input.name, type: input.type })
+    .select(STORAGE_COLUMNS)
+    .single();
+  if (error) return { ok: false, error: storageError(error) };
+  const location = parseStorageLocation(data);
+  return location ? { ok: true, location } : { ok: false, error: "saveFailed" };
+}
+
+export async function updateStorageLocation(
+  scope: TenantScope,
+  id: string,
+  patch: { name?: string; isActive?: boolean },
+): Promise<AnbarErrorCode | null> {
+  const { error } = await scope.client
+    .from("storage_locations")
+    .update({
+      ...(patch.name !== undefined && { name: patch.name }),
+      ...(patch.isActive !== undefined && { is_active: patch.isActive }),
+    })
     .eq("tenant_id", scope.tenantId)
-    .order("name")
-    .limit(200);
-  if (error) throw error;
-  return parseRows(data, parseStorageLocation);
+    .eq("id", id);
+  return error ? storageError(error) : null;
 }
 
 /** Goods receipt: one 'prihod' movement; the stock_movements trigger adds the lot to product_stocks. */
-export async function receiveStock(scope: OrgScope, input: ReceiptInput): Promise<AnbarErrorCode | null> {
+export async function receiveStock(scope: TenantScope, input: ReceiptInput): Promise<AnbarErrorCode | null> {
   const [location, product] = await Promise.all([
     scope.client
       .from("storage_locations")
       .select("id, branch_id")
       .eq("tenant_id", scope.tenantId)
       .eq("id", input.locationId)
+      .eq("is_active", true)
       .maybeSingle(),
     scope.client
       .from("products")
       .select("id, unit")
       .eq("tenant_id", scope.tenantId)
-      .eq("organization_id", scope.orgId)
       .eq("id", input.productId)
       .maybeSingle(),
   ]);
@@ -186,100 +311,6 @@ export async function receiveStock(scope: OrgScope, input: ReceiptInput): Promis
     expiry_date: input.expiryDate,
     cost_per_unit: input.pricePerUnit,
     unit: typeof product.data.unit === "string" ? product.data.unit : null,
-  });
-  return error ? mapRpcError(error) : null;
-}
-
-export async function listLocations(scope: OrgScope): Promise<Location[]> {
-  const { data, error } = await scope.client
-    .from("locations")
-    .select("id, name")
-    .eq("organization_id", scope.orgId)
-    .order("name")
-    .limit(500);
-  if (error) throw error;
-  return parseRows(data, parseLocation);
-}
-
-export async function locationExists(scope: OrgScope, locationId: string): Promise<boolean> {
-  const { data, error } = await scope.client
-    .from("locations")
-    .select("id")
-    .eq("id", locationId)
-    .eq("organization_id", scope.orgId)
-    .maybeSingle();
-  if (error) throw error;
-  return data !== null;
-}
-
-export type ProductPage = { products: Product[]; hasNext: boolean };
-
-/**
- * One page of products, soonest expiry first (no expiry last), then name, then id (stable order).
- * Fetches PAGE_SIZE + 1 rows to know whether a next page exists without an expensive count.
- */
-export async function listProducts(
-  scope: OrgScope,
-  filters: ProductFilters,
-  now: Date = new Date(),
-): Promise<ProductPage> {
-  let query = scope.client
-    .from("products")
-    .select(PRODUCT_COLUMNS)
-    .eq("tenant_id", scope.tenantId)
-    .eq("organization_id", scope.orgId);
-
-  if (filters.barcode) query = query.eq("barcode", filters.barcode);
-  if (filters.locationId) query = query.eq("location_id", filters.locationId);
-  if (filters.lowStock) query = query.lt("qty", LOW_STOCK_THRESHOLD);
-
-  const today = toDateOnly(now);
-  if (filters.expiredOnly) query = query.lt("expiry_date", today);
-  if (filters.expiry === "week") query = query.lt("expiry_date", addDaysUtc(now, 7));
-  if (filters.expiry === "month") query = query.lt("expiry_date", addDaysUtc(now, 30));
-  if (filters.expiry === "ok") query = query.gte("expiry_date", addDaysUtc(now, 30));
-
-  const from = (filters.page - 1) * PAGE_SIZE;
-  const { data, error } = await query
-    .order("expiry_date", { ascending: true, nullsFirst: false })
-    .order("name")
-    .order("id")
-    .range(from, from + PAGE_SIZE);
-  if (error) throw error;
-
-  const rows = parseRows(data, parseProduct);
-  return { products: rows.slice(0, PAGE_SIZE), hasNext: rows.length > PAGE_SIZE };
-}
-
-export async function insertLocation(scope: OrgScope, name: string): Promise<AnbarErrorCode | null> {
-  const { error } = await scope.client
-    .from("locations")
-    .insert({ organization_id: scope.orgId, name });
-  return error ? mapRpcError(error) : null;
-}
-
-export async function insertProduct(scope: OrgScope, input: ProductInput): Promise<AnbarErrorCode | null> {
-  const { error } = await scope.client.from("products").insert({
-    organization_id: scope.orgId,
-    tenant_id: scope.tenantId,
-    name: input.name,
-    barcode: input.barcode,
-    expiry_date: input.expiryDate,
-    location_id: input.locationId,
-    qty: input.qty,
-    cost: input.cost,
-    unit: input.unit,
-  });
-  return error ? mapRpcError(error) : null;
-}
-
-/** The only way stock moves: the atomic, org-checked move_stock RPC. */
-export async function moveStockRpc(scope: OrgScope, input: MoveInput): Promise<AnbarErrorCode | null> {
-  const { error } = await scope.client.rpc("move_stock", {
-    p_product_id: input.productId,
-    p_from_location: input.fromLocationId,
-    p_to_location: input.toLocationId,
-    p_qty: input.qty,
   });
   return error ? mapRpcError(error) : null;
 }

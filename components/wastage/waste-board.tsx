@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,45 +8,47 @@ import { Card } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Pager } from "@/components/ui/pager";
 import { Select } from "@/components/ui/select";
 import { Toast } from "@/components/ui/toast";
 import type { KitchenBranch, KitchenLocation, StockLine } from "@/lib/anbar/stock-view";
 import { formatMoney } from "@/lib/money";
 import { useT } from "@/lib/i18n/useT";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
+import { searchWasteStockAction } from "@/lib/wastage/actions";
+import type { WasteErrorCode } from "@/lib/wastage/create";
 import { WASTE_REASONS, type WasteCard, type WasteReason } from "@/lib/wastage/model";
 
-function wasteError(
-  code: string | undefined,
-  errors: {
-    invalid_input: string;
-    unauthenticated: string;
-    no_tenant: string;
-    product_not_found: string;
-    location_not_found: string;
-    insufficient_stock: string;
-    photo_required: string;
-    save_failed: string;
-  },
-): string {
-  if (code && code in errors) return errors[code as keyof typeof errors];
+function wasteError(code: string | undefined, errors: Record<WasteErrorCode, string>): string {
+  if (code && code in errors) return errors[code as WasteErrorCode];
   return errors.save_failed;
 }
 
+const stockKey = (line: StockLine) => `${line.productId}|${line.locationId}`;
+
 export default function WasteBoard({
-  lines,
   locations,
   branches,
   locationId,
   branchId,
   cards,
+  count,
+  page,
+  pageSize,
+  total,
   symbol,
 }: {
-  lines: StockLine[];
   locations: KitchenLocation[];
   branches: KitchenBranch[];
   locationId: string | "all";
   branchId: string | "all";
   cards: WasteCard[];
+  /** Today's logs in the filter (all pages). */
+  count: number;
+  page: number;
+  pageSize: number;
+  /** Value of today's logs in the filter; null when the role may not see costs. */
+  total: number | null;
   symbol: string | null;
 }) {
   const { t } = useT();
@@ -57,13 +59,17 @@ export default function WasteBoard({
   const base = pathname.startsWith("/app/wastage") ? "/app/wastage" : "/app/tullanti";
   const [open, setOpen] = useState(false);
   const [toast, setToast] = useState<number | null>(null);
-  const total = cards.reduce((sum, card) => sum + card.cost, 0);
+  const money = (amount: number | null) => (amount === null ? "—" : formatMoney(amount, symbol));
+
+  const filterQuery = (nextBranch: string | "all", nextLocation: string | "all") => {
+    const query: Record<string, string> = {};
+    if (nextBranch !== "all") query.branch = nextBranch;
+    if (nextLocation !== "all") query.location = nextLocation;
+    return query;
+  };
 
   const href = (nextBranch: string | "all", nextLocation: string | "all") => {
-    const params = new URLSearchParams();
-    if (nextBranch !== "all") params.set("branch", nextBranch);
-    if (nextLocation !== "all") params.set("location", nextLocation);
-    const query = params.toString();
+    const query = new URLSearchParams(filterQuery(nextBranch, nextLocation)).toString();
     return query ? `${base}?${query}` : base;
   };
 
@@ -111,7 +117,7 @@ export default function WasteBoard({
           >
             <option value="">{place.places.all}</option>
             {locations
-              .filter((location) => branchId === "all" || location.branchId === branchId)
+              .filter((location) => location.active && (branchId === "all" || location.branchId === branchId))
               .map((location) => (
                 <option key={location.id} value={location.id}>
                   {location.name}
@@ -145,20 +151,30 @@ export default function WasteBoard({
                   </p>
                 ) : null}
               </div>
-              <p className="shrink-0 text-sm text-beige">{formatMoney(card.cost, symbol)}</p>
+              <p className="shrink-0 text-sm text-beige">{money(card.cost)}</p>
             </Card>
           ))}
         </div>
       )}
 
+      <Pager
+        path={base}
+        query={filterQuery(branchId, locationId)}
+        page={page}
+        pageSize={pageSize}
+        total={count}
+        shown={cards.length}
+      />
+
       <div>
         <p className="text-[10px] font-medium uppercase tracking-widest text-white/50">{copy.total}</p>
-        <p className="mt-1 font-serif text-3xl font-bold text-white">{formatMoney(total, symbol)}</p>
+        <p className="mt-1 font-serif text-3xl font-bold text-white">{money(total)}</p>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen} title={copy.writeOff} closeLabel={copy.cancel}>
         <WriteOffForm
-          lines={lines}
+          branchId={branchId}
+          locationId={locationId}
           onDone={() => {
             setOpen(false);
             setToast(Date.now());
@@ -171,15 +187,43 @@ export default function WasteBoard({
   );
 }
 
-function WriteOffForm({ lines, onDone }: { lines: StockLine[]; onDone: () => void }) {
+function WriteOffForm({
+  branchId,
+  locationId,
+  onDone,
+}: {
+  branchId: string | "all";
+  locationId: string | "all";
+  onDone: () => void;
+}) {
   const { t } = useT();
   const copy = t.waste;
   const [reason, setReason] = useState<WasteReason>("spoiled");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const first = lines[0];
-  const [stock, setStock] = useState(first ? `${first.productId}|${first.locationId}` : "");
-  const selected = lines.find((line) => `${line.productId}|${line.locationId}` === stock) ?? first;
+  const [query, setQuery] = useState("");
+  const search = useDebouncedValue(query.trim());
+  const [lines, setLines] = useState<StockLine[] | null>(null);
+  const [stock, setStock] = useState("");
+  const selected = lines?.find((line) => stockKey(line) === stock) ?? null;
+
+  useEffect(() => {
+    let live = true;
+    void searchWasteStockAction({ search, branchId, locationId }).then((result) => {
+      if (!live) return;
+      if (!result.ok) {
+        setError(copy.errors.save_failed);
+        return;
+      }
+      setLines(result.lines);
+      setStock((current) =>
+        result.lines.some((line) => stockKey(line) === current) ? current : result.lines[0] ? stockKey(result.lines[0]) : "",
+      );
+    });
+    return () => {
+      live = false;
+    };
+  }, [search, branchId, locationId, copy.errors.save_failed]);
 
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -195,19 +239,41 @@ function WriteOffForm({ lines, onDone }: { lines: StockLine[]; onDone: () => voi
     onDone();
   };
 
-  if (!selected) return <p className="text-sm text-white/60">{copy.noStock}</p>;
+  if (lines !== null && lines.length === 0 && search === "") {
+    return <p className="text-sm text-white/60">{copy.noStock}</p>;
+  }
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <div>
-        <Label htmlFor="waste-product">{copy.product}</Label>
-        <Select id="waste-product" name="stock" value={stock} onChange={(event) => setStock(event.target.value)} required>
-          {lines.map((line) => (
-            <option key={`${line.productId}|${line.locationId}`} value={`${line.productId}|${line.locationId}`}>
-              {line.productName} · {line.locationName}
-            </option>
-          ))}
-        </Select>
+        <Label htmlFor="waste-search">{copy.product}</Label>
+        <Input
+          id="waste-search"
+          type="search"
+          value={query}
+          placeholder={copy.search}
+          autoComplete="off"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {lines !== null && lines.length === 0 ? (
+          <p className="mt-1.5 text-xs text-white/50">{copy.noMatches}</p>
+        ) : (
+          <Select
+            id="waste-product"
+            aria-label={copy.product}
+            className="mt-2"
+            name="stock"
+            value={stock}
+            onChange={(event) => setStock(event.target.value)}
+            required
+          >
+            {(lines ?? []).map((line) => (
+              <option key={stockKey(line)} value={stockKey(line)}>
+                {line.productName} · {line.locationName} · {line.quantity} {line.unit}
+              </option>
+            ))}
+          </Select>
+        )}
       </div>
       <div>
         <Label htmlFor="waste-qty">{copy.quantity}</Label>
@@ -216,7 +282,7 @@ function WriteOffForm({ lines, onDone }: { lines: StockLine[]; onDone: () => voi
           name="quantity"
           type="number"
           min="0.001"
-          max={selected.quantity}
+          max={selected?.quantity}
           step="any"
           required
         />
@@ -242,7 +308,7 @@ function WriteOffForm({ lines, onDone }: { lines: StockLine[]; onDone: () => voi
         {reason === "theft" ? <p className="mt-1.5 text-xs text-white/50">{copy.photoTheft}</p> : null}
       </div>
       {error ? <p className="text-sm text-red-300">{error}</p> : null}
-      <Button type="submit" disabled={pending}>
+      <Button type="submit" disabled={pending || !selected}>
         {pending ? copy.working : copy.submit}
       </Button>
     </form>

@@ -4,12 +4,12 @@ import { getTenantId, OrgError } from "@/lib/org";
 import { createServerSupabase } from "@/lib/supabase/server";
 
 /**
- * Proof that the organization id was resolved on the server for the verified user. Repository
- * functions only accept this type, so every query is built with the organization filter.
+ * Proof that the tenant id was resolved on the server for the verified user through
+ * public.current_tenant_id(). Repository functions only accept this type, so every query is built
+ * with the tenant filter.
  */
-export type OrgScope = {
+export type TenantScope = {
   readonly client: SupabaseClient;
-  readonly orgId: string;
   readonly tenantId: string;
 };
 
@@ -17,7 +17,7 @@ export type ScopeResult =
   | { status: "unauthenticated" }
   | { status: "no_organization" }
   | { status: "error"; cause: unknown }
-  | { status: "ok"; scope: OrgScope };
+  | { status: "ok"; scope: TenantScope };
 
 /**
  * Resolves user + tenant once per request. Never reads the tenant id from client input.
@@ -29,7 +29,7 @@ export const resolveScope = cache(async (): Promise<ScopeResult> => {
 
   try {
     const tenantId = await getTenantId(supabase);
-    return { status: "ok", scope: { client: supabase, orgId: tenantId, tenantId } };
+    return { status: "ok", scope: { client: supabase, tenantId } };
   } catch (error) {
     if (error instanceof OrgError && error.code === "no_organization") {
       return { status: "no_organization" };

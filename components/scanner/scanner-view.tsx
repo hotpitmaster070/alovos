@@ -11,6 +11,8 @@ import { Toast } from "@/components/ui/toast";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { KitchenBranch, KitchenLocation } from "@/lib/anbar/stock-view";
 import { useT } from "@/lib/i18n/useT";
+import { matchScannedProductsAction, searchScannerProductsAction } from "@/lib/scanner/actions";
+import { useDebouncedValue } from "@/lib/use-debounced-value";
 import {
   SCAN_MIME,
   isRecord,
@@ -19,7 +21,14 @@ import {
   type ScanItem,
 } from "@/lib/scanner/model";
 
-type Draft = ScanItem & { key: string; qtyText: string; priceText: string; productId: string; query: string };
+type Draft = ScanItem & {
+  key: string;
+  qtyText: string;
+  priceText: string;
+  productId: string;
+  productName: string;
+  query: string;
+};
 
 type ScanError = {
   invalid_input: string;
@@ -47,21 +56,64 @@ function readError(value: unknown): string | undefined {
   return value.error;
 }
 
-function matchProduct(name: string, products: CatalogProduct[]): string {
-  const needle = name.trim().toLowerCase();
-  const found = products.find((product) => product.name.trim().toLowerCase() === needle);
-  return found ? found.id : "";
+/** Debounced product search under one invoice line. */
+function ProductPicker({
+  query,
+  label,
+  onQuery,
+  onPick,
+}: {
+  query: string;
+  label: string;
+  onQuery: (query: string) => void;
+  onPick: (product: CatalogProduct) => void;
+}) {
+  const search = useDebouncedValue(query.trim());
+  const [matches, setMatches] = useState<CatalogProduct[]>([]);
+
+  useEffect(() => {
+    let live = true;
+    if (!search) {
+      setMatches([]);
+      return;
+    }
+    void searchScannerProductsAction(search).then((result) => {
+      if (live) setMatches(result.ok ? result.products : []);
+    });
+    return () => {
+      live = false;
+    };
+  }, [search]);
+
+  return (
+    <>
+      <Input aria-label={label} value={query} placeholder={label} onChange={(event) => onQuery(event.target.value)} />
+      {matches.length > 0 ? (
+        <ul className="mt-2 flex flex-col gap-1">
+          {matches.map((product) => (
+            <li key={product.id}>
+              <button
+                type="button"
+                className="text-left text-sm text-beige underline underline-offset-4"
+                onClick={() => onPick(product)}
+              >
+                {product.name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </>
+  );
 }
 
 export default function ScannerView({
   locations,
-  products,
   branches,
   locationId,
   branchId,
 }: {
   locations: KitchenLocation[];
-  products: CatalogProduct[];
   branches: KitchenBranch[];
   locationId: string | "all";
   branchId: string | "all";
@@ -121,29 +173,36 @@ export default function ScannerView({
     body.set("photo", file);
     const response = await fetch("/api/scan-invoice", { method: "POST", body });
     const payload: unknown = await response.json().catch(() => null);
-    setPending(false);
     if (!response.ok) {
+      setPending(false);
       setError(scanError(readError(payload), copy.errors));
       return;
     }
     const items = parseScanItems(payload);
     const path = readPhotoPath(payload);
     if (items.length === 0 || !path) {
+      setPending(false);
       setError(copy.errors.no_items);
+      return;
+    }
+    const matched = await matchScannedProductsAction(items.map((item) => item.name));
+    setPending(false);
+    if (!matched.ok) {
+      setError(copy.errors.save_failed);
       return;
     }
     setPhotoPath(path);
     setRows(
       items.map((item, index) => {
-        const productId = matchProduct(item.name, products);
-        const selected = products.find((product) => product.id === productId);
+        const selected = matched.products[item.name.trim()] ?? null;
         return {
           ...item,
           key: `${index}-${item.name}`,
           qtyText: String(item.qty),
           priceText: String(item.price),
-          productId,
-          query: selected ? selected.name : "",
+          productId: selected?.id ?? "",
+          productName: selected?.name ?? "",
+          query: selected?.name ?? "",
         };
       }),
     );
@@ -280,14 +339,6 @@ export default function ScannerView({
               </TableHeader>
               <TableBody>
                 {rows.map((row) => {
-                  const needle = row.query.trim().toLowerCase();
-                  const matches =
-                    needle === ""
-                      ? []
-                      : products
-                          .filter((product) => product.name.toLowerCase().includes(needle))
-                          .slice(0, 6);
-                  const selected = products.find((product) => product.id === row.productId);
                   return (
                     <TableRow key={row.key}>
                       <TableCell>{row.name}</TableCell>
@@ -309,34 +360,21 @@ export default function ScannerView({
                         />
                       </TableCell>
                       <TableCell>
-                        <Input
-                          aria-label={copy.search}
-                          value={row.query}
-                          placeholder={copy.search}
-                          onChange={(event) => patch(row.key, { query: event.target.value, productId: "" })}
+                        <ProductPicker
+                          query={row.query}
+                          label={copy.search}
+                          onQuery={(query) => patch(row.key, { query, productId: "", productName: "" })}
+                          onPick={(product) =>
+                            patch(row.key, { productId: product.id, productName: product.name, query: product.name })
+                          }
                         />
-                        {selected ? (
+                        {row.productId ? (
                           <p className="mt-1 text-xs text-beige">
-                            {copy.selected}: {selected.name}
+                            {copy.selected}: {row.productName}
                           </p>
                         ) : (
                           <p className="mt-1 text-xs text-white/50">{copy.create}</p>
                         )}
-                        {matches.length > 0 ? (
-                          <ul className="mt-2 flex flex-col gap-1">
-                            {matches.map((product) => (
-                              <li key={product.id}>
-                                <button
-                                  type="button"
-                                  className="text-left text-sm text-beige underline underline-offset-4"
-                                  onClick={() => patch(row.key, { productId: product.id, query: product.name })}
-                                >
-                                  {product.name}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
                       </TableCell>
                     </TableRow>
                   );

@@ -3,50 +3,65 @@
 import { Loader2, Package, Plus, ScanLine, Search } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { buttonVariants } from "@/components/ui/button";
+import { Pager } from "@/components/ui/pager";
+import { SearchField } from "@/components/ui/search-field";
 import { Sheet } from "@/components/ui/sheet";
-import { lookupCodeAction } from "@/lib/anbar/actions";
+import { lookupCatalogLineAction } from "@/lib/anbar/actions";
 import { expiryStatus, isLowStock } from "@/lib/anbar/catalog-status";
 import type { AnbarErrorCode } from "@/lib/anbar/errors";
-import { isUnit, type Branch, type CatalogLine, type CatalogProduct } from "@/lib/anbar/types";
-import { ANBAR_RECEIPT_PATH } from "@/lib/auth-redirect";
+import { isUnit, type Branch, type CatalogLine, type CatalogProduct, type StorageLocation } from "@/lib/anbar/types";
+import { ANBAR_APP_PATH, ANBAR_RECEIPT_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
+import type { TenantSettings } from "@/lib/tenant-settings/parse";
 import { cn } from "@/lib/utils";
 import BarcodeScanner from "./barcode-scanner";
 import { useExpiryLabel } from "./catalog/expiry-label";
-import { ProductImage, SECONDARY_BUTTON, StatusDot } from "./catalog/primitives";
+import { ProductImage, StatusDot } from "./catalog/primitives";
 import ProductCreateForm from "./catalog/product-create-form";
 import ProductDetails from "./catalog/product-details";
 
-type Panel = { kind: "found"; product: CatalogProduct } | { kind: "create"; code: string | null } | null;
+type Panel =
+  | { kind: "found"; product: CatalogProduct; stock: CatalogLine | null }
+  | { kind: "create"; code: string | null }
+  | null;
 
-const CHIP = "shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors";
-const CHIP_ON = "bg-neutral-900 text-white";
-const CHIP_OFF = "bg-white text-neutral-600 shadow-[0_0_0_1px_rgba(0,0,0,0.06)] hover:text-neutral-900";
+const chip = (active: boolean) => cn(buttonVariants("outline", "sm"), "shrink-0", active && "bg-beige text-black");
 
-function ProductCard({ line, now, onOpen }: { line: CatalogLine; now: Date; onOpen: () => void }) {
+function ProductCard({
+  line,
+  now,
+  settings,
+  onOpen,
+}: {
+  line: CatalogLine;
+  now: Date;
+  settings: TenantSettings;
+  onOpen: () => void;
+}) {
   const { t } = useT();
   const expiryLabel = useExpiryLabel();
-  const status = expiryStatus(line.nearestExpiry, now);
+  const status = expiryStatus(line.nearestExpiry, now, settings);
   const unit = isUnit(line.unit) ? t.anbar.units[line.unit] : line.unit;
-  const low = isLowStock(line.stock, line.minStock);
+  const low = isLowStock(line.stock, line.minStock, settings);
 
   return (
     <button
       type="button"
       onClick={onOpen}
-      className="group relative flex w-full flex-col rounded-[22px] bg-white p-2.5 text-left shadow-[0_1px_2px_rgba(0,0,0,0.04),0_6px_20px_rgba(0,0,0,0.05)] transition duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_2px_4px_rgba(0,0,0,0.04),0_14px_34px_rgba(0,0,0,0.08)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-900/20 active:scale-[0.98]"
+      className="group relative flex w-full flex-col rounded-[22px] border border-white/10 bg-white/[0.03] p-2.5 text-left transition duration-300 ease-out hover:-translate-y-0.5 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 active:scale-[0.98]"
     >
       {status.dot && (
         <StatusDot dot={status.dot} label={expiryLabel(status)} className="absolute right-4 top-4 z-10" />
       )}
-      <ProductImage url={line.photoUrl} name={line.name} className="aspect-square w-full rounded-[16px]" />
+      <ProductImage url={line.photoUrl} name={line.name} className="aspect-square w-full rounded-[16px] !bg-white/5" />
       <div className="px-1.5 pb-1.5 pt-3">
-        <p className="line-clamp-2 text-[15px] font-medium leading-snug tracking-[-0.01em] text-neutral-900">
+        <p className="line-clamp-2 text-[15px] font-medium leading-snug tracking-[-0.01em] text-white">
           {line.name}
         </p>
-        <p className="mt-1 truncate text-[13px] text-neutral-500">
-          <span className={cn(low && "font-medium text-neutral-900")}>
+        <p className="mt-1 truncate text-[13px] text-white/50">
+          <span className={cn(low && "font-medium text-white")}>
             {line.stock} {unit}
           </span>
           {line.category ? ` · ${line.category}` : ""}
@@ -57,62 +72,107 @@ function ProductCard({ line, now, onOpen }: { line: CatalogLine; now: Date; onOp
 }
 
 /**
- * Block 1.1 catalog, Apple-style: light surface, Spotlight search, a grid of product cards with a
- * small expiry dot, one shutter button for the camera, and an iOS sheet with the scanned product.
+ * Catalog on the same dark shell as sayım: search, branch and category filters, receipt, and the
+ * product grid, with a text link back to Anbar.
  */
+type Filters = { branch: string | null; q: string; category: string | null; low: boolean };
+
 export default function CatalogView({
   lines,
+  total,
+  page,
+  pageSize,
+  search,
+  category,
+  lowOnly,
+  categories,
   branches,
+  locations,
   branchId,
-  currencySymbol,
+  settings,
 }: {
   lines: CatalogLine[];
+  /** Products matching the filters, all pages. */
+  total: number;
+  page: number;
+  pageSize: number;
+  search: string;
+  category: string | null;
+  lowOnly: boolean;
+  categories: string[];
   branches: Branch[];
+  locations: StorageLocation[];
   branchId: string | null;
-  currencySymbol: string | null;
+  settings: TenantSettings;
 }) {
   const { t } = useT();
   const copy = t.anbar.barcode;
   const shelf = t.anbar.shelf;
   const router = useRouter();
   const pathname = usePathname();
-  const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>(null);
   const [lookupError, setLookupError] = useState<AnbarErrorCode | null>(null);
   const [looking, startLookup] = useTransition();
+  /** Code submitted with Enter while the list still showed another search. */
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
   const now = useMemo(() => new Date(), []);
+  const filtered = search !== "" || category !== null || lowOnly;
 
-  const stockById = useMemo(() => new Map(lines.map((line) => [line.id, line])), [lines]);
-  const categories = useMemo(
-    () => Array.from(new Set(lines.flatMap((line) => (line.category ? [line.category] : [])))).sort(),
-    [lines],
-  );
-
-  const visible = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return lines.filter((line) => {
-      if (category && line.category !== category) return false;
-      if (!needle) return true;
-      return [line.name, line.barcode ?? "", line.internalCode, line.category ?? ""].some((value) =>
-        value.toLowerCase().includes(needle),
-      );
-    });
-  }, [lines, query, category]);
-
-  const lookup = (code: string) => {
-    setLookupError(null);
-    startLookup(async () => {
-      const found = await lookupCodeAction(code);
-      if (!found.ok) {
-        setLookupError(found.error);
-        return;
-      }
-      setPanel(found.product ? { kind: "found", product: found.product } : { kind: "create", code: found.code });
-    });
+  const current: Filters = { branch: branchId, q: search, category, low: lowOnly };
+  const filterQuery = (next: Partial<Filters>) => {
+    const merged = { ...current, ...next };
+    const params: Record<string, string> = {};
+    if (merged.branch) params.branch = merged.branch;
+    if (merged.q) params.q = merged.q;
+    if (merged.category) params.category = merged.category;
+    if (merged.low) params.low = "1";
+    return params;
+  };
+  const filterHref = (next: Partial<Filters>) => {
+    const params = new URLSearchParams(filterQuery(next)).toString();
+    return params ? `${pathname}?${params}` : pathname;
   };
 
-  const branchHref = (id: string | null) => (id ? `${pathname}?branch=${id}` : pathname);
+  const openLine = (line: CatalogLine) => setPanel({ kind: "found", product: line, stock: line });
+
+  /**
+   * Scan or Enter on a code: its product (barcode or internal code); otherwise, with the list of that
+   * search, the only match or a new product when nothing matches.
+   */
+  const resolveCode = useCallback(
+    (code: string, matches: { lines: CatalogLine[]; total: number } | null) => {
+      setLookupError(null);
+      startLookup(async () => {
+        const found = await lookupCatalogLineAction(code, branchId);
+        if (!found.ok) {
+          setLookupError(found.error);
+          return;
+        }
+        if (found.line) setPanel({ kind: "found", product: found.line, stock: found.line });
+        else if (matches === null || matches.total === 0) setPanel({ kind: "create", code: found.code });
+        else if (matches.total === 1 && matches.lines[0]) {
+          setPanel({ kind: "found", product: matches.lines[0], stock: matches.lines[0] });
+        }
+      });
+    },
+    [branchId],
+  );
+
+  useEffect(() => {
+    if (pendingCode === null || pendingCode !== search) return;
+    setPendingCode(null);
+    resolveCode(pendingCode, { lines, total });
+  }, [pendingCode, search, lines, total, resolveCode]);
+
+  const submitSearch = (raw: string) => {
+    const code = raw.trim();
+    if (!code) return;
+    if (code === search) resolveCode(code, { lines, total });
+    else {
+      setPendingCode(code);
+      router.replace(filterHref({ q: code }));
+    }
+  };
 
   const sheetTitle =
     panel?.kind === "found" ? panel.product.name : panel?.kind === "create" ? shelf.newProduct : "";
@@ -124,21 +184,16 @@ export default function CatalogView({
         : undefined;
 
   return (
-    <div
-      data-surface="light"
-      className="-mx-4 -mt-8 min-h-[100dvh] bg-[#F5F5F7] px-5 pb-44 pt-10 font-system text-[#1d1d1f] antialiased lg:-mx-10 lg:px-10"
-    >
-      <header className="flex items-end justify-between gap-4">
-        <div className="min-w-0">
-          <p className="text-[13px] font-medium uppercase tracking-[0.08em] text-neutral-400">{t.anbar.title}</p>
-          <h1 className="mt-1 text-[34px] font-semibold leading-[1.1] tracking-[-0.025em]">{t.anbar.catalog.title}</h1>
-          <p className="mt-1.5 text-[15px] text-neutral-500">{shelf.products(lines.length)}</p>
+    <>
+    <div aria-hidden className="pointer-events-none fixed inset-y-0 right-0 hidden bg-[#0A0A0A] lg:left-64 lg:block" />
+    <div className="relative z-10 -mx-4 -my-8 flex min-h-screen flex-col gap-6 bg-[#0A0A0A] p-6 text-white lg:-mx-10">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-[32px] font-bold leading-[1.1] tracking-tight">{t.anbar.catalog.title}</h1>
+          <p className="mt-2 text-sm text-white/60">{shelf.shown(lines.length, total)}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
-          <Link
-            href={ANBAR_RECEIPT_PATH}
-            className="rounded-full px-3.5 py-2 text-[15px] font-medium text-neutral-600 transition-colors hover:bg-black/5 hover:text-neutral-900"
-          >
+        <div className="flex flex-wrap justify-end gap-2">
+          <Link href={ANBAR_RECEIPT_PATH} className={buttonVariants("outline", "sm")}>
             {t.anbar.qebul.open}
           </Link>
           <button
@@ -146,54 +201,62 @@ export default function CatalogView({
             onClick={() => setPanel({ kind: "create", code: null })}
             aria-label={copy.add}
             title={copy.add}
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-900 shadow-[0_0_0_1px_rgba(0,0,0,0.06),0_2px_8px_rgba(0,0,0,0.06)] transition hover:shadow-[0_0_0_1px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.1)]"
+            className={buttonVariants("outline", "sm")}
           >
-            <Plus className="h-[18px] w-[18px]" strokeWidth={2} aria-hidden="true" />
+            <Plus className="h-4 w-4" strokeWidth={2} aria-hidden="true" />
           </button>
+          <Link href={ANBAR_APP_PATH} className={buttonVariants("outline", "sm")}>
+            {t.anbar.title}
+          </Link>
         </div>
-      </header>
+      </div>
 
-      <div className="sticky top-0 z-20 -mx-5 mt-7 bg-[#F5F5F7]/80 px-5 py-3 backdrop-blur-xl lg:-mx-10 lg:px-10">
+      <div className="sticky top-0 z-20 -mx-6 bg-[#0A0A0A]/90 px-6 py-3 backdrop-blur-xl">
         <form
           role="search"
           onSubmit={(event) => {
             event.preventDefault();
-            const code = query.trim();
-            if (!code) return;
-            if (visible.length === 1) setPanel({ kind: "found", product: visible[0] });
-            else if (visible.length === 0) lookup(code);
+            submitSearch(String(new FormData(event.currentTarget).get("q") ?? ""));
           }}
           className="relative"
         >
           <Search
-            className="pointer-events-none absolute left-3.5 top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-neutral-400"
+            className="pointer-events-none absolute left-3.5 top-1/2 h-[17px] w-[17px] -translate-y-1/2 text-white/40"
             strokeWidth={2}
             aria-hidden="true"
           />
-          <input
+          <SearchField
+            unstyled
             type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            name="q"
+            value={search}
+            onSearch={(text) => router.replace(filterHref({ q: text }))}
             placeholder={copy.search}
             aria-label={copy.search}
             autoComplete="off"
             enterKeyHint="search"
-            className="h-11 w-full appearance-none rounded-[12px] bg-black/[0.06] pl-10 pr-4 text-[17px] text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:bg-white focus:shadow-[0_0_0_4px_rgba(0,0,0,0.05)]"
+            className="h-11 w-full appearance-none rounded-[12px] border border-white/10 bg-white/5 pl-10 pr-4 text-[17px] text-white outline-none transition placeholder:text-white/40 focus:border-white/20"
           />
         </form>
 
-        {(branches.length > 0 || categories.length > 0) && (
-          <div className="-mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1 [scrollbar-width:none] lg:-mx-10 lg:px-10">
+        {(total > 0 || filtered) && (
+          <div className="-mx-6 mt-3 flex gap-2 overflow-x-auto px-6 pb-1 [scrollbar-width:none]">
+            <Link href={filterHref({ low: !lowOnly })} aria-current={lowOnly ? "true" : undefined} className={chip(lowOnly)}>
+              {shelf.lowStock}
+            </Link>
+            {(branches.length > 0 || categories.length > 0) && (
+              <span className="mx-1 w-px shrink-0 self-stretch bg-white/10" aria-hidden="true" />
+            )}
             {branches.length > 0 && (
               <>
-                <Link href={branchHref(null)} className={cn(CHIP, branchId === null ? CHIP_ON : CHIP_OFF)}>
+                <Link href={filterHref({ branch: null, category: null })} className={chip(branchId === null)}>
                   {copy.allBranches}
                 </Link>
                 {branches.map((branch) => (
                   <Link
                     key={branch.id}
-                    href={branchHref(branch.id)}
-                    className={cn(CHIP, branchId === branch.id ? CHIP_ON : CHIP_OFF)}
+                    href={filterHref({ branch: branch.id, category: null })}
+                    className={chip(branchId === branch.id)}
                   >
                     {branch.name}
                   </Link>
@@ -201,51 +264,56 @@ export default function CatalogView({
               </>
             )}
             {branches.length > 0 && categories.length > 0 && (
-              <span className="mx-1 w-px shrink-0 self-stretch bg-black/10" aria-hidden="true" />
+              <span className="mx-1 w-px shrink-0 self-stretch bg-white/10" aria-hidden="true" />
             )}
             {categories.map((name) => (
-              <button
+              <Link
                 key={name}
-                type="button"
-                aria-pressed={category === name}
-                onClick={() => setCategory(category === name ? null : name)}
-                className={cn(CHIP, category === name ? CHIP_ON : CHIP_OFF)}
+                href={filterHref({ category: category === name ? null : name })}
+                aria-current={category === name ? "true" : undefined}
+                className={chip(category === name)}
               >
                 {name}
-              </button>
+              </Link>
             ))}
           </div>
         )}
       </div>
 
-      {lines.length === 0 ? (
+      {total === 0 && !filtered ? (
         <div className="mx-auto mt-20 flex max-w-xs flex-col items-center text-center">
-          <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white shadow-[0_6px_20px_rgba(0,0,0,0.06)]">
-            <Package className="h-9 w-9 text-neutral-300" strokeWidth={1.25} aria-hidden="true" />
+          <div className="flex h-20 w-20 items-center justify-center rounded-full border border-white/10 bg-white/5">
+            <Package className="h-9 w-9 text-white/30" strokeWidth={1.25} aria-hidden="true" />
           </div>
           <p className="mt-6 text-[20px] font-semibold tracking-[-0.015em]">{copy.empty}</p>
-          <p className="mt-2 text-[15px] leading-relaxed text-neutral-500">{t.anbar.qebul.hint}</p>
+          <p className="mt-2 text-[15px] leading-relaxed text-white/50">{t.anbar.qebul.hint}</p>
           <button
             type="button"
             onClick={() => setPanel({ kind: "create", code: null })}
-            className={cn(SECONDARY_BUTTON, "mt-6")}
+            className={cn(buttonVariants("outline", "sm"), "mt-6")}
           >
             {copy.add}
           </button>
         </div>
-      ) : visible.length === 0 ? (
-        <p className="mt-20 text-center text-[15px] text-neutral-500">{copy.noMatch}</p>
+      ) : lines.length === 0 ? (
+        <p className="mt-20 text-center text-[15px] text-white/50">{copy.noMatch}</p>
       ) : (
         <ul className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:gap-6">
-          {visible.map((line) => (
+          {lines.map((line) => (
             <li key={line.id}>
-              <ProductCard line={line} now={now} onOpen={() => setPanel({ kind: "found", product: line })} />
+              <ProductCard line={line} now={now} settings={settings} onOpen={() => openLine(line)} />
             </li>
           ))}
         </ul>
       )}
 
-      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex flex-col items-center gap-3 bg-gradient-to-t from-[#F5F5F7] via-[#F5F5F7]/85 to-transparent pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-12 lg:pl-64">
+      {total > 0 && (
+        <div className="mb-32">
+          <Pager path={pathname} query={filterQuery({})} page={page} pageSize={pageSize} total={total} shown={lines.length} />
+        </div>
+      )}
+
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-30 flex flex-col items-center gap-3 bg-gradient-to-t from-[#0A0A0A] via-[#0A0A0A]/85 to-transparent pb-[max(1.75rem,env(safe-area-inset-bottom))] pt-12 lg:left-64">
         {lookupError && (
           <p
             role="alert"
@@ -255,7 +323,7 @@ export default function CatalogView({
           </p>
         )}
         <BarcodeScanner
-          onScan={lookup}
+          onScan={(code) => resolveCode(code, null)}
           disabled={looking}
           renderTrigger={({ open, disabled, label }) => (
             <button
@@ -264,10 +332,10 @@ export default function CatalogView({
               disabled={disabled}
               aria-label={shelf.scan}
               title={label}
-              className="pointer-events-auto h-[78px] w-[78px] rounded-full bg-white/80 p-[5px] shadow-[0_10px_34px_rgba(0,0,0,0.14)] ring-1 ring-black/5 backdrop-blur-xl transition duration-200 active:scale-95 disabled:opacity-70"
+              className="pointer-events-auto h-[78px] w-[78px] rounded-full border border-white/20 bg-white/10 p-[5px] shadow-[0_10px_34px_rgba(0,0,0,0.35)] backdrop-blur-xl transition duration-200 active:scale-95 disabled:opacity-70"
             >
-              <span className="block h-full w-full rounded-full border-[3px] border-neutral-900 p-[3px]">
-                <span className="flex h-full w-full items-center justify-center rounded-full bg-neutral-900 text-white">
+              <span className="block h-full w-full rounded-full border-[3px] border-white/70 p-[3px]">
+                <span className="flex h-full w-full items-center justify-center rounded-full bg-white text-black">
                   {looking ? (
                     <Loader2 className="h-6 w-6 animate-spin" strokeWidth={1.75} aria-hidden="true" />
                   ) : (
@@ -292,8 +360,8 @@ export default function CatalogView({
         {panel?.kind === "found" && (
           <ProductDetails
             product={panel.product}
-            stock={stockById.get(panel.product.id) ?? null}
-            currencySymbol={currencySymbol}
+            stock={panel.stock}
+            settings={settings}
             now={now}
             onSaved={() => {
               setPanel(null);
@@ -305,16 +373,18 @@ export default function CatalogView({
           <ProductCreateForm
             code={panel.code}
             branches={branches}
+            locations={locations}
             categories={categories}
             defaultBranchId={branchId}
             onCancel={() => setPanel(null)}
             onCreated={(product) => {
-              setPanel({ kind: "found", product });
+              setPanel({ kind: "found", product, stock: null });
               router.refresh();
             }}
           />
         )}
       </Sheet>
     </div>
+    </>
   );
 }

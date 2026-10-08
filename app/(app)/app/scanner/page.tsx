@@ -1,9 +1,8 @@
 import ScannerView from "@/components/scanner/scanner-view";
 import { redirectIfNoOrg } from "@/lib/app-gate";
-import { listBranches } from "@/lib/anbar/kitchen";
+import { listBranches, listStorageLocations } from "@/lib/anbar/repository";
 import { resolveScope } from "@/lib/anbar/scope";
 import { parseLocationFilter } from "@/lib/anbar/stock-view";
-import { listScannerCatalog } from "@/lib/scanner/load";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 
 export const dynamic = "force-dynamic";
@@ -20,15 +19,11 @@ export default async function ScannerPage({ searchParams }: { searchParams: RawS
     throw gated.cause instanceof Error ? gated.cause : new Error("Tenant lookup failed");
   }
 
-  const [catalog, branches] = await Promise.all([
-    listScannerCatalog(gated.scope),
-    listBranches(gated.scope),
-  ]);
+  const [locations, branches] = await Promise.all([listStorageLocations(gated.scope), listBranches(gated.scope)]);
 
   return (
     <ScannerView
-      locations={catalog.locations}
-      products={catalog.products}
+      locations={locations}
       branches={branches}
       locationId={locationId}
       branchId={branchId}

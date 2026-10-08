@@ -1,13 +1,9 @@
+import { PAGE_SIZE, pageRange } from "@/lib/pagination";
+import type { TenantSettings } from "@/lib/tenant-settings/parse";
+import { dateBounds } from "@/lib/tenant-settings/time";
 import { parseRows } from "./parse";
-import type { OrgScope } from "./scope";
-import {
-  nextUtcDate,
-  type KitchenBalance,
-  type KitchenBranch,
-  type KitchenLocation,
-  type KitchenProduct,
-  type MovementType,
-} from "./stock-view";
+import type { TenantScope } from "./scope";
+import type { MovementType, StockLine } from "./stock-view";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -15,8 +11,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const asString = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
 /** Supabase errors are plain objects; Next.js drops their message unless they are real Errors. */
-function queryError(table: string, error: { message: string; code?: string }): Error {
-  return new Error(`${table}: ${error.message}${error.code ? ` (${error.code})` : ""}`);
+function queryError(source: string, error: { message: string; code?: string }): Error {
+  return new Error(`${source}: ${error.message}${error.code ? ` (${error.code})` : ""}`);
 }
 
 function asNumber(value: unknown): number | null {
@@ -28,90 +24,70 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
-function parseProduct(row: unknown): KitchenProduct | null {
-  if (!isRecord(row)) return null;
-  const id = asString(row.id);
-  const name = asString(row.name);
-  return id && name !== null ? { id, name } : null;
-}
+export type StockFilters = { branchId: string | "all"; locationId: string | "all"; search: string | null };
 
-function parseLocation(row: unknown): KitchenLocation | null {
-  if (!isRecord(row)) return null;
-  const id = asString(row.id);
-  const name = asString(row.name);
-  const type = asString(row.type);
-  return id && name !== null && type !== null
-    ? { id, name, type, branchId: asString(row.branch_id) }
-    : null;
-}
+type StockLineRow = { line: StockLine; total: number };
 
-function parseBalance(row: unknown): KitchenBalance | null {
+function parseStockLine(row: unknown): StockLineRow | null {
   if (!isRecord(row)) return null;
   const productId = asString(row.product_id);
   const locationId = asString(row.location_id);
   const quantity = asNumber(row.quantity);
-  if (!productId || !locationId || quantity === null) return null;
+  const total = asNumber(row.total_count);
+  if (!productId || !locationId || quantity === null || total === null) return null;
   return {
-    productId,
-    locationId,
-    branchId: asString(row.branch_id),
-    quantity,
-    unit: asString(row.unit) ?? "",
-    cost: asNumber(row.cost_per_unit),
+    line: {
+      productId,
+      productName: asString(row.product_name) ?? "",
+      locationId,
+      locationName: asString(row.location_name) ?? "",
+      quantity,
+      unit: asString(row.unit) ?? "",
+    },
+    total,
   };
 }
 
-export type KitchenBoard = {
-  products: KitchenProduct[];
-  locations: KitchenLocation[];
-  balances: KitchenBalance[];
-};
+const allToNull = (value: string | "all"): string | null => (value === "all" ? null : value);
 
-export async function listKitchenBoard(scope: OrgScope): Promise<KitchenBoard> {
-  const [products, locations, balances] = await Promise.all([
-    scope.client
-      .from("products")
-      .select("id, name")
-      .eq("tenant_id", scope.tenantId)
-      .eq("organization_id", scope.orgId)
-      .order("name")
-      .limit(500),
-    scope.client
-      .from("storage_locations")
-      .select("id, name, type, branch_id")
-      .eq("tenant_id", scope.tenantId)
-      .order("type")
-      .limit(50),
-    scope.client
-      .from("product_stocks")
-      .select("product_id, location_id, branch_id, quantity, unit, cost_per_unit")
-      .eq("tenant_id", scope.tenantId)
-      .limit(2000),
-  ]);
-  if (products.error) throw queryError("products", products.error);
-  if (locations.error) throw queryError("storage_locations", locations.error);
-  if (balances.error) throw queryError("product_stocks", balances.error);
-  return {
-    products: parseRows(products.data, parseProduct),
-    locations: parseRows(locations.data, parseLocation),
-    balances: parseRows(balances.data, parseBalance),
-  };
-}
-
-export async function listBranches(scope: OrgScope): Promise<KitchenBranch[]> {
-  const { data, error } = await scope.client
-    .from("branches")
-    .select("id, name")
-    .eq("tenant_id", scope.tenantId)
-    .order("name")
-    .limit(200);
-  if (error) throw queryError("branches", error);
-  return parseRows(data, (row) => {
-    if (!isRecord(row)) return null;
-    const id = asString(row.id);
-    const name = asString(row.name);
-    return id && name !== null ? { id, name } : null;
+async function stockLinesPage(scope: TenantScope, filters: StockFilters, offset: number, limit: number) {
+  const { data, error } = await scope.client.rpc("stock_lines_page", {
+    p_branch_id: allToNull(filters.branchId),
+    p_location_id: allToNull(filters.locationId),
+    p_search: filters.search,
+    p_offset: offset,
+    p_limit: limit,
   });
+  if (error) throw queryError("stock_lines_page", error);
+  return parseRows(data, parseStockLine);
+}
+
+/** One page of non-zero balances per product and storage location, and how many there are. */
+export async function listStockLines(
+  scope: TenantScope,
+  filters: StockFilters,
+  page: number,
+): Promise<{ lines: StockLine[]; total: number }> {
+  const { from } = pageRange(page);
+  const rows = await stockLinesPage(scope, filters, from, PAGE_SIZE);
+  if (rows.length === 0) {
+    const total = from > 0 ? ((await stockLinesPage(scope, filters, 0, 1))[0]?.total ?? 0) : 0;
+    return { lines: [], total };
+  }
+  return { lines: rows.map((row) => row.line), total: rows[0].total };
+}
+
+/** Value of every lot in the filter; null when the caller may not see costs. */
+export async function stockValueTotal(
+  scope: TenantScope,
+  filters: Pick<StockFilters, "branchId" | "locationId">,
+): Promise<number | null> {
+  const { data, error } = await scope.client.rpc("stock_value", {
+    p_branch_id: allToNull(filters.branchId),
+    p_location_id: allToNull(filters.locationId),
+  });
+  if (error) throw queryError("stock_value", error);
+  return asNumber(data);
 }
 
 export type MovementRow = {
@@ -153,24 +129,31 @@ function parseMovement(row: unknown): MovementRow | null {
 }
 
 export async function listStockMovements(
-  scope: OrgScope,
+  scope: TenantScope,
   filters: { date: string | null; type: MovementType | null },
-): Promise<MovementRow[]> {
+  settings: Pick<TenantSettings, "timezone">,
+  page: number,
+): Promise<{ rows: MovementRow[]; total: number }> {
+  const { from, to } = pageRange(page);
   let query = scope.client
     .from("stock_movements")
     .select(
       "id, quantity, movement_type, reason, created_at, products(name), from_location:storage_locations!stock_movements_from_location_id_fkey(name), to_location:storage_locations!stock_movements_to_location_id_fkey(name), actor:profiles!stock_movements_user_id_fkey(email)",
+      { count: "exact" },
     )
-    .eq("tenant_id", scope.tenantId)
-    .order("created_at", { ascending: false })
-    .limit(200);
+    .eq("tenant_id", scope.tenantId);
 
   if (filters.type) query = query.eq("movement_type", filters.type);
   if (filters.date) {
-    query = query.gte("created_at", `${filters.date}T00:00:00.000Z`).lt("created_at", `${nextUtcDate(filters.date)}T00:00:00.000Z`);
+    const day = dateBounds(filters.date, settings.timezone);
+    query = query.gte("created_at", day.start).lt("created_at", day.end);
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
-  return parseRows(data, parseMovement);
+  const { data, error, count } = await query.order("created_at", { ascending: false }).order("id").range(from, to);
+  if (error) {
+    // PostgREST answers 416 for an offset past the end; the page is then empty.
+    if (error.code === "PGRST103") return { rows: [], total: count ?? 0 };
+    throw queryError("stock_movements", error);
+  }
+  return { rows: parseRows(data, parseMovement), total: count ?? 0 };
 }

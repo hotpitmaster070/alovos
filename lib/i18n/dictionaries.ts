@@ -1,6 +1,6 @@
 import type { BlockSlug } from "@/lib/block-slugs";
 import type { AnbarErrorCode } from "@/lib/anbar/errors";
-import type { Unit } from "@/lib/anbar/types";
+import type { StorageType, Unit } from "@/lib/anbar/types";
 import type { LoginErrorCode } from "@/lib/auth-errors";
 
 export type BlockDetails = {
@@ -20,8 +20,9 @@ export type AnbarDictionary = {
   };
   kitchen: {
     movements: string;
+    search: string;
     place: string;
-    places: { all: string; sklad: string; holodilnik: string; morozilka: string };
+    places: { all: string };
     qty: string;
     writeOff: string;
     transfer: string;
@@ -72,9 +73,59 @@ export type AnbarDictionary = {
     groupKey: string;
     groupHint: string;
     location: string;
+    noLocations: string;
     counted: string;
     submit: string;
     empty: string;
+    noCount: string;
+    start: string;
+    finish: string;
+    merge: string;
+    approve: string;
+    cancel: string;
+    confirmApprove: string;
+    confirmCancel: string;
+    finishedMine: string;
+    finishedCount: (finished: number) => string;
+    waitMerge: string;
+    waitApprove: string;
+    readOnly: string;
+    scan: string;
+    scanNotFound: string;
+    state: string;
+    status: Record<"draft" | "counting" | "merging" | "approved" | "cancelled", string>;
+    mergeModes: Record<"last" | "sum", string>;
+    mergeMode: string;
+    notices: Record<"saved" | "finished" | "started" | "merged" | "approved" | "cancelled", string>;
+    errors: Record<
+      | "invalid_input"
+      | "unauthenticated"
+      | "no_tenant"
+      | "forbidden"
+      | "count_not_found"
+      | "location_not_found"
+      | "product_not_found"
+      | "invalid_status"
+      | "already_finished"
+      | "nothing_counted"
+      | "insufficient_stock"
+      | "save_failed",
+      string
+    >;
+    product: string;
+    discrepancies: string;
+    expected: string;
+    actual: string;
+    difference: string;
+    differenceValue: string;
+    counters: string;
+    total: string;
+    noDifferences: string;
+    hiddenUntilMerge: string;
+    history: string;
+    noHistory: string;
+    startedAt: string;
+    approvedAt: string;
   };
   searchLabel: string;
   searchPlaceholder: string;
@@ -128,6 +179,7 @@ export type AnbarDictionary = {
   };
   shelf: {
     products: (count: number) => string;
+    shown: (shown: number, total: number) => string;
     scan: string;
     category: string;
     categoryPlaceholder: string;
@@ -158,24 +210,16 @@ export type AnbarDictionary = {
     done: (name: string) => string;
     noLocations: string;
   };
-  filters: {
+  storage: {
+    add: string;
     title: string;
-    location: string;
-    allLocations: string;
-    expiredOnly: string;
-    lowStock: (threshold: number) => string;
-    expiry: string;
-    expiryAll: string;
-    expiryWeek: string;
-    expiryMonth: string;
-    expiryOk: string;
-    apply: string;
-    reset: string;
-  };
-  pagination: {
-    previous: string;
-    next: string;
-    page: (page: number) => string;
+    name: string;
+    namePlaceholder: string;
+    type: string;
+    branch: string;
+    submit: string;
+    none: string;
+    types: Record<StorageType, string>;
   };
   emptyTitle: string;
   emptyHint: string;
@@ -195,34 +239,6 @@ export type AnbarDictionary = {
     noExpiry: string;
     actions: string;
     name: string;
-  };
-  expiry: {
-    expired: string;
-    today: string;
-    daysLeft: (days: number) => string;
-  };
-  lowStockBadge: string;
-  move: {
-    open: string;
-    title: string;
-    description: (name: string, from: string) => string;
-    target: string;
-    choose: string;
-    qty: string;
-    available: (qty: number, unit: string) => string;
-    submit: string;
-    working: string;
-    success: string;
-    noTargets: string;
-    needsLocation: string;
-    cancel: string;
-  };
-  addLocation: {
-    open: string;
-    title: string;
-    name: string;
-    submit: string;
-    success: string;
   };
   addProduct: {
     open: string;
@@ -263,6 +279,8 @@ export type WasteDictionary = {
   working: string;
   cancel: string;
   choose: string;
+  search: string;
+  noMatches: string;
   saved: string;
   reasons: Record<WasteReasonKey, string>;
   errors: {
@@ -273,6 +291,7 @@ export type WasteDictionary = {
     location_not_found: string;
     insufficient_stock: string;
     photo_required: string;
+    forbidden: string;
     save_failed: string;
   };
 };
@@ -340,11 +359,8 @@ export type Dictionary = {
   };
   modulesLabel: string;
   price: {
-    amount: number;
-    currency: string;
     period: string;
     included: string;
-    trialDays: number;
     trial: (days: number) => string;
     cta: string;
   };
@@ -353,6 +369,12 @@ export type Dictionary = {
   };
   moduleStub: string;
   blockNumber: string;
+  pagination: {
+    previous: string;
+    next: string;
+    page: (page: number) => string;
+    shown: (from: number, to: number, total: number) => string;
+  };
   sidebar: {
     dashboard: string;
     openMenu: string;
@@ -387,11 +409,8 @@ const AZ: Dictionary = {
   },
   modulesLabel: "Modullar",
   price: {
-    amount: 79,
-    currency: "AZN",
     period: "ay",
     included: "Hər şey daxil.",
-    trialDays: 14,
     trial: (days) => `${days} gün pulsuz sınaq.`,
     cta: "Başla - pulsuz",
   },
@@ -400,6 +419,12 @@ const AZ: Dictionary = {
   },
   moduleStub: "Modul {name} - spek hazırdır, UI növbəti",
   blockNumber: "Blok",
+  pagination: {
+    previous: "Əvvəlki",
+    next: "Növbəti",
+    page: (page) => `Səhifə ${page}`,
+    shown: (from, to, total) => `${total} nəticədən ${from}–${to} göstərilir`,
+  },
   sidebar: {
     dashboard: "Panel",
     openMenu: "Menyunu aç",
@@ -469,8 +494,9 @@ const AZ: Dictionary = {
     },
     kitchen: {
       movements: "Hərəkətlər",
+      search: "Məhsul axtar",
       place: "Yer",
-      places: { all: "Hamısı", sklad: "Anbar", holodilnik: "Soyuducu", morozilka: "Dondurucu" },
+      places: { all: "Hamısı" },
       qty: "Miqdar",
       writeOff: "Sil",
       transfer: "Köçür",
@@ -521,9 +547,71 @@ const AZ: Dictionary = {
       groupKey: "Qrup açarı",
       groupHint: "Bir neçə nəfər eyni açarı yazır.",
       location: "Saxlama yeri",
+      noLocations: "Saxlama yeri yoxdur. Əvvəlcə yer əlavə edin.",
       counted: "Sayılan",
       submit: "Saxla",
-      empty: "Məhsul yoxdur",
+      empty: "Bu yerdə məhsul yoxdur",
+      noCount: "Bu yerdə sayım başlanmayıb.",
+      start: "Sayıma başla",
+      finish: "Mənim sayımımı bitir",
+      merge: "Birləşdir",
+      approve: "Təsdiqlə",
+      cancel: "Ləğv et",
+      confirmApprove: "Qalıq sayımın nəticəsinə görə dəyişəcək. Təsdiqləyirsiniz?",
+      confirmCancel: "Sayım ləğv edilsin? Qalıq dəyişməyəcək.",
+      finishedMine: "Siz sayımınızı bitirdiniz.",
+      finishedCount: (finished) => `Bitirənlər: ${finished}`,
+      waitMerge: "Şef nəticələri birləşdirəcək.",
+      waitApprove: "Nəticələr birləşdirilib, şefin təsdiqi gözlənilir.",
+      readOnly: "Sayımı yalnız aşpaz, şef və sahib apara bilər.",
+      scan: "Skan et",
+      scanNotFound: "Bu kodla məhsul tapılmadı",
+      state: "Status",
+      status: {
+        draft: "Qaralama",
+        counting: "Sayılır",
+        merging: "Birləşdirilib",
+        approved: "Təsdiqlənib",
+        cancelled: "Ləğv edilib",
+      },
+      mergeModes: { last: "Son daxil edilən", sum: "Cəmi" },
+      mergeMode: "Birləşdirmə",
+      notices: {
+        saved: "Yadda saxlanıldı. Qalıq dəyişmədi.",
+        finished: "Sayımınız bitdi.",
+        started: "Sayım başladı.",
+        merged: "Nəticələr birləşdirildi.",
+        approved: "Təsdiqləndi. Qalıq yeniləndi.",
+        cancelled: "Sayım ləğv edildi.",
+      },
+      errors: {
+        invalid_input: "Miqdar düzgün deyil.",
+        unauthenticated: "Yenidən daxil olun.",
+        no_tenant: "Təşkilat tapılmadı.",
+        forbidden: "Bu addım üçün icazəniz yoxdur.",
+        count_not_found: "Sayım tapılmadı.",
+        location_not_found: "Saxlama yeri tapılmadı.",
+        product_not_found: "Məhsul tapılmadı.",
+        invalid_status: "Sayım artıq bu mərhələdə deyil. Səhifəni yeniləyin.",
+        already_finished: "Siz sayımınızı artıq bitirmisiniz.",
+        nothing_counted: "Heç nə sayılmayıb.",
+        insufficient_stock: "Qalıq dəyişib, təkrar cəhd edin.",
+        save_failed: "Yadda saxlamaq alınmadı.",
+      },
+      product: "Məhsul",
+      discrepancies: "Fərqlər",
+      expected: "Olmalı",
+      actual: "Fakt",
+      difference: "Fərq",
+      differenceValue: "Fərqin məbləği",
+      counters: "Sayanlar",
+      total: "Cəmi",
+      noDifferences: "Fərq yoxdur.",
+      hiddenUntilMerge: "Kor sayım: olmalı miqdar birləşdirmədən sonra şefə, təsdiqdən sonra hamıya görünür.",
+      history: "Sayımlar",
+      noHistory: "Hələ sayım yoxdur.",
+      startedAt: "Başlanıb",
+      approvedAt: "Təsdiqlənib",
     },
     searchLabel: "Barkod",
     searchPlaceholder: "Barkodu skan edin və ya yazın",
@@ -579,6 +667,7 @@ const AZ: Dictionary = {
     },
     shelf: {
       products: (count) => `${count} məhsul`,
+      shown: (shown, total) => `${total} məhsuldan ${shown} göstərilir`,
       scan: "Barkodu skan et",
       category: "Kateqoriya",
       categoryPlaceholder: "Məs. Süd məhsulları",
@@ -609,24 +698,16 @@ const AZ: Dictionary = {
       done: (name) => `${name} anbara alındı`,
       noLocations: "Saxlama yeri yoxdur. Əvvəlcə filial və saxlama yeri yaradın.",
     },
-    filters: {
-      title: "Filtrlər",
-      location: "Məkan",
-      allLocations: "Bütün məkanlar",
-      expiredOnly: "Yalnız vaxtı keçmişlər",
-      lowStock: (threshold) => `Az qalıq (< ${threshold})`,
-      expiry: "Son istifadə tarixi",
-      expiryAll: "Hamısı",
-      expiryWeek: "7 gündən az",
-      expiryMonth: "30 gündən az",
-      expiryOk: "30 gündən çox",
-      apply: "Tətbiq et",
-      reset: "Təmizlə",
-    },
-    pagination: {
-      previous: "Əvvəlki",
-      next: "Növbəti",
-      page: (page) => `Səhifə ${page}`,
+    storage: {
+      add: "Saxlama yeri əlavə et",
+      title: "Yeni saxlama yeri",
+      name: "Ad",
+      namePlaceholder: "Məs: Bar soyuducusu, Yarımfabrikat soyuducusu",
+      type: "Növ",
+      branch: "Filial",
+      submit: "Əlavə et",
+      none: "Seçilməyib",
+      types: { quru: "Quru anbar", soyuducu: "Soyuducu", dondurucu: "Dondurucu", custom: "Digər" },
     },
     emptyTitle: "Anbar boşdur",
     emptyHint: "İlk məkanı və məhsulu əlavə edin.",
@@ -646,34 +727,6 @@ const AZ: Dictionary = {
       noExpiry: "Tarixsiz",
       actions: "Əməliyyat",
       name: "Ad",
-    },
-    expiry: {
-      expired: "Vaxtı keçib",
-      today: "Bu gün bitir",
-      daysLeft: (days) => `${days} gün qalıb`,
-    },
-    lowStockBadge: "Az qalıb",
-    move: {
-      open: "Köçür",
-      title: "Məhsulu köçür",
-      description: (name, from) => `${name} - ${from}`,
-      target: "Hədəf məkan",
-      choose: "Məkan seçin",
-      qty: "Köçürülən miqdar",
-      available: (qty, unit) => `Mövcud: ${qty} ${unit}`,
-      submit: "Köçür",
-      working: "Köçürülür",
-      success: "Köçürüldü",
-      noTargets: "Köçürmək üçün başqa məkan yoxdur.",
-      needsLocation: "Köçürmək üçün məhsulun məkanı olmalıdır.",
-      cancel: "Ləğv et",
-    },
-    addLocation: {
-      open: "Məkan əlavə et",
-      title: "Yeni məkan",
-      name: "Məkanın adı",
-      submit: "Əlavə et",
-      success: "Məkan əlavə edildi",
     },
     addProduct: {
       open: "Məhsul əlavə et",
@@ -702,6 +755,7 @@ const AZ: Dictionary = {
       exceedsQty: "Miqdar mövcud ehtiyatdan çoxdur.",
       unitMismatch: "Hədəf məkandakı eyni barkodlu məhsulun vahidi fərqlidir.",
       duplicateBarcode: "Bu məkanda həmin barkodlu məhsul artıq var.",
+      duplicateLocation: "Bu filialda həmin adda saxlama yeri artıq var.",
       concurrent: "Məlumat dəyişdi. Səhifəni yeniləyib yenidən cəhd edin.",
       saveFailed: "Yadda saxlamaq mümkün olmadı.",
     },
@@ -723,6 +777,8 @@ const AZ: Dictionary = {
     working: "Saxlanılır",
     cancel: "Bağla",
     choose: "Seçin",
+    search: "Məhsul axtar",
+    noMatches: "Anbarda belə məhsul yoxdur",
     saved: "Silindi və anbardan çıxarıldı",
     reasons: {
       spoiled: "Xarab",
@@ -740,6 +796,7 @@ const AZ: Dictionary = {
       location_not_found: "Yer tapılmadı",
       insufficient_stock: "Qalıq çatmır",
       photo_required: "Oğurluq üçün foto mütləqdir",
+      forbidden: "Silinmə üçün icazəniz yoxdur",
       save_failed: "Saxlamaq olmadı",
     },
   },
@@ -813,11 +870,8 @@ const RU: Dictionary = {
   },
   modulesLabel: "Модули",
   price: {
-    amount: 79,
-    currency: "AZN",
     period: "мес",
     included: "Всё включено.",
-    trialDays: 14,
     trial: (days) => `${days} дней бесплатного пробного периода.`,
     cta: "Начать - бесплатно",
   },
@@ -826,6 +880,12 @@ const RU: Dictionary = {
   },
   moduleStub: "Модуль {name} - спек готов, UI далее",
   blockNumber: "Блок",
+  pagination: {
+    previous: "Назад",
+    next: "Вперёд",
+    page: (page) => `Страница ${page}`,
+    shown: (from, to, total) => `Показано ${from}–${to} из ${total}`,
+  },
   sidebar: {
     dashboard: "Панель",
     openMenu: "Открыть меню",
@@ -895,8 +955,9 @@ const RU: Dictionary = {
     },
     kitchen: {
       movements: "Движения",
+      search: "Найти продукт",
       place: "Место",
-      places: { all: "Все", sklad: "Склад", holodilnik: "Холодильник", morozilka: "Морозилка" },
+      places: { all: "Все" },
       qty: "Количество",
       writeOff: "Списать",
       transfer: "Переместить",
@@ -947,9 +1008,71 @@ const RU: Dictionary = {
       groupKey: "Ключ группы",
       groupHint: "Несколько человек вводят один и тот же ключ.",
       location: "Место хранения",
+      noLocations: "Мест хранения нет. Сначала добавьте место.",
       counted: "Посчитано",
       submit: "Сохранить",
-      empty: "Продуктов нет",
+      empty: "В этом месте нет товаров",
+      noCount: "Подсчёт в этом месте не начат.",
+      start: "Начать подсчёт",
+      finish: "Завершить мой подсчёт",
+      merge: "Объединить",
+      approve: "Утвердить",
+      cancel: "Отменить",
+      confirmApprove: "Остаток изменится по результатам подсчёта. Утвердить?",
+      confirmCancel: "Отменить подсчёт? Остаток не изменится.",
+      finishedMine: "Вы завершили свой подсчёт.",
+      finishedCount: (finished) => `Завершили: ${finished}`,
+      waitMerge: "Шеф объединит результаты.",
+      waitApprove: "Результаты объединены, ждём утверждения шефа.",
+      readOnly: "Считать могут повар, шеф и владелец.",
+      scan: "Сканировать",
+      scanNotFound: "Товар с этим кодом не найден",
+      state: "Статус",
+      status: {
+        draft: "Черновик",
+        counting: "Идёт подсчёт",
+        merging: "Объединено",
+        approved: "Утверждено",
+        cancelled: "Отменено",
+      },
+      mergeModes: { last: "Последний ввод", sum: "Сумма" },
+      mergeMode: "Объединение",
+      notices: {
+        saved: "Сохранено. Остаток не изменился.",
+        finished: "Ваш подсчёт завершён.",
+        started: "Подсчёт начат.",
+        merged: "Результаты объединены.",
+        approved: "Утверждено. Остаток обновлён.",
+        cancelled: "Подсчёт отменён.",
+      },
+      errors: {
+        invalid_input: "Неверное количество.",
+        unauthenticated: "Войдите снова.",
+        no_tenant: "Организация не найдена.",
+        forbidden: "Нет прав на это действие.",
+        count_not_found: "Подсчёт не найден.",
+        location_not_found: "Место хранения не найдено.",
+        product_not_found: "Товар не найден.",
+        invalid_status: "Подсчёт уже на другом этапе. Обновите страницу.",
+        already_finished: "Вы уже завершили свой подсчёт.",
+        nothing_counted: "Ничего не посчитано.",
+        insufficient_stock: "Остаток изменился, попробуйте ещё раз.",
+        save_failed: "Не удалось сохранить.",
+      },
+      product: "Товар",
+      discrepancies: "Расхождения",
+      expected: "Должно",
+      actual: "Факт",
+      difference: "Разница",
+      differenceValue: "Сумма разницы",
+      counters: "Считали",
+      total: "Итого",
+      noDifferences: "Расхождений нет.",
+      hiddenUntilMerge: "Слепой подсчёт: «должно» видно шефу после объединения, всем — после утверждения.",
+      history: "Подсчёты",
+      noHistory: "Подсчётов пока нет.",
+      startedAt: "Начат",
+      approvedAt: "Утверждён",
     },
     searchLabel: "Штрихкод",
     searchPlaceholder: "Отсканируйте или введите штрихкод",
@@ -1005,6 +1128,7 @@ const RU: Dictionary = {
     },
     shelf: {
       products: (count) => `${count} ${ruPlural(count, "товар", "товара", "товаров")}`,
+      shown: (shown, total) => `Показано ${shown} из ${total} ${ruPlural(total, "товара", "товаров", "товаров")}`,
       scan: "Сканировать штрихкод",
       category: "Категория",
       categoryPlaceholder: "Напр. Молочные продукты",
@@ -1035,24 +1159,16 @@ const RU: Dictionary = {
       done: (name) => `${name} оприходован`,
       noLocations: "Нет мест хранения. Сначала создайте филиал и место хранения.",
     },
-    filters: {
-      title: "Фильтры",
-      location: "Локация",
-      allLocations: "Все локации",
-      expiredOnly: "Только просроченные",
-      lowStock: (threshold) => `Мало на складе (< ${threshold})`,
-      expiry: "Срок годности",
-      expiryAll: "Любой",
-      expiryWeek: "Меньше 7 дней",
-      expiryMonth: "Меньше 30 дней",
-      expiryOk: "Больше 30 дней",
-      apply: "Применить",
-      reset: "Сбросить",
-    },
-    pagination: {
-      previous: "Назад",
-      next: "Вперёд",
-      page: (page) => `Страница ${page}`,
+    storage: {
+      add: "Добавить место хранения",
+      title: "Новое место хранения",
+      name: "Название",
+      namePlaceholder: "Напр.: Барный холодильник, Холодильник для заготовок",
+      type: "Тип",
+      branch: "Точка",
+      submit: "Добавить",
+      none: "Не выбрано",
+      types: { quru: "Сухой склад", soyuducu: "Холодильник", dondurucu: "Морозильник", custom: "Другое" },
     },
     emptyTitle: "Склад пуст",
     emptyHint: "Добавьте первую локацию и товар.",
@@ -1072,34 +1188,6 @@ const RU: Dictionary = {
       noExpiry: "Без срока",
       actions: "Действия",
       name: "Название",
-    },
-    expiry: {
-      expired: "Просрочено",
-      today: "Истекает сегодня",
-      daysLeft: (days) => `Осталось ${days} дн.`,
-    },
-    lowStockBadge: "Мало",
-    move: {
-      open: "Переместить",
-      title: "Переместить товар",
-      description: (name, from) => `${name} - ${from}`,
-      target: "Целевая локация",
-      choose: "Выберите локацию",
-      qty: "Количество к перемещению",
-      available: (qty, unit) => `Доступно: ${qty} ${unit}`,
-      submit: "Переместить",
-      working: "Перемещение",
-      success: "Перемещено",
-      noTargets: "Нет другой локации для перемещения.",
-      needsLocation: "Чтобы переместить товар, у него должна быть локация.",
-      cancel: "Отмена",
-    },
-    addLocation: {
-      open: "Добавить локацию",
-      title: "Новая локация",
-      name: "Название локации",
-      submit: "Добавить",
-      success: "Локация добавлена",
     },
     addProduct: {
       open: "Добавить товар",
@@ -1128,6 +1216,7 @@ const RU: Dictionary = {
       exceedsQty: "Количество больше остатка.",
       unitMismatch: "У товара с тем же штрихкодом в целевой локации другая единица измерения.",
       duplicateBarcode: "Товар с таким штрихкодом в этой локации уже есть.",
+      duplicateLocation: "Место хранения с таким названием в этой точке уже есть.",
       concurrent: "Данные изменились. Обновите страницу и повторите.",
       saveFailed: "Не удалось сохранить.",
     },
@@ -1149,6 +1238,8 @@ const RU: Dictionary = {
     working: "Сохраняем",
     cancel: "Закрыть",
     choose: "Выберите",
+    search: "Найти продукт",
+    noMatches: "Такого продукта нет на складе",
     saved: "Списано и снято со склада",
     reasons: {
       spoiled: "Испорчено",
@@ -1166,6 +1257,7 @@ const RU: Dictionary = {
       location_not_found: "Место не найдено",
       insufficient_stock: "Не хватает остатка",
       photo_required: "Для кражи нужно фото",
+      forbidden: "Нет прав на списание",
       save_failed: "Не удалось сохранить",
     },
   },
@@ -1239,11 +1331,8 @@ const EN: Dictionary = {
   },
   modulesLabel: "Modules",
   price: {
-    amount: 79,
-    currency: "AZN",
     period: "mo",
     included: "Everything included.",
-    trialDays: 14,
     trial: (days) => `${days}-day free trial.`,
     cta: "Start - free",
   },
@@ -1252,6 +1341,12 @@ const EN: Dictionary = {
   },
   moduleStub: "Module {name} - spec ready, UI next",
   blockNumber: "Block",
+  pagination: {
+    previous: "Previous",
+    next: "Next",
+    page: (page) => `Page ${page}`,
+    shown: (from, to, total) => `Showing ${from}–${to} of ${total}`,
+  },
   sidebar: {
     dashboard: "Dashboard",
     openMenu: "Open menu",
@@ -1321,8 +1416,9 @@ const EN: Dictionary = {
     },
     kitchen: {
       movements: "Movements",
+      search: "Find a product",
       place: "Place",
-      places: { all: "All", sklad: "Storeroom", holodilnik: "Fridge", morozilka: "Freezer" },
+      places: { all: "All" },
       qty: "Quantity",
       writeOff: "Write off",
       transfer: "Move",
@@ -1373,9 +1469,71 @@ const EN: Dictionary = {
       groupKey: "Group key",
       groupHint: "Several people enter the same key.",
       location: "Storage location",
+      noLocations: "No storage locations. Add one first.",
       counted: "Counted",
       submit: "Save",
-      empty: "No products",
+      empty: "No products at this location",
+      noCount: "No count started at this location.",
+      start: "Start count",
+      finish: "Finish my count",
+      merge: "Merge",
+      approve: "Approve",
+      cancel: "Cancel",
+      confirmApprove: "Stock will be set to the counted quantities. Approve?",
+      confirmCancel: "Cancel the count? Stock will not change.",
+      finishedMine: "You finished your count.",
+      finishedCount: (finished) => `Finished: ${finished}`,
+      waitMerge: "The chef will merge the results.",
+      waitApprove: "Results merged, waiting for the chef to approve.",
+      readOnly: "Cooks, chefs and owners can count.",
+      scan: "Scan",
+      scanNotFound: "No product with this code",
+      state: "Status",
+      status: {
+        draft: "Draft",
+        counting: "Counting",
+        merging: "Merged",
+        approved: "Approved",
+        cancelled: "Cancelled",
+      },
+      mergeModes: { last: "Latest entry", sum: "Sum" },
+      mergeMode: "Merge",
+      notices: {
+        saved: "Saved. Stock unchanged.",
+        finished: "Your count is finished.",
+        started: "Count started.",
+        merged: "Results merged.",
+        approved: "Approved. Stock updated.",
+        cancelled: "Count cancelled.",
+      },
+      errors: {
+        invalid_input: "Invalid quantity.",
+        unauthenticated: "Sign in again.",
+        no_tenant: "Organization not found.",
+        forbidden: "You are not allowed to do this.",
+        count_not_found: "Count not found.",
+        location_not_found: "Storage location not found.",
+        product_not_found: "Product not found.",
+        invalid_status: "The count has moved on. Reload the page.",
+        already_finished: "You already finished your count.",
+        nothing_counted: "Nothing was counted.",
+        insufficient_stock: "Stock changed, try again.",
+        save_failed: "Could not save.",
+      },
+      product: "Product",
+      discrepancies: "Discrepancies",
+      expected: "Expected",
+      actual: "Counted",
+      difference: "Difference",
+      differenceValue: "Difference value",
+      counters: "Counted by",
+      total: "Total",
+      noDifferences: "No discrepancies.",
+      hiddenUntilMerge: "Blind count: the chef sees expected quantities after merging, everyone after approval.",
+      history: "Counts",
+      noHistory: "No counts yet.",
+      startedAt: "Started",
+      approvedAt: "Approved",
     },
     searchLabel: "Barcode",
     searchPlaceholder: "Scan or type a barcode",
@@ -1431,6 +1589,7 @@ const EN: Dictionary = {
     },
     shelf: {
       products: (count) => `${count} ${count === 1 ? "product" : "products"}`,
+      shown: (shown, total) => `Showing ${shown} of ${total} ${total === 1 ? "product" : "products"}`,
       scan: "Scan barcode",
       category: "Category",
       categoryPlaceholder: "e.g. Dairy",
@@ -1461,24 +1620,16 @@ const EN: Dictionary = {
       done: (name) => `${name} received`,
       noLocations: "No storage locations. Create a branch and a storage location first.",
     },
-    filters: {
-      title: "Filters",
-      location: "Location",
-      allLocations: "All locations",
-      expiredOnly: "Expired only",
-      lowStock: (threshold) => `Low stock (< ${threshold})`,
-      expiry: "Expiry",
-      expiryAll: "Any",
-      expiryWeek: "Under 7 days",
-      expiryMonth: "Under 30 days",
-      expiryOk: "30 days or more",
-      apply: "Apply",
-      reset: "Reset",
-    },
-    pagination: {
-      previous: "Previous",
-      next: "Next",
-      page: (page) => `Page ${page}`,
+    storage: {
+      add: "Add storage location",
+      title: "New storage location",
+      name: "Name",
+      namePlaceholder: "E.g. Bar fridge, Prep fridge",
+      type: "Type",
+      branch: "Branch",
+      submit: "Add",
+      none: "Not selected",
+      types: { quru: "Dry store", soyuducu: "Fridge", dondurucu: "Freezer", custom: "Other" },
     },
     emptyTitle: "The warehouse is empty",
     emptyHint: "Add your first location and product.",
@@ -1498,34 +1649,6 @@ const EN: Dictionary = {
       noExpiry: "No date",
       actions: "Actions",
       name: "Name",
-    },
-    expiry: {
-      expired: "Expired",
-      today: "Expires today",
-      daysLeft: (days) => `${days} days left`,
-    },
-    lowStockBadge: "Low",
-    move: {
-      open: "Move",
-      title: "Move stock",
-      description: (name, from) => `${name} - ${from}`,
-      target: "Target location",
-      choose: "Choose a location",
-      qty: "Quantity to move",
-      available: (qty, unit) => `Available: ${qty} ${unit}`,
-      submit: "Move",
-      working: "Moving",
-      success: "Moved",
-      noTargets: "There is no other location to move to.",
-      needsLocation: "A product needs a location before it can be moved.",
-      cancel: "Cancel",
-    },
-    addLocation: {
-      open: "Add location",
-      title: "New location",
-      name: "Location name",
-      submit: "Add",
-      success: "Location added",
     },
     addProduct: {
       open: "Add product",
@@ -1554,6 +1677,7 @@ const EN: Dictionary = {
       exceedsQty: "Quantity is more than the available stock.",
       unitMismatch: "The product with the same barcode at the target location uses a different unit.",
       duplicateBarcode: "A product with this barcode already exists at this location.",
+      duplicateLocation: "This branch already has a storage location with that name.",
       concurrent: "The data changed. Refresh the page and try again.",
       saveFailed: "Could not save.",
     },
@@ -1575,6 +1699,8 @@ const EN: Dictionary = {
     working: "Saving",
     cancel: "Close",
     choose: "Choose",
+    search: "Find a product",
+    noMatches: "No such product in stock",
     saved: "Written off and removed from stock",
     reasons: {
       spoiled: "Spoiled",
@@ -1592,6 +1718,7 @@ const EN: Dictionary = {
       location_not_found: "Place not found",
       insufficient_stock: "Not enough stock",
       photo_required: "Theft requires a photo",
+      forbidden: "You may not write off stock",
       save_failed: "Could not save",
     },
   },

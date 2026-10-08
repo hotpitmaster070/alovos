@@ -1,8 +1,3 @@
-export type Location = {
-  id: string;
-  name: string;
-};
-
 export type CatalogProduct = {
   id: string;
   name: string;
@@ -11,6 +6,7 @@ export type CatalogProduct = {
   photoUrl: string | null;
   category: string | null;
   unit: string;
+  /** products.cost; null when the role may not see costs. */
   pricePerUnit: number | null;
   /** Days a fresh delivery keeps; pre-fills the expiry date on goods receipt. */
   shelfLifeDays: number | null;
@@ -20,6 +16,8 @@ export type CatalogProduct = {
   expiryDate: string | null;
   branchId: string | null;
   branchName: string | null;
+  /** Default storage location; pre-selects the location on goods receipt. */
+  storageLocationId: string | null;
 };
 
 export type CatalogLine = CatalogProduct & {
@@ -30,18 +28,12 @@ export type CatalogLine = CatalogProduct & {
 
 export type Branch = { id: string; name: string };
 
-export type StorageLocation = { id: string; name: string; type: string; branchId: string | null };
+export const STORAGE_TYPES = ["quru", "soyuducu", "dondurucu", "custom"] as const;
+export type StorageType = (typeof STORAGE_TYPES)[number];
+export const isStorageType = (value: string): value is StorageType =>
+  (STORAGE_TYPES as readonly string[]).includes(value);
 
-export type Product = {
-  id: string;
-  name: string;
-  barcode: string | null;
-  expiryDate: string | null;
-  qty: number;
-  unit: string;
-  cost: number | null;
-  locationId: string | null;
-};
+export type StorageLocation = { id: string; name: string; type: StorageType; branchId: string; active: boolean };
 
 export const UNITS = ["kg", "g", "l", "ml", "pcs"] as const;
 export type Unit = (typeof UNITS)[number];

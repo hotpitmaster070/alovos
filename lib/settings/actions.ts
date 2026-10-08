@@ -1,7 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { insertStorageLocation, updateStorageLocation } from "@/lib/anbar/repository";
 import { resolveScope } from "@/lib/anbar/scope";
+import { isUuid, validateStorageLocationInput, validateStorageLocationRename } from "@/lib/anbar/validation";
+import { validateTenantSettingsInput } from "@/lib/tenant-settings/validation";
 
 async function scope() {
   const resolved = await resolveScope();
@@ -9,18 +12,18 @@ async function scope() {
   return resolved.scope;
 }
 
+function revalidateStorage() {
+  revalidatePath("/app/sebeke");
+  revalidatePath("/app/anbar", "layout");
+}
+
 export async function saveTenantSettings(form: FormData) {
+  const input = validateTenantSettingsInput(form);
+  if (!input) return;
   const current = await scope();
   if (!current) return;
-  const settings = {
-    currency: String(form.get("currency") ?? "").trim(),
-    currency_symbol: String(form.get("currency_symbol") ?? "").trim(),
-    language: String(form.get("language") ?? "").trim(),
-  };
-  const clean = Object.fromEntries(Object.entries(settings).filter(([, value]) => value !== ""));
-  await current.client.from("tenants").update({ settings: clean }).eq("id", current.tenantId);
-  revalidatePath("/app/sebeke");
-  revalidatePath("/app/anbar");
+  await current.client.from("tenant_settings").update(input).eq("tenant_id", current.tenantId);
+  revalidatePath("/app", "layout");
 }
 
 export async function addBranch(form: FormData) {
@@ -34,24 +37,36 @@ export async function addBranch(form: FormData) {
     name,
     address: address || null,
   });
-  revalidatePath("/app/sebeke");
+  revalidateStorage();
 }
 
 export async function addStorageLocation(form: FormData) {
+  const input = validateStorageLocationInput(form);
+  if (!input.ok) return;
   const current = await scope();
   if (!current) return;
-  const name = String(form.get("name") ?? "").trim();
-  const type = String(form.get("type") ?? "").trim();
-  const branchId = String(form.get("branch_id") ?? "").trim();
-  if (!name || !type) return;
-  await current.client.from("storage_locations").insert({
-    tenant_id: current.tenantId,
-    name,
-    type,
-    branch_id: branchId || null,
-  });
-  revalidatePath("/app/sebeke");
-  revalidatePath("/app/anbar");
+  await insertStorageLocation(current, input.value);
+  revalidateStorage();
+}
+
+export async function renameStorageLocation(form: FormData) {
+  const input = validateStorageLocationRename(form);
+  if (!input.ok) return;
+  const current = await scope();
+  if (!current) return;
+  await updateStorageLocation(current, input.value.id, { name: input.value.name });
+  revalidateStorage();
+}
+
+/** Locations are never deleted: stock, movements and logs keep referencing them. */
+export async function setStorageLocationActive(form: FormData) {
+  const id = String(form.get("id") ?? "").trim();
+  const active = form.get("active") === "true";
+  if (!isUuid(id)) return;
+  const current = await scope();
+  if (!current) return;
+  await updateStorageLocation(current, id, { isActive: active });
+  revalidateStorage();
 }
 
 export async function addUnit(form: FormData) {

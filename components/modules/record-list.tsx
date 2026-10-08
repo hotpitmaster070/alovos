@@ -1,20 +1,44 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { buttonVariants } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { getBlock, getBlockLabel } from "@/lib/blocks";
 import type { BlockSlug } from "@/lib/block-slugs";
 import { useT } from "@/lib/i18n/useT";
 
+export type RecordGroup = {
+  label: string;
+  /** Query parameter holding this group's page. */
+  param: string;
+  rows: Record<string, unknown>[];
+  page: number;
+  hasMore: boolean;
+};
+
 export function RecordList({
   slug,
   groups,
+  query,
 }: {
   slug: BlockSlug;
-  groups: { label: string; rows: Record<string, unknown>[] }[];
+  groups: RecordGroup[];
+  /** Current search params, kept when one group changes page. */
+  query: Record<string, string>;
 }) {
-  const { lang } = useT();
+  const { lang, t } = useT();
+  const pathname = usePathname();
   const block = getBlock(slug);
   const title = block ? getBlockLabel(block, lang) : slug;
+
+  const pageHref = (param: string, page: number) => {
+    const params = new URLSearchParams(query);
+    if (page > 1) params.set(param, String(page));
+    else params.delete(param);
+    const search = params.toString();
+    return search ? `${pathname}?${search}` : pathname;
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,6 +56,25 @@ export function RecordList({
                 </li>
               ))}
             </ul>
+          )}
+          {(group.page > 1 || group.hasMore) && (
+            <nav className="mt-4 flex items-center justify-between gap-3" aria-label={group.label}>
+              {group.page > 1 ? (
+                <Link href={pageHref(group.param, group.page - 1)} className={buttonVariants("outline", "sm")}>
+                  {t.pagination.previous}
+                </Link>
+              ) : (
+                <span />
+              )}
+              <span className="text-xs text-muted">{t.pagination.page(group.page)}</span>
+              {group.hasMore ? (
+                <Link href={pageHref(group.param, group.page + 1)} className={buttonVariants("outline", "sm")}>
+                  {t.pagination.next}
+                </Link>
+              ) : (
+                <span />
+              )}
+            </nav>
           )}
         </Card>
       ))}

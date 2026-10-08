@@ -7,6 +7,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Pager } from "@/components/ui/pager";
+import { SearchField } from "@/components/ui/search-field";
 import { Select } from "@/components/ui/select";
 import { Toast } from "@/components/ui/toast";
 import {
@@ -26,6 +28,7 @@ import {
   type StockLine,
 } from "@/lib/anbar/stock-view";
 import { useT } from "@/lib/i18n/useT";
+import AddStorageLocation from "./add-storage-location";
 
 function unitLabel(unit: string, units: { kg: string; litr: string; sht: string }): string {
   if (unit === "kg" || unit === "litr" || unit === "sht") return units[unit];
@@ -63,6 +66,10 @@ type Draft = {
 
 export default function StockBoard({
   lines,
+  total,
+  page,
+  pageSize,
+  search,
   locations,
   branches,
   locationId,
@@ -71,6 +78,10 @@ export default function StockBoard({
   updated,
 }: {
   lines: StockLine[];
+  total: number;
+  page: number;
+  pageSize: number;
+  search: string;
   locations: KitchenLocation[];
   branches: KitchenBranch[];
   locationId: string | "all";
@@ -98,11 +109,16 @@ export default function StockBoard({
     return () => window.clearTimeout(id);
   }, [updated, router]);
 
-  const href = (nextBranch: string | "all", nextLocation: string | "all") => {
-    const params = new URLSearchParams();
-    if (nextBranch !== "all") params.set("branch", nextBranch);
-    if (nextLocation !== "all") params.set("location", nextLocation);
-    const query = params.toString();
+  const filterQuery = (nextBranch: string | "all", nextLocation: string | "all", nextSearch: string) => {
+    const query: Record<string, string> = {};
+    if (nextBranch !== "all") query.branch = nextBranch;
+    if (nextLocation !== "all") query.location = nextLocation;
+    if (nextSearch) query.q = nextSearch;
+    return query;
+  };
+
+  const href = (nextBranch: string | "all", nextLocation: string | "all", nextSearch: string = search) => {
+    const query = new URLSearchParams(filterQuery(nextBranch, nextLocation, nextSearch)).toString();
     return query ? `/app/anbar?${query}` : "/app/anbar";
   };
 
@@ -147,22 +163,38 @@ export default function StockBoard({
         </div>
         <div>
           <Label htmlFor="stock-location">{copy.storage}</Label>
-          <Select
-            id="stock-location"
-            value={locationId === "all" ? "" : locationId}
-            onChange={(event) => router.push(href(branchId, event.target.value || "all"))}
-          >
-            <option value="">{copy.places.all}</option>
-            {locations
-              .filter((location) => branchId === "all" || location.branchId === branchId)
-              .map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select
+              id="stock-location"
+              value={locationId === "all" ? "" : locationId}
+              onChange={(event) => router.push(href(branchId, event.target.value || "all"))}
+            >
+              <option value="">{copy.places.all}</option>
+              {locations
+                .filter((location) => location.active && (branchId === "all" || location.branchId === branchId))
+                .map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+            </Select>
+            <AddStorageLocation
+              branches={branches}
+              branchId={branchId === "all" ? null : branchId}
+              onCreated={(location) => router.push(href(branchId === "all" ? "all" : location.branchId, location.id))}
+            />
+          </div>
         </div>
       </div>
+
+      <SearchField
+        id="stock-search"
+        type="search"
+        aria-label={copy.search}
+        placeholder={copy.search}
+        value={search}
+        onSearch={(text) => router.replace(href(branchId, locationId, text))}
+      />
 
       {lines.length === 0 ? (
         <p className="text-sm text-white/60">{copy.empty}</p>
@@ -202,6 +234,15 @@ export default function StockBoard({
           </TableBody>
         </Table>
       )}
+
+      <Pager
+        path="/app/anbar"
+        query={filterQuery(branchId, locationId, search)}
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        shown={lines.length}
+      />
 
       <div>
         <p className="text-[10px] font-medium uppercase tracking-widest text-white/50">{copy.total}</p>
@@ -332,6 +373,7 @@ function MoveForm({
               {copy.choose}
             </option>
             {locations
+              .filter((location) => location.active)
               .filter((location) => movementType !== "peremeshchenie" || location.id !== draft.line.locationId)
               .map((location) => (
                 <option key={location.id} value={location.id}>

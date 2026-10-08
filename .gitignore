@@ -43,3 +43,4 @@ anbar.bundle
 h
 h origin main
 *.bundle
+.env*

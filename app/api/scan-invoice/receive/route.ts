@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     .select("id, branch_id")
     .eq("id", locationId)
     .eq("tenant_id", tenantId)
+    .eq("is_active", true)
     .maybeSingle();
   if (location.error) return fail("save_failed", 500);
   if (!location.data) return fail("location_not_found", 404);
@@ -76,13 +77,6 @@ export async function POST(request: Request) {
       (found.data ?? []).flatMap((row) => (isRecord(row) && typeof row.id === "string" ? [row.id] : [])),
     );
     if (productIds.some((id) => !ids.has(id))) return fail("invalid_input", 400);
-  }
-
-  let orgId: string | null = null;
-  if (ready.some((line) => line.productId === null)) {
-    const org = await supabase.rpc("current_org_id");
-    if (org.error || typeof org.data !== "string" || org.data === "") return fail("save_failed", 500);
-    orgId = org.data;
   }
 
   const scan = await supabase
@@ -107,11 +101,9 @@ export async function POST(request: Request) {
   for (const line of ready) {
     let productId = line.productId;
     if (!productId) {
-      if (!orgId) return fail("save_failed", 500);
       const created = await supabase
         .from("products")
         .insert({
-          organization_id: orgId,
           tenant_id: tenantId,
           name: line.name,
           unit: line.unit || "unit",

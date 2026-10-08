@@ -1,7 +1,7 @@
 import type { Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
 
-export { getOrgId, OrgError, type OrgErrorCode } from "@/lib/org";
+export { getTenantId, OrgError, type OrgErrorCode } from "@/lib/org";
 
 export type Credentials = { email: string; password: string };
 

@@ -1,7 +1,9 @@
 import SettingsView from "@/components/settings/settings-view";
 import { redirectIfNoOrg } from "@/lib/app-gate";
+import { listBranches, listStorageLocations } from "@/lib/anbar/repository";
 import { resolveScope } from "@/lib/anbar/scope";
-import { readSettings } from "@/lib/money";
+import { fetchAll } from "@/lib/supabase/fetch-all";
+import { getSettings } from "@/lib/tenant-settings/getSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -13,23 +15,21 @@ export default async function SettingsPage() {
   }
   const client = gated.scope.client;
   const tenantId = gated.scope.tenantId;
-  const [tenant, branches, locations, units] = await Promise.all([
-    client.from("tenants").select("settings").eq("id", tenantId).maybeSingle(),
-    client.from("branches").select("id, name").eq("tenant_id", tenantId).order("name").limit(200),
-    client.from("storage_locations").select("id, name, type").eq("tenant_id", tenantId).order("name").limit(200),
-    client.from("units").select("id, code, name").eq("tenant_id", tenantId).order("code").limit(200),
+  const [settings, branches, locations, units] = await Promise.all([
+    getSettings(gated.scope),
+    listBranches(gated.scope),
+    listStorageLocations(gated.scope, { includeInactive: true }),
+    fetchAll((from, to) =>
+      client.from("units").select("id, code, name").eq("tenant_id", tenantId).order("code").order("id").range(from, to),
+    ),
   ]);
-  if (tenant.error) throw tenant.error;
-  if (branches.error) throw branches.error;
-  if (locations.error) throw locations.error;
-  if (units.error) throw units.error;
 
   return (
     <SettingsView
-      settings={readSettings(tenant.data?.settings)}
-      branches={(branches.data ?? []) as { id: string; name: string }[]}
-      locations={(locations.data ?? []) as { id: string; name: string; type: string }[]}
-      units={(units.data ?? []) as { id: string; code: string; name: string }[]}
+      settings={settings}
+      branches={branches}
+      locations={locations}
+      units={units as { id: string; code: string; name: string }[]}
     />
   );
 }

@@ -8,6 +8,7 @@ import { isUnit, type CatalogProduct } from "@/lib/anbar/types";
 import { ANBAR_RECEIPT_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
 import { formatMoney } from "@/lib/money";
+import { currencyLabel, type TenantSettings } from "@/lib/tenant-settings/parse";
 import { useAction } from "../use-action";
 import { useExpiryLabel } from "./expiry-label";
 import {
@@ -24,27 +25,27 @@ type Stock = { stock: number; nearestExpiry: string | null; value: number };
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-4 px-4 py-3">
-      <span className="text-[15px] text-neutral-500">{label}</span>
-      <span className="flex min-w-0 items-center gap-2 text-right text-[15px] text-neutral-900">{children}</span>
+      <span className="text-[15px] text-white/60">{label}</span>
+      <span className="flex min-w-0 items-center gap-2 text-right text-[15px] text-white">{children}</span>
     </div>
   );
 }
 
 function Group({ children }: { children: ReactNode }) {
-  return <div className="divide-y divide-black/[0.06] rounded-[16px] bg-[#F5F5F7]">{children}</div>;
+  return <div className="divide-y divide-line rounded-[16px] border border-line bg-bg">{children}</div>;
 }
 
 /** What the phone shows after a scan: photo, stock, expiry, codes, and the next actions. */
 export default function ProductDetails({
   product,
   stock,
-  currencySymbol,
+  settings,
   now,
   onSaved,
 }: {
   product: CatalogProduct;
   stock: Stock | null;
-  currencySymbol: string | null;
+  settings: TenantSettings;
   now: Date;
   onSaved: () => void;
 }) {
@@ -57,7 +58,8 @@ export default function ProductDetails({
   const unit = isUnit(product.unit) ? t.anbar.units[product.unit] : product.unit;
   const qty = stock?.stock ?? 0;
   const expiryDate = stock?.nearestExpiry ?? product.expiryDate;
-  const status = expiryStatus(expiryDate, now);
+  const status = expiryStatus(expiryDate, now, settings);
+  const currency = currencyLabel(settings);
   const receiveHref = `${ANBAR_RECEIPT_PATH}?code=${encodeURIComponent(product.barcode ?? product.internalCode)}`;
 
   return (
@@ -71,9 +73,9 @@ export default function ProductDetails({
           <span className="font-medium">
             {qty} {unit}
           </span>
-          {isLowStock(qty, product.minStock) && <span className="text-neutral-500">· {shelf.lowStock}</span>}
+          {isLowStock(qty, product.minStock, settings) && <span className="text-white/60">· {shelf.lowStock}</span>}
         </Row>
-        <Row label={copy.value}>{formatMoney(stock?.value ?? 0, currencySymbol)}</Row>
+        <Row label={copy.value}>{formatMoney(stock?.value ?? 0, currency)}</Row>
         <Row label={t.anbar.fields.expiry}>
           {status.dot && <StatusDot dot={status.dot} label={expiryLabel(status)} />}
           <span className="truncate">{expiryDate ? `${expiryDate} · ${expiryLabel(status)}` : shelf.noExpiry}</span>
@@ -87,7 +89,7 @@ export default function ProductDetails({
           </Row>
         )}
         {product.pricePerUnit !== null && (
-          <Row label={copy.price}>{formatMoney(product.pricePerUnit, currencySymbol)}</Row>
+          <Row label={copy.price}>{formatMoney(product.pricePerUnit, currency)}</Row>
         )}
       </Group>
 
@@ -102,7 +104,7 @@ export default function ProductDetails({
 
       <form onSubmit={onSubmit} className="flex flex-col gap-2">
         <input type="hidden" name="productId" value={product.id} />
-        <label htmlFor="sheet-expiry" className="text-[13px] text-neutral-500">
+        <label htmlFor="sheet-expiry" className="text-[13px] text-white/60">
           {copy.updateExpiry}
         </label>
         <div className="flex gap-2">

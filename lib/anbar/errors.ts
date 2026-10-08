@@ -8,6 +8,7 @@ export const ANBAR_ERROR_CODES = [
   "exceedsQty",
   "unitMismatch",
   "duplicateBarcode",
+  "duplicateLocation",
   "concurrent",
   "saveFailed",
 ] as const;

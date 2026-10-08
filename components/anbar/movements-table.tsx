@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
+import { Pager } from "@/components/ui/pager";
 import {
   Table,
   TableBody,
@@ -11,7 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { MovementRow } from "@/lib/anbar/kitchen";
-import { ANBAR_APP_PATH } from "@/lib/auth-redirect";
+import { ANBAR_APP_PATH, ANBAR_MOVEMENTS_PATH } from "@/lib/auth-redirect";
 import { MOVEMENT_TYPES, type MovementType } from "@/lib/anbar/stock-view";
 import { useT } from "@/lib/i18n/useT";
 
@@ -25,15 +26,24 @@ function movementLabel(
 
 export default function MovementsTable({
   rows,
+  total,
+  page,
+  pageSize,
   date,
   type,
 }: {
   rows: MovementRow[];
+  total: number;
+  page: number;
+  pageSize: number;
   date: string | null;
   type: MovementType | null;
 }) {
   const { t } = useT();
   const copy = t.anbar.kitchen;
+  const query: Record<string, string> = {};
+  if (date) query.date = date;
+  if (type) query.type = type;
 
   return (
     <div className="flex flex-col gap-6">
@@ -104,6 +114,8 @@ export default function MovementsTable({
           </TableBody>
         </Table>
       )}
+
+      <Pager path={ANBAR_MOVEMENTS_PATH} query={query} page={page} pageSize={pageSize} total={total} shown={rows.length} />
     </div>
   );
 }

@@ -1,80 +1,99 @@
 import { NextResponse } from "next/server";
 import { requireTenant } from "@/lib/api/tenant";
+import type { TenantScope } from "@/lib/anbar/scope";
+import { ANBAR_COUNT_PATH } from "@/lib/auth-redirect";
+import { countByGroupKey, countLines, getCount } from "@/lib/count/load";
+import { GROUP_KEY_MAX_LENGTH, isUuid, mapCountError, parseCountedQuantity } from "@/lib/count/model";
 
 export const dynamic = "force-dynamic";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
+/**
+ * Saves the caller's entries of an open count (form: count_id, qty_<product id>, intent=save|finish).
+ * Only stock_count_items are written; stock changes when a chef approves the count.
+ */
 export async function POST(request: Request) {
   const current = await requireTenant();
   if ("error" in current) return current.error;
+  const scope: TenantScope = { client: current.supabase, tenantId: current.tenantId };
 
   const form = await request.formData();
-  const locationId = String(form.get("location_id") ?? "");
-  const groupKey = String(form.get("group_key") ?? "").trim();
-  if (!UUID.test(locationId)) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
+  const countId = String(form.get("count_id") ?? "");
+  const finish = form.get("intent") === "finish";
+  if (!isUuid(countId)) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
 
-  const counted: { productId: string; quantity: number }[] = [];
+  let count;
+  try {
+    count = await getCount(scope, countId);
+  } catch (error) {
+    console.error("count POST failed", error instanceof Error ? error.message : "unknown");
+    return NextResponse.json({ error: "save_failed" }, { status: 500 });
+  }
+  if (!count) return NextResponse.json({ error: "count_not_found" }, { status: 404 });
+
+  const back = (params: Record<string, string>) => {
+    const next = new URL(ANBAR_COUNT_PATH, request.url);
+    next.searchParams.set("location", count.locationId);
+    for (const [key, value] of Object.entries(params)) next.searchParams.set(key, value);
+    return NextResponse.redirect(next, 303);
+  };
+
+  const items: { product_id: string; quantity: number }[] = [];
   for (const [key, value] of Array.from(form.entries())) {
     if (!key.startsWith("qty_")) continue;
     const productId = key.slice(4);
-    const text = String(value).trim();
-    if (!UUID.test(productId) || text === "") continue;
-    const quantity = Number(text);
-    if (!Number.isFinite(quantity) || quantity < 0) continue;
-    counted.push({ productId, quantity });
+    const quantity = parseCountedQuantity(value);
+    if (!isUuid(productId) || !quantity.ok) return back({ error: "invalid_input" });
+    if (quantity.value !== null) items.push({ product_id: productId, quantity: quantity.value });
   }
 
-  const created = await current.supabase
-    .from("stock_counts")
-    .insert({
-      tenant_id: current.tenantId,
-      location_id: locationId,
-      group_key: groupKey || null,
-      user_id: current.userId,
-    })
-    .select("id")
-    .single();
-  if (created.error || !created.data) return NextResponse.json({ error: "save_failed" }, { status: 500 });
+  if (items.length > 0) {
+    const saved = await current.supabase.rpc("save_stock_count_items", { p_count_id: countId, p_items: items });
+    if (saved.error) return back({ error: mapCountError(saved.error.message ?? "").code });
+  }
+  if (finish) {
+    const finished = await current.supabase.rpc("finish_my_stock_count", { p_count_id: countId });
+    if (finished.error) return back({ error: mapCountError(finished.error.message ?? "").code });
+  }
+  return back({ notice: finish ? "finished" : "saved" });
+}
 
-  if (counted.length > 0) {
-    const items = await current.supabase.from("stock_count_items").insert(
-      counted.map((row) => ({
-        tenant_id: current.tenantId,
-        stock_count_id: created.data.id,
-        product_id: row.productId,
-        counted_quantity: row.quantity,
-      })),
-    );
-    if (items.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
+/**
+ * Merged list of a count: GET ?count_id=<uuid> or ?group_key=<label> (the open count with that label,
+ * else the latest). Products entered by several people are combined by the tenant's merge mode
+ * (latest entry or sum). The system quantity stays hidden while the count is blind.
+ */
+export async function GET(request: Request) {
+  const current = await requireTenant();
+  if ("error" in current) return current.error;
+  const scope: TenantScope = { client: current.supabase, tenantId: current.tenantId };
+
+  const params = new URL(request.url).searchParams;
+  const countId = params.get("count_id");
+  const groupKey = params.get("group_key")?.trim() ?? "";
+  if (countId !== null ? !isUuid(countId) : groupKey === "" || groupKey.length > GROUP_KEY_MAX_LENGTH) {
+    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
 
-  let moved = false;
-  for (const row of counted) {
-    const stock = await current.supabase
-      .from("product_stocks")
-      .select("quantity")
-      .eq("tenant_id", current.tenantId)
-      .eq("product_id", row.productId)
-      .eq("location_id", locationId);
-    if (stock.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
-    const system = (stock.data ?? []).reduce((sum, item) => sum + Number(item.quantity), 0);
-    const delta = row.quantity - system;
-    if (delta === 0) continue;
-    const movement = await current.supabase.from("stock_movements").insert({
-      tenant_id: current.tenantId,
-      product_id: row.productId,
-      from_location_id: delta < 0 ? locationId : null,
-      to_location_id: delta > 0 ? locationId : null,
-      quantity: Math.abs(delta),
-      movement_type: "count",
-      user_id: current.userId,
+  try {
+    const count = countId !== null ? await getCount(scope, countId) : await countByGroupKey(scope, groupKey);
+    if (!count) return NextResponse.json({ error: "count_not_found" }, { status: 404 });
+    const lines = await countLines(scope, count.id);
+    return NextResponse.json({
+      count: {
+        id: count.id,
+        status: count.status,
+        locationId: count.locationId,
+        groupKey: count.groupKey,
+        mergeMode: count.mergeMode,
+        finished: count.finishedBy.length,
+        createdAt: count.createdAt,
+        approvedAt: count.approvedAt,
+      },
+      lines,
     });
-    if (movement.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
-    moved = true;
+  } catch (error) {
+    const mapped = mapCountError(error instanceof Error ? error.message : "");
+    if (mapped.code === "save_failed") console.error("count GET failed", error instanceof Error ? error.message : "unknown");
+    return NextResponse.json({ error: mapped.code }, { status: mapped.status });
   }
-
-  const next = new URL("/app/anbar", request.url);
-  if (moved) next.searchParams.set("notice", "1");
-  return NextResponse.redirect(next, 303);
 }

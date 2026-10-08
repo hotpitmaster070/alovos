@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
-import { createServerSupabase } from "@/lib/supabase/server";
+import { requireTenant } from "@/lib/api/tenant";
 import { parseStockMove } from "@/lib/anbar/stock-view";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const { supabase, userId } = await createServerSupabase();
-  if (!userId) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  const current = await requireTenant();
+  if ("error" in current) return current.error;
+  const { supabase, userId, tenantId } = current;
 
   let body: unknown;
   try {
@@ -19,17 +20,11 @@ export async function POST(request: Request) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const move = parsed.value;
 
-  const profile = await supabase.from("profiles").select("tenant_id").eq("id", userId).maybeSingle();
-  if (profile.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
-  const tenantId = typeof profile.data?.tenant_id === "string" ? profile.data.tenant_id : null;
-  if (!tenantId) return NextResponse.json({ error: "no_tenant" }, { status: 403 });
-
   const product = await supabase
     .from("products")
     .select("id")
     .eq("id", move.productId)
     .eq("tenant_id", tenantId)
-    .eq("organization_id", tenantId)
     .maybeSingle();
   if (product.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
   if (!product.data) return NextResponse.json({ error: "product_not_found" }, { status: 404 });
@@ -38,12 +33,13 @@ export async function POST(request: Request) {
   if (locationIds.length > 0) {
     const locations = await supabase
       .from("storage_locations")
-      .select("id")
+      .select("id, is_active")
       .eq("tenant_id", tenantId)
       .in("id", locationIds);
     if (locations.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
-    const found = new Set((locations.data ?? []).map((row) => row.id));
-    if (locationIds.some((id) => !found.has(id))) {
+    const found = new Map((locations.data ?? []).map((row) => [row.id, row.is_active !== false]));
+    const targetInactive = move.toLocationId !== null && found.get(move.toLocationId) === false;
+    if (locationIds.some((id) => !found.has(id)) || targetInactive) {
       return NextResponse.json({ error: "location_not_found" }, { status: 404 });
     }
   }

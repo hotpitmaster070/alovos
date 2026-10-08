@@ -6,6 +6,7 @@ import Logo from "@/components/logo";
 import ModuleCard from "@/components/module-card";
 import { BLOCKS } from "@/lib/blocks";
 import { useT } from "@/lib/i18n/useT";
+import { PLAN } from "@/lib/pricing";
 
 const CONTAINER = "mx-auto max-w-[390px] px-4";
 
@@ -52,10 +53,10 @@ export default function Home() {
 
         <section className={`${CONTAINER} mt-12 text-center`}>
           <p className="text-3xl font-bold text-white">
-            {price.amount} {price.currency} / {price.period}
+            {PLAN.amount} {PLAN.currency} / {price.period}
           </p>
           <p className="mt-2 text-sm text-white">
-            {price.included} {price.trial(price.trialDays)}
+            {price.included} {price.trial(PLAN.trialDays)}
           </p>
           <Link
             href="/app/dashboard"

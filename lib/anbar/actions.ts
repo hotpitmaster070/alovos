@@ -5,28 +5,26 @@ import { failure, success, type ActionResult, type AnbarErrorCode } from "./erro
 import {
   createProductWithBarcode,
   findProductByBarcode,
-  insertLocation,
-  insertProduct,
-  locationExists,
-  moveStockRpc,
+  getCatalogLine,
+  insertStorageLocation,
   receiveStock,
   updateExpiry,
 } from "./repository";
-import { resolveScope, type OrgScope } from "./scope";
-import type { CatalogProduct } from "./types";
+import { resolveScope, type TenantScope } from "./scope";
+import type { CatalogLine, CatalogProduct, StorageLocation } from "./types";
 import {
   normalizeCode,
   validateBarcodeProductInput,
   validateExpiryInput,
-  validateLocationName,
-  validateMoveInput,
-  validateProductInput,
   validateReceiptInput,
+  validateStorageLocationInput,
 } from "./validation";
 
 const ANBAR_PATH = "/app/anbar";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SETTINGS_PATH = "/app/sebeke";
 
-async function scopeOrFailure(): Promise<{ scope: OrgScope } | { error: AnbarErrorCode }> {
+async function scopeOrFailure(): Promise<{ scope: TenantScope } | { error: AnbarErrorCode }> {
   const resolved = await resolveScope();
   if (resolved.status === "unauthenticated" || resolved.status === "no_organization") {
     return { error: "unauthenticated" };
@@ -53,6 +51,27 @@ export async function lookupCodeAction(raw: string): Promise<LookupResult> {
   }
 }
 
+export type CatalogLookupResult =
+  | { ok: true; code: string; line: CatalogLine | null }
+  | { ok: false; error: AnbarErrorCode };
+
+/** Catalog scan or Enter: the product for a code with its stock in the branch, or null when it is new. */
+export async function lookupCatalogLineAction(raw: string, branchId: string | null): Promise<CatalogLookupResult> {
+  const code = normalizeCode(raw);
+  if (!code || (branchId !== null && !UUID.test(branchId))) return { ok: false, error: "invalidInput" };
+  const current = await scopeOrFailure();
+  if ("error" in current) return { ok: false, error: current.error };
+  try {
+    const product = await findProductByBarcode(current.scope, code);
+    if (!product) return { ok: true, code, line: null };
+    const line = await getCatalogLine(current.scope, product.id, branchId);
+    return { ok: true, code, line: line ?? { ...product, stock: 0, nearestExpiry: product.expiryDate, value: 0 } };
+  } catch (error) {
+    console.error("lookupCatalogLineAction failed", error instanceof Error ? error.message : "unknown");
+    return { ok: false, error: "saveFailed" };
+  }
+}
+
 export type CreateProductResult = { ok: true; product: CatalogProduct } | { ok: false; error: AnbarErrorCode };
 
 export async function createBarcodeProductAction(data: FormData): Promise<CreateProductResult> {
@@ -70,6 +89,27 @@ export async function createBarcodeProductAction(data: FormData): Promise<Create
     return created;
   } catch (error) {
     console.error("createBarcodeProductAction failed", error instanceof Error ? error.message : "unknown");
+    return { ok: false, error: "saveFailed" };
+  }
+}
+
+export type StorageLocationResult = { ok: true; location: StorageLocation } | { ok: false; error: AnbarErrorCode };
+
+export async function addStorageLocationAction(data: FormData): Promise<StorageLocationResult> {
+  const input = validateStorageLocationInput(data);
+  if (!input.ok) return { ok: false, error: input.error };
+  const current = await scopeOrFailure();
+  if ("error" in current) return { ok: false, error: current.error };
+
+  try {
+    const created = await insertStorageLocation(current.scope, input.value);
+    if (created.ok) {
+      revalidatePath(ANBAR_PATH, "layout");
+      revalidatePath(SETTINGS_PATH);
+    }
+    return created;
+  } catch (error) {
+    console.error("addStorageLocationAction failed", error instanceof Error ? error.message : "unknown");
     return { ok: false, error: "saveFailed" };
   }
 }
@@ -100,66 +140,5 @@ export async function receiveStockAction(data: FormData): Promise<ActionResult> 
     return failure("saveFailed");
   }
   revalidatePath(ANBAR_PATH, "layout");
-  return success;
-}
-
-/** Every action re-verifies the session and re-resolves the organization; nothing is trusted from the client. */
-export async function moveStockAction(data: FormData): Promise<ActionResult> {
-  const input = validateMoveInput(data);
-  if (!input.ok) return failure(input.error);
-
-  const resolved = await resolveScope();
-  if (resolved.status === "unauthenticated" || resolved.status === "no_organization") {
-    return failure("unauthenticated");
-  }
-  if (resolved.status === "error") return failure("saveFailed");
-
-  const error = await moveStockRpc(resolved.scope, input.value);
-  if (error) return failure(error);
-
-  revalidatePath(ANBAR_PATH);
-  return success;
-}
-
-export async function addProductAction(data: FormData): Promise<ActionResult> {
-  const input = validateProductInput(data);
-  if (!input.ok) return failure(input.error);
-
-  const resolved = await resolveScope();
-  if (resolved.status === "unauthenticated" || resolved.status === "no_organization") {
-    return failure("unauthenticated");
-  }
-  if (resolved.status === "error") return failure("saveFailed");
-
-  const { scope } = resolved;
-  try {
-    if (input.value.locationId && !(await locationExists(scope, input.value.locationId))) {
-      return failure("locationNotFound");
-    }
-    const error = await insertProduct(scope, input.value);
-    if (error) return failure(error);
-  } catch (error) {
-    console.error("addProductAction failed", error instanceof Error ? error.message : "unknown");
-    return failure("saveFailed");
-  }
-
-  revalidatePath(ANBAR_PATH);
-  return success;
-}
-
-export async function addLocationAction(data: FormData): Promise<ActionResult> {
-  const input = validateLocationName(data);
-  if (!input.ok) return failure(input.error);
-
-  const resolved = await resolveScope();
-  if (resolved.status === "unauthenticated" || resolved.status === "no_organization") {
-    return failure("unauthenticated");
-  }
-  if (resolved.status === "error") return failure("saveFailed");
-
-  const error = await insertLocation(resolved.scope, input.name);
-  if (error) return failure(error);
-
-  revalidatePath(ANBAR_PATH);
   return success;
 }

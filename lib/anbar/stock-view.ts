@@ -1,18 +1,12 @@
 export const MOVEMENT_TYPES = ["prihod", "spisanie", "peremeshchenie", "transfer", "waste", "task", "count"] as const;
 export type MovementType = (typeof MOVEMENT_TYPES)[number];
 
-export type KitchenLocation = { id: string; name: string; type: string; branchId: string | null };
-export type KitchenBranch = { id: string; name: string };
-export type KitchenProduct = { id: string; name: string };
-export type KitchenBalance = {
-  productId: string;
-  locationId: string;
-  branchId: string | null;
-  quantity: number;
-  unit: string;
-  cost: number | null;
-};
+import type { StorageLocation } from "./types";
 
+export type KitchenLocation = StorageLocation;
+export type KitchenBranch = { id: string; name: string };
+
+/** Lots of one product summed per storage location. */
 export type StockLine = {
   productId: string;
   productName: string;
@@ -20,7 +14,6 @@ export type StockLine = {
   locationName: string;
   quantity: number;
   unit: string;
-  value: number;
 };
 
 export type StockMoveInput = {
@@ -56,53 +49,10 @@ export function parseMovementDate(value: string | string[] | undefined): string 
   return raw;
 }
 
-export function nextUtcDate(date: string): string {
-  const [year, month, day] = date.split("-").map(Number);
-  const utc = new Date(Date.UTC(year, month - 1, day));
-  utc.setUTCDate(utc.getUTCDate() + 1);
-  return utc.toISOString().slice(0, 10);
-}
-
 export function parseLocationFilter(value: string | string[] | undefined): string | "all" {
   const raw = Array.isArray(value) ? value[0] : value;
   if (!raw || raw === "all") return "all";
   return UUID.test(raw) ? raw : "all";
-}
-
-export function buildStockLines(
-  products: KitchenProduct[],
-  locations: KitchenLocation[],
-  balances: KitchenBalance[],
-  locationId: string | "all",
-  branchId: string | "all",
-): StockLine[] {
-  const visible = locations.filter((location) => {
-    if (locationId !== "all" && location.id !== locationId) return false;
-    if (branchId !== "all" && location.branchId !== branchId) return false;
-    return true;
-  });
-  const lines: StockLine[] = [];
-  for (const product of products) {
-    for (const location of visible) {
-      const lots = balances.filter((row) => row.productId === product.id && row.locationId === location.id);
-      const quantity = lots.reduce((sum, row) => sum + row.quantity, 0);
-      if (quantity === 0) continue;
-      lines.push({
-        productId: product.id,
-        productName: product.name,
-        locationId: location.id,
-        locationName: location.name,
-        quantity,
-        unit: lots[0]?.unit ?? "",
-        value: lots.reduce((sum, row) => sum + row.quantity * (row.cost ?? 0), 0),
-      });
-    }
-  }
-  return lines;
-}
-
-export function stockValue(lines: StockLine[]): number {
-  return lines.reduce((sum, line) => sum + line.value, 0);
 }
 
 function optionalUuid(value: unknown): string | null | undefined {
