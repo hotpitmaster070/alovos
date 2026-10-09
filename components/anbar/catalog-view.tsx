@@ -367,6 +367,7 @@ export default function CatalogView({
             settings={settings}
             now={now}
             branchId={branchId}
+            locations={locations}
             onSaved={(line) => {
               if (line) setPanel({ kind: "found", product: line, stock: line });
               router.refresh();

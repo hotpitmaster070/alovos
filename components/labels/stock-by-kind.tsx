@@ -1,10 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
-import { isUnit } from "@/lib/anbar/types";
+import { isUnit, type StorageLocation } from "@/lib/anbar/types";
 import { useT } from "@/lib/i18n/useT";
+import { canSetShelfLife } from "@/lib/labels/model";
+import type { ExpirySettings } from "@/lib/tenant-settings/parse";
+import MoveLotDialog from "./move-lot-dialog";
 import {
   STOCK_FILTERS,
   STOCK_KINDS,
@@ -96,13 +102,42 @@ export function StockKindCards({ value, currency, link }: { value: StockValue; c
 
 export type StockBlock = { kind: StockKind | null; items: StockItem[]; total: number };
 
-function ItemsTable({ items, currency, seesMoney }: { items: StockItem[]; currency: CurrencyInfo; seesMoney: boolean }) {
+/** What the Move button needs; without it the rows have no button. */
+export type StockMove = { locations: StorageLocation[]; settings: ExpirySettings; role: string | null };
+
+function ItemsTable({
+  items,
+  currency,
+  seesMoney,
+  move,
+}: {
+  items: StockItem[];
+  currency: CurrencyInfo;
+  seesMoney: boolean;
+  move: StockMove | null;
+}) {
   const { t } = useT();
   const copy = t.labels.stock;
+  const router = useRouter();
+  const [moving, setMoving] = useState<StockItem | null>(null);
   const unit = (value: string) => (isUnit(value) ? t.anbar.units[value] : value);
+  const canMove = move !== null && canSetShelfLife(move.role);
   if (items.length === 0) return <p className="text-sm text-white/60">{copy.empty}</p>;
   return (
     <div className="overflow-x-auto">
+      {move && moving && (
+        <MoveLotDialog
+          item={moving}
+          locations={move.locations}
+          settings={move.settings}
+          role={move.role}
+          onClose={() => setMoving(null)}
+          onDone={() => {
+            setMoving(null);
+            router.refresh();
+          }}
+        />
+      )}
       <table className="w-full min-w-[640px] text-left text-sm">
         <thead className="text-xs uppercase tracking-widest text-white/50">
           <tr>
@@ -113,6 +148,7 @@ function ItemsTable({ items, currency, seesMoney }: { items: StockItem[]; curren
             {seesMoney && <th className="py-2 pr-3 text-right font-medium">{copy.columns.cost}</th>}
             {seesMoney && <th className="py-2 pr-3 text-right font-medium">{copy.columns.sale}</th>}
             <th className="py-2 font-medium">{copy.columns.kind}</th>
+            {canMove && <th className="py-2 pl-3" aria-label={t.labels.move.action} />}
           </tr>
         </thead>
         <tbody className="divide-y divide-line">
@@ -144,6 +180,15 @@ function ItemsTable({ items, currency, seesMoney }: { items: StockItem[]; curren
                 <td className="py-2">
                   <Badge className={KIND_STYLE[item.kind].badge}>{copy.kinds[item.kind]}</Badge>
                 </td>
+                {canMove && (
+                  <td className="py-2 pl-3 text-right">
+                    {item.locationId && (item.daysLeft === null || item.daysLeft >= 0) && (
+                      <Button size="sm" variant="outline" onClick={() => setMoving(item)}>
+                        {t.labels.move.action}
+                      </Button>
+                    )}
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -164,6 +209,7 @@ export default function StockByKind({
   currency,
   seesMoney,
   link,
+  move,
 }: {
   value: StockValue;
   blocks: StockBlock[];
@@ -171,6 +217,7 @@ export default function StockByKind({
   currency: CurrencyInfo;
   seesMoney: boolean;
   link: StockLink;
+  move?: StockMove;
 }) {
   const { t } = useT();
   const copy = t.labels.stock;
@@ -202,7 +249,7 @@ export default function StockByKind({
           <CardTitle className={block.kind ? KIND_STYLE[block.kind].text : "text-red-300"}>
             {block.kind ? copy.kinds[block.kind] : copy.filters.expiring}
           </CardTitle>
-          <ItemsTable items={block.items} currency={currency} seesMoney={seesMoney} />
+          <ItemsTable items={block.items} currency={currency} seesMoney={seesMoney} move={move ?? null} />
           {block.total > block.items.length && <p className="text-xs text-white/50">{copy.more(block.items.length, block.total)}</p>}
         </Card>
       ))}

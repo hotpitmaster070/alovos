@@ -58,6 +58,11 @@ export default async function StoragePage({ searchParams }: { searchParams: RawS
           currency={currency}
           seesMoney={seesMoney}
           link={{ path: ANBAR_STORAGE_PATH, branchId: branch?.id ?? null }}
+          move={{
+            locations: locations.filter((location) => location.active),
+            settings: { timezone: settings.timezone, expiryWarnDays: settings.expiryWarnDays, expiryCriticalDays: settings.expiryCriticalDays },
+            role,
+          }}
         />
       )}
       {expired && <ExpiredStockCard rows={expired.value} canWriteOff={canWriteOffWaste(role)} />}

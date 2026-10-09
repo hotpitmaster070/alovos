@@ -1,10 +1,12 @@
 import StockByKind from "@/components/labels/stock-by-kind";
 import { redirectIfNoOrg } from "@/lib/app-gate";
-import { listBranches } from "@/lib/anbar/repository";
+import { listBranches, listStorageLocations } from "@/lib/anbar/repository";
 import { resolveScope } from "@/lib/anbar/scope";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 import { KITCHEN_STOCK_PATH } from "@/lib/auth-redirect";
+import { memberRole } from "@/lib/count/load";
 import { stockFilter } from "@/lib/labels/final";
+import { canSetShelfLife } from "@/lib/labels/model";
 import { stockView } from "@/lib/labels/repository";
 import { getSettings } from "@/lib/tenant-settings/getSettings";
 import { currencyOf } from "@/lib/money";
@@ -21,11 +23,14 @@ export default async function KitchenStockPage({ searchParams }: { searchParams:
   if (gated.status === "error") {
     throw gated.cause instanceof Error ? gated.cause : new Error("Tenant lookup failed");
   }
-  const [branches, settings] = await Promise.all([listBranches(gated.scope), getSettings(gated.scope)]);
+  const [branches, settings, role] = await Promise.all([listBranches(gated.scope), getSettings(gated.scope), memberRole(gated.scope)]);
   const requested = first(searchParams.branch);
   const branch = branches.find((item) => item.id === requested) ?? branches[0] ?? null;
   const filter = stockFilter(first(searchParams.type));
-  const stock = branch ? await stockView(gated.scope, branch.id, filter, false) : null;
+  const [stock, locations] = await Promise.all([
+    branch ? stockView(gated.scope, branch.id, filter, false) : null,
+    branch && canSetShelfLife(role) ? listStorageLocations(gated.scope, { branchId: branch.id }) : [],
+  ]);
   if (stock && !stock.ok) throw new Error(`stock_items: ${stock.error}`);
 
   return (
@@ -38,6 +43,11 @@ export default async function KitchenStockPage({ searchParams }: { searchParams:
           currency={currencyOf(settings)}
           seesMoney={false}
           link={{ path: KITCHEN_STOCK_PATH, branchId: branch?.id ?? null }}
+          move={{
+            locations,
+            settings: { timezone: settings.timezone, expiryWarnDays: settings.expiryWarnDays, expiryCriticalDays: settings.expiryCriticalDays },
+            role,
+          }}
         />
       )}
     </div>

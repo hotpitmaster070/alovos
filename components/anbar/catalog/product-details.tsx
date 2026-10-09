@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { updateExpiryAction } from "@/lib/anbar/actions";
 import { expiryStatus, isLowStock } from "@/lib/anbar/catalog-status";
-import { isUnit, type CatalogLine, type CatalogProduct } from "@/lib/anbar/types";
+import { isUnit, type CatalogLine, type CatalogProduct, type StorageLocation } from "@/lib/anbar/types";
 import { EXPIRY_MAX_YEARS, addCalendarYears, validateExpiryInput } from "@/lib/anbar/validation";
 import { ANBAR_RECEIPT_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
@@ -14,6 +14,7 @@ import { daysBetween, todayIn } from "@/lib/tenant-settings/time";
 import { useAction } from "../use-action";
 import { useExpiryLabel } from "./expiry-label";
 import ProductEconomics from "./product-economics";
+import ProductStorageNorms from "./product-storage-norms";
 import {
   ErrorText,
   LightInput,
@@ -52,6 +53,7 @@ export default function ProductDetails({
   settings,
   now,
   branchId,
+  locations,
   onSaved,
 }: {
   product: CatalogProduct;
@@ -59,6 +61,8 @@ export default function ProductDetails({
   settings: TenantSettings;
   now: Date;
   branchId: string | null;
+  /** Storage places of all branches; the norms show those of the product's branch. */
+  locations: StorageLocation[];
   onSaved: (line: CatalogLine | null) => void;
 }) {
   const { t } = useT();
@@ -93,6 +97,8 @@ export default function ProductDetails({
   const mismatch = productExpiry !== null && lotExpiry !== null && (dayGap(productExpiry, lotExpiry) ?? 0) > EXPIRY_MISMATCH_DAYS;
   const status = expiryStatus(productExpiry, now, settings);
   const currency = currencyOf(settings);
+  const normBranch = product.branchId ?? branchId;
+  const normLocations = locations.filter((location) => location.active && location.branchId === normBranch);
   const receiveHref = `${ANBAR_RECEIPT_PATH}?code=${encodeURIComponent(product.barcode ?? product.internalCode)}`;
 
   return (
@@ -142,6 +148,8 @@ export default function ProductDetails({
       </Group>
 
       <ProductEconomics productId={product.id} />
+
+      <ProductStorageNorms productId={product.id} locations={normLocations} />
 
       <form onSubmit={onSubmit} className="flex flex-col gap-2">
         <input type="hidden" name="productId" value={product.id} />
