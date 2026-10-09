@@ -111,7 +111,9 @@ export type AnbarDictionary = {
       | "already_finished"
       | "nothing_counted"
       | "insufficient_stock"
-      | "save_failed",
+      | "save_failed"
+      | "count_already_open"
+      | "permission_denied",
       string
     >;
     product: string;
@@ -128,6 +130,8 @@ export type AnbarDictionary = {
     noHistory: string;
     startedAt: string;
     approvedAt: string;
+    dismiss: string;
+    openExisting: string;
   };
   searchLabel: string;
   searchPlaceholder: string;
@@ -174,6 +178,9 @@ export type AnbarDictionary = {
     branch: string;
     create: string;
     updateExpiry: string;
+    nearestLotExpiry: (date: string) => string;
+    expiryMismatch: string;
+    expiryUpdated: (lots: number) => string;
     save: string;
     saved: string;
     close: string;
@@ -612,6 +619,8 @@ const AZ: Dictionary = {
         nothing_counted: "Heç nə sayılmayıb.",
         insufficient_stock: "Qalıq dəyişib, təkrar cəhd edin.",
         save_failed: "Yadda saxlamaq alınmadı.",
+        count_already_open: "Bu yerdə artıq açıq sayım var.",
+        permission_denied: "Bu əməliyyat üçün icazəniz yoxdur.",
       },
       product: "Məhsul",
       discrepancies: "Fərqlər",
@@ -627,6 +636,8 @@ const AZ: Dictionary = {
       noHistory: "Hələ sayım yoxdur.",
       startedAt: "Başlanıb",
       approvedAt: "Təsdiqlənib",
+      dismiss: "Bağla",
+      openExisting: "Açıq sayımı aç",
     },
     searchLabel: "Barkod",
     searchPlaceholder: "Barkodu skan edin və ya yazın",
@@ -675,6 +686,9 @@ const AZ: Dictionary = {
       branch: "Filial",
       create: "Yarat",
       updateExpiry: "Son istifadə tarixi",
+      nearestLotExpiry: (date) => `Ən yaxın partiya: ${date}`,
+      expiryMismatch: "Məhsulun tarixi ilə ən yaxın partiya 3 gündən çox fərqlənir.",
+      expiryUpdated: (lots) => `Son istifadə tarixi məhsulda və ${lots} partiyada yeniləndi`,
       save: "Saxla",
       saved: "Saxlanıldı",
       close: "Bağla",
@@ -784,6 +798,7 @@ const AZ: Dictionary = {
     errors: {
       unauthenticated: "Davam etmək üçün daxil olun.",
       invalidInput: "Daxil edilən məlumat düzgün deyil.",
+      expiryOutOfRange: "Son istifadə tarixi bu gündən 5 ilə qədər olmalıdır.",
       productNotFound: "Məhsul tapılmadı.",
       locationNotFound: "Məkan tapılmadı.",
       sameLocation: "Məhsul artıq bu məkandadır.",
@@ -1099,6 +1114,8 @@ const RU: Dictionary = {
         nothing_counted: "Ничего не посчитано.",
         insufficient_stock: "Остаток изменился, попробуйте ещё раз.",
         save_failed: "Не удалось сохранить.",
+        count_already_open: "На этом месте уже есть открытый подсчёт.",
+        permission_denied: "Недостаточно прав для этого действия.",
       },
       product: "Товар",
       discrepancies: "Расхождения",
@@ -1114,6 +1131,8 @@ const RU: Dictionary = {
       noHistory: "Подсчётов пока нет.",
       startedAt: "Начат",
       approvedAt: "Утверждён",
+      dismiss: "Закрыть",
+      openExisting: "Открыть существующий подсчёт",
     },
     searchLabel: "Штрихкод",
     searchPlaceholder: "Отсканируйте или введите штрихкод",
@@ -1162,6 +1181,9 @@ const RU: Dictionary = {
       branch: "Филиал",
       create: "Создать",
       updateExpiry: "Срок годности",
+      nearestLotExpiry: (date) => `Ближайшая партия: ${date}`,
+      expiryMismatch: "Дата товара и ближайшая партия расходятся больше чем на 3 дня.",
+      expiryUpdated: (lots) => `Срок обновлён у товара и ${lots} ${ruPlural(lots, "партия", "партии", "партий")}`,
       save: "Сохранить",
       saved: "Сохранено",
       close: "Закрыть",
@@ -1271,6 +1293,7 @@ const RU: Dictionary = {
     errors: {
       unauthenticated: "Войдите, чтобы продолжить.",
       invalidInput: "Некорректные данные.",
+      expiryOutOfRange: "Срок годности должен быть не раньше сегодня и не позже чем через 5 лет.",
       productNotFound: "Товар не найден.",
       locationNotFound: "Локация не найдена.",
       sameLocation: "Товар уже находится в этой локации.",
@@ -1586,6 +1609,8 @@ const EN: Dictionary = {
         nothing_counted: "Nothing was counted.",
         insufficient_stock: "Stock changed, try again.",
         save_failed: "Could not save.",
+        count_already_open: "An open count already exists for this place.",
+        permission_denied: "You do not have permission to do this.",
       },
       product: "Product",
       discrepancies: "Discrepancies",
@@ -1601,6 +1626,8 @@ const EN: Dictionary = {
       noHistory: "No counts yet.",
       startedAt: "Started",
       approvedAt: "Approved",
+      dismiss: "Dismiss",
+      openExisting: "Open the existing count",
     },
     searchLabel: "Barcode",
     searchPlaceholder: "Scan or type a barcode",
@@ -1649,6 +1676,9 @@ const EN: Dictionary = {
       branch: "Branch",
       create: "Create",
       updateExpiry: "Expiry date",
+      nearestLotExpiry: (date) => `Nearest lot expiry: ${date}`,
+      expiryMismatch: "Product expiry and the nearest lot differ by more than 3 days.",
+      expiryUpdated: (lots) => `Expiry updated for product and ${lots} ${lots === 1 ? "lot" : "lots"}`,
       save: "Save",
       saved: "Saved",
       close: "Close",
@@ -1758,6 +1788,7 @@ const EN: Dictionary = {
     errors: {
       unauthenticated: "Sign in to continue.",
       invalidInput: "The submitted data is not valid.",
+      expiryOutOfRange: "Expiry must be today or later, and no more than 5 years ahead.",
       productNotFound: "Product not found.",
       locationNotFound: "Location not found.",
       sameLocation: "The product is already at this location.",

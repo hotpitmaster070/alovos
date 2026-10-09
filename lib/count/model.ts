@@ -131,7 +131,9 @@ export type CountErrorCode =
   | "already_finished"
   | "nothing_counted"
   | "insufficient_stock"
-  | "save_failed";
+  | "save_failed"
+  | "count_already_open"
+  | "permission_denied";
 
 const RAISED: Record<string, { code: CountErrorCode; status: number }> = {
   invalid_input: { code: "invalid_input", status: 400 },
@@ -154,5 +156,36 @@ export function mapCountError(message: string): { code: CountErrorCode; status: 
   return key ? RAISED[key] : { code: "save_failed", status: 500 };
 }
 
+const FORM_ONLY: readonly CountErrorCode[] = ["count_already_open", "permission_denied"];
+
 export const isCountErrorCode = (value: unknown): value is CountErrorCode =>
-  typeof value === "string" && (value === "save_failed" || Object.values(RAISED).some((raised) => raised.code === value));
+  typeof value === "string" &&
+  (value === "save_failed" ||
+    (FORM_ONLY as readonly string[]).includes(value) ||
+    Object.values(RAISED).some((raised) => raised.code === value));
+
+const EXISTING_COUNT_ID = /[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i;
+
+/**
+ * HTML-form failures. The page always receives a code it can translate.
+ * "Open count exists" keeps the id named in the message when one is present.
+ */
+export function countFormError(message: string): { error: CountErrorCode; existingId: string | null } {
+  const lower = message.toLowerCase();
+  const existingId = message.match(EXISTING_COUNT_ID)?.[0] ?? null;
+  if (
+    lower.includes("open count exists") ||
+    lower.includes("count_already_open") ||
+    lower.includes("open_count") ||
+    lower.includes("uniq_open_count_per_location")
+  ) {
+    return { error: "count_already_open", existingId };
+  }
+  if (lower.includes("permission denied") || lower.includes("permission_denied") || lower.includes("forbidden")) {
+    return { error: "permission_denied", existingId: null };
+  }
+  if (lower.includes("count_not_found") || lower.includes("count not found")) {
+    return { error: "count_not_found", existingId: null };
+  }
+  return { error: mapCountError(message).code, existingId: null };
+}

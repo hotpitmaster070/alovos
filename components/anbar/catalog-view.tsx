@@ -366,8 +366,9 @@ export default function CatalogView({
             stock={panel.stock}
             settings={settings}
             now={now}
-            onSaved={() => {
-              setPanel(null);
+            branchId={branchId}
+            onSaved={(line) => {
+              if (line) setPanel({ kind: "found", product: line, stock: line });
               router.refresh();
             }}
           />

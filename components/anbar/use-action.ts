@@ -3,16 +3,18 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { failure, type ActionResult, type AnbarErrorCode } from "@/lib/anbar/errors";
 
-type ServerAction = (data: FormData) => Promise<ActionResult>;
+type ServerAction<T extends ActionResult> = (data: FormData) => Promise<T>;
 
-type Options = {
+type Options<T extends ActionResult> = {
   /** Optional client-side check that runs before the server action. */
   validate?: (data: FormData) => AnbarErrorCode | null;
-  onSuccess?: () => void;
+  onSuccess?: (result: T & { ok: true }) => void;
+  /** Set false to keep the submitted values on screen after a successful save. */
+  resetOnSuccess?: boolean;
 };
 
 /** Runs a server action from a form submit, tracks pending state and resets the form on success. */
-export function useAction(action: ServerAction, options: Options = {}) {
+export function useAction<T extends ActionResult>(action: ServerAction<T>, options: Options<T> = {}) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<ActionResult | null>(null);
 
@@ -33,8 +35,8 @@ export function useAction(action: ServerAction, options: Options = {}) {
         const outcome = await action(data);
         setResult(outcome);
         if (outcome.ok) {
-          form.reset();
-          options.onSuccess?.();
+          if (options.resetOnSuccess !== false) form.reset();
+          options.onSuccess?.(outcome as T & { ok: true });
         }
       } catch {
         setResult(failure("saveFailed"));

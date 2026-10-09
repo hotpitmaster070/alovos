@@ -14,7 +14,7 @@ import {
   myCountEntries,
   openCountAt,
 } from "@/lib/count/load";
-import { isCountErrorCode } from "@/lib/count/model";
+import { isCountErrorCode, isUuid } from "@/lib/count/model";
 import { PAGE_SIZE, parsePage } from "@/lib/pagination";
 import { getSettings } from "@/lib/tenant-settings/getSettings";
 
@@ -65,6 +65,7 @@ export default async function CountPage({ searchParams }: { searchParams: RawSea
   const userId = user.data.user?.id ?? null;
   const notice = first(searchParams.notice);
   const error = first(searchParams.error);
+  const existingRaw = first(searchParams.existingId);
 
   return (
     <CountForm
@@ -87,6 +88,7 @@ export default async function CountPage({ searchParams }: { searchParams: RawSea
       mine={mine}
       notice={isNotice(notice) ? notice : null}
       error={isCountErrorCode(error) ? error : null}
+      existingId={isUuid(existingRaw) ? existingRaw : null}
       history={history.counts}
       historyTotal={history.total}
       historyPage={historyPage}

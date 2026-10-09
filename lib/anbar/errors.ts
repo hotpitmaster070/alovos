@@ -1,6 +1,7 @@
 export const ANBAR_ERROR_CODES = [
   "unauthenticated",
   "invalidInput",
+  "expiryOutOfRange",
   "productNotFound",
   "locationNotFound",
   "sameLocation",
@@ -20,7 +21,7 @@ export type AnbarErrorCode = (typeof ANBAR_ERROR_CODES)[number];
 export type ActionResult = { ok: true } | { ok: false; error: AnbarErrorCode };
 
 export const success: ActionResult = { ok: true };
-export const failure = (error: AnbarErrorCode): ActionResult => ({ ok: false, error });
+export const failure = (error: AnbarErrorCode): { ok: false; error: AnbarErrorCode } => ({ ok: false, error });
 
 type PostgrestErrorLike = { message?: unknown; code?: unknown };
 
@@ -36,6 +37,7 @@ export function mapRpcError(error: PostgrestErrorLike): AnbarErrorCode {
   if (message.includes("insufficient_stock")) return "exceedsQty";
   if (message.includes("invalid_qty")) return "invalidQty";
   if (message.includes("same_location")) return "sameLocation";
+  if (message.includes("expiry_out_of_range")) return "expiryOutOfRange";
   if (message.includes("product_not_found")) return "productNotFound";
   if (message.includes("location_not_found")) return "locationNotFound";
   if (message.includes("unit_mismatch")) return "unitMismatch";

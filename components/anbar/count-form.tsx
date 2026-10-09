@@ -47,6 +47,7 @@ export default function CountForm({
   mine,
   notice,
   error,
+  existingId,
   history,
   historyTotal,
   historyPage,
@@ -77,6 +78,8 @@ export default function CountForm({
   mine: Record<string, number>;
   notice: "saved" | "finished" | "started" | null;
   error: CountErrorCode | null;
+  /** Open count named by a failed start, when the server could resolve one. */
+  existingId: string | null;
   history: StockCount[];
   historyTotal: number;
   historyPage: number;
@@ -156,6 +159,18 @@ export default function CountForm({
         ? copy.errors[value.key]
         : `${copy.scanNotFound}: ${value.code}`;
 
+  const dismissMessage = () => {
+    setMessage(null);
+    const params = new URLSearchParams(window.location.search);
+    if (!params.has("error") && !params.has("notice") && !params.has("existingId") && !params.has("countId")) return;
+    params.delete("error");
+    params.delete("notice");
+    params.delete("existingId");
+    params.delete("countId");
+    const query = params.toString();
+    router.replace(query ? `${ANBAR_COUNT_PATH}?${query}` : ANBAR_COUNT_PATH, { scroll: false });
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-3">
@@ -231,9 +246,26 @@ export default function CountForm({
       )}
 
       {message && (
-        <p role={message.kind === "notice" ? "status" : "alert"} className={message.kind === "notice" ? "text-sm text-emerald-400" : "text-sm text-red-400"}>
-          {messageText(message)}
-        </p>
+        <div
+          role={message.kind === "notice" ? "status" : "alert"}
+          className={
+            message.kind === "notice"
+              ? "flex items-start justify-between gap-3 rounded-[12px] border border-emerald-400/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-300"
+              : "flex items-start justify-between gap-3 rounded-[12px] border border-red-400/30 bg-red-400/10 px-3 py-2 text-sm text-red-300"
+          }
+        >
+          <div>
+            <p>{messageText(message)}</p>
+            {message.kind === "error" && message.key === "count_already_open" && existingId && (
+              <Link href={`${ANBAR_COUNT_PATH}/${existingId}`} className="mt-1 inline-block underline-offset-2 hover:underline">
+                {copy.openExisting}
+              </Link>
+            )}
+          </div>
+          <button type="button" onClick={dismissMessage} className="shrink-0 underline-offset-2 hover:underline">
+            {copy.dismiss}
+          </button>
+        </div>
       )}
 
       {locationId && (

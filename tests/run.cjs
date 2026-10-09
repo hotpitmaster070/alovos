@@ -138,6 +138,11 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
   const receipt = { productId: P1, locationId: L1, qty: "2", expiryDate: "2027-01-31", pricePerUnit: "1.5" };
   ok("receiptInput: valid", validation.validateReceiptInput(fd(receipt)).ok === true);
   ok("receiptInput: bad product / location / qty", validation.validateReceiptInput(fd({ ...receipt, productId: "x" })).error === "invalidInput" && validation.validateReceiptInput(fd({ ...receipt, locationId: "x" })).error === "locationNotFound" && validation.validateReceiptInput(fd({ ...receipt, qty: "0" })).error === "invalidQty");
+  const today = "2026-10-06";
+  ok("expiryInput: today and empty are valid", validation.validateExpiryInput(fd({ productId: P1, expiryDate: today }), today).ok === true && validation.validateExpiryInput(fd({ productId: P1, expiryDate: "" }), today).ok === true);
+  ok("expiryInput: before today or beyond five years rejected", validation.validateExpiryInput(fd({ productId: P1, expiryDate: "2026-10-05" }), today).error === "expiryOutOfRange" && validation.validateExpiryInput(fd({ productId: P1, expiryDate: "2031-10-07" }), today).error === "expiryOutOfRange" && validation.validateExpiryInput(fd({ productId: P1, expiryDate: "2031-10-06" }), today).ok === true);
+  ok("expiryInput: leap day plus five years", validation.addCalendarYears("2024-02-29", 5) === "2029-02-28" && validation.validateExpiryInput(fd({ productId: P1, expiryDate: "2029-02-28" }), "2024-02-29").ok === true);
+  ok("expiryInput: impossible date", validation.validateExpiryInput(fd({ productId: P1, expiryDate: "2026-02-31" }), today).error === "invalidInput");
 
   // ---- catalog product input (block 1.1)
   const cp = validation.validateBarcodeProductInput(fd({ name: " Milk ", barcode: "4600000000001", category: " Dairy ", unit: "l", pricePerUnit: "2.5", shelfLifeDays: "7", minStock: "10" }));
@@ -166,7 +171,7 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
 
   // ---- auth error mapping
   ok("authErr: mapped", mapAuthError({ code: "invalid_credentials" }) === "invalidCredentials" && mapAuthError({ code: "weak_password" }) === "weakPassword" && mapAuthError({ code: "user_already_exists" }) === "emailTaken" && mapAuthError({ code: "email_not_confirmed" }) === "emailNotConfirmed" && mapAuthError({ status: 429 }) === "rateLimited" && mapAuthError({ name: "AuthRetryableFetchError", status: 0 }) === "network" && mapAuthError(new TypeError("Failed to fetch")) === "network" && mapAuthError("x") === "unknown" && mapAuthError({ message: "Invalid login credentials" }) === "invalidCredentials");
-  ok("rpcErr: mapped", mapRpcError({ message: "insufficient_stock" }) === "exceedsQty" && mapRpcError({ message: "same_location" }) === "sameLocation" && mapRpcError({ message: "product_not_found" }) === "productNotFound" && mapRpcError({ message: "location_not_found" }) === "locationNotFound" && mapRpcError({ message: "unit_mismatch" }) === "unitMismatch" && mapRpcError({ message: "product_location_mismatch" }) === "concurrent" && mapRpcError({ message: "not_authenticated" }) === "unauthenticated" && mapRpcError({ code: "23505", message: "dup" }) === "duplicateBarcode" && mapRpcError({ message: "boom" }) === "saveFailed");
+  ok("rpcErr: mapped", mapRpcError({ message: "insufficient_stock" }) === "exceedsQty" && mapRpcError({ message: "same_location" }) === "sameLocation" && mapRpcError({ message: "product_not_found" }) === "productNotFound" && mapRpcError({ message: "location_not_found" }) === "locationNotFound" && mapRpcError({ message: "unit_mismatch" }) === "unitMismatch" && mapRpcError({ message: "product_location_mismatch" }) === "concurrent" && mapRpcError({ message: "not_authenticated" }) === "unauthenticated" && mapRpcError({ code: "23505", message: "dup" }) === "duplicateBarcode" && mapRpcError({ message: "boom" }) === "saveFailed" && mapRpcError({ message: "expiry_out_of_range" }) === "expiryOutOfRange");
 
   // ---- cookie codec
   const name = "sb-abc-auth-token";
@@ -352,7 +357,11 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     const q = countModel.parseCountedQuantity;
     ok("count: quantity parsing", q("").ok && q("").value === null && q(" 2,5 ").value === 2.5 && q("0").value === 0 && !q("-1").ok && !q("abc").ok && !q("1000001").ok && q(null).value === null);
     ok("count: error mapping", countModel.mapCountError("invalid_status").code === "invalid_status" && countModel.mapCountError("x forbidden").status === 403 && countModel.mapCountError("boom").code === "save_failed");
-    ok("count: error code guard", countModel.isCountErrorCode("already_finished") && countModel.isCountErrorCode("location_required") && countModel.isCountErrorCode("save_failed") && !countModel.isCountErrorCode("toString") && !countModel.isCountErrorCode("location_id required") && !countModel.isCountErrorCode("nope"));
+    ok("count: error code guard", countModel.isCountErrorCode("already_finished") && countModel.isCountErrorCode("location_required") && countModel.isCountErrorCode("save_failed") && countModel.isCountErrorCode("count_already_open") && countModel.isCountErrorCode("permission_denied") && !countModel.isCountErrorCode("toString") && !countModel.isCountErrorCode("location_id required") && !countModel.isCountErrorCode("nope"));
+    const openId = "11111111-1111-4111-8111-111111111111";
+    const openCount = countModel.countFormError(`Open count exists ${openId}`);
+    ok("count: open count redirects with the existing id", openCount.error === "count_already_open" && openCount.existingId === openId);
+    ok("count: permission and missing count", countModel.countFormError("Permission denied").error === "permission_denied" && countModel.countFormError("forbidden").error === "permission_denied" && countModel.countFormError("count_not_found").error === "count_not_found" && countModel.countFormError("Count not found").existingId === null);
 
     const scope = (client) => ({ client, tenantId: TENANT });
     let client = makeClient({ tables: { stock_counts: [countRow(C2, "approved"), countRow(C1, "counting")] } });

@@ -204,16 +204,20 @@ export async function createProductWithBarcode(
   return product ? { ok: true, product } : { ok: false, error: "saveFailed" };
 }
 
+/** Writes products.expiry_date and every in-date lot in one transaction. Returns how many stock lots changed. */
 export async function updateExpiry(
   scope: TenantScope,
   productId: string,
   expiryDate: string | null,
-): Promise<AnbarErrorCode | null> {
-  const { error } = await scope.client.rpc("set_product_expiry", {
+): Promise<{ ok: true; lotsUpdated: number } | { ok: false; error: AnbarErrorCode }> {
+  const { data, error } = await scope.client.rpc("update_product_and_lots_expiry", {
     p_product_id: productId,
     p_expiry: expiryDate,
   });
-  return error ? mapRpcError(error) : null;
+  if (error) return { ok: false, error: mapRpcError(error) };
+  const lotsUpdated = typeof data === "number" ? data : typeof data === "string" ? Number(data) : Number.NaN;
+  if (!Number.isInteger(lotsUpdated) || lotsUpdated < 0) return { ok: false, error: "saveFailed" };
+  return { ok: true, lotsUpdated };
 }
 
 export async function listBranches(scope: TenantScope): Promise<Branch[]> {

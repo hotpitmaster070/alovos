@@ -1,6 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getSettings } from "@/lib/tenant-settings/getSettings";
+import { todayIn } from "@/lib/tenant-settings/time";
 import { failure, success, type ActionResult, type AnbarErrorCode } from "./errors";
 import {
   createProductWithBarcode,
@@ -154,16 +156,29 @@ export async function setStorageLocationActiveAction(id: string, active: boolean
   }
 }
 
-export async function updateExpiryAction(data: FormData): Promise<ActionResult> {
-  const input = validateExpiryInput(data);
-  if (!input.ok) return failure(input.error);
+export type ExpiryActionResult =
+  | { ok: true; lotsUpdated: number; line: CatalogLine | null }
+  | { ok: false; error: AnbarErrorCode };
+
+export async function updateExpiryAction(data: FormData): Promise<ExpiryActionResult> {
   const current = await scopeOrFailure();
   if ("error" in current) return failure(current.error);
 
-  const error = await updateExpiry(current.scope, input.value.productId, input.value.expiryDate);
-  if (error) return failure(error);
-  revalidatePath(ANBAR_PATH, "layout");
-  return success;
+  try {
+    const settings = await getSettings(current.scope);
+    const input = validateExpiryInput(data, todayIn(settings.timezone, new Date()));
+    if (!input.ok) return failure(input.error);
+
+    const updated = await updateExpiry(current.scope, input.value.productId, input.value.expiryDate);
+    if (!updated.ok) return updated;
+
+    revalidatePath(ANBAR_PATH, "layout");
+    const line = await getCatalogLine(current.scope, input.value.productId, input.value.branchId);
+    return { ok: true, lotsUpdated: updated.lotsUpdated, line };
+  } catch (error) {
+    console.error("updateExpiryAction failed", error instanceof Error ? error.message : "unknown");
+    return failure("saveFailed");
+  }
 }
 
 export async function receiveStockAction(data: FormData): Promise<ActionResult> {

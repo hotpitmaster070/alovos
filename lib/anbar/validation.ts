@@ -19,6 +19,21 @@ export const isRealDate = (value: string): boolean => {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 };
 
+/** Catalog expiry may be today through this many calendar years ahead. */
+export const EXPIRY_MAX_YEARS = 5;
+
+/** Calendar date plus whole years. 29 Feb lands on 28 Feb when the target year is not a leap year. */
+export function addCalendarYears(date: string, years: number): string | null {
+  if (!isRealDate(date) || !Number.isInteger(years)) return null;
+  const year = Number(date.slice(0, 4)) + years;
+  const monthDay = date.slice(4);
+  const candidate = `${year}${monthDay}`;
+  if (isRealDate(candidate)) return candidate;
+  const month = date.slice(5, 7);
+  const clamped = `${year}-${month}-28`;
+  return isRealDate(clamped) ? clamped : null;
+}
+
 export type RawSearchParams = Record<string, string | string[] | undefined>;
 
 const field = (data: FormData, key: string): string => {
@@ -201,11 +216,26 @@ export function validateReceiptInput(
 
 export function validateExpiryInput(
   data: FormData,
-): { ok: true; value: { productId: string; expiryDate: string | null } } | { ok: false; error: "invalidInput" } {
+  today: string,
+): { ok: true; value: { productId: string; branchId: string | null; expiryDate: string | null } } | { ok: false; error: "invalidInput" | "expiryOutOfRange" } {
   const productId = field(data, "productId");
+  const branchRaw = field(data, "branchId");
   const expiryDate = field(data, "expiryDate");
-  if (!isUuid(productId) || (expiryDate !== "" && !isRealDate(expiryDate))) {
+  if (!isUuid(productId) || (branchRaw !== "" && !isUuid(branchRaw)) || (expiryDate !== "" && !isRealDate(expiryDate))) {
     return { ok: false, error: "invalidInput" };
   }
-  return { ok: true, value: { productId, expiryDate: expiryDate === "" ? null : expiryDate } };
+  if (expiryDate !== "") {
+    const latest = addCalendarYears(today, EXPIRY_MAX_YEARS);
+    if (!isRealDate(today) || latest === null || expiryDate < today || expiryDate > latest) {
+      return { ok: false, error: "expiryOutOfRange" };
+    }
+  }
+  return {
+    ok: true,
+    value: {
+      productId,
+      branchId: branchRaw === "" ? null : branchRaw,
+      expiryDate: expiryDate === "" ? null : expiryDate,
+    },
+  };
 }
