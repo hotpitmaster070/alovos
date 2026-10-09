@@ -14,7 +14,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 export const isUuid = (value: unknown): value is string => typeof value === "string" && UUID.test(value);
 
 export const COUNT_COLUMNS =
-  "id, status, location_id, branch_id, group_key, user_id, counted_by, merge_mode, created_at, merged_at, approved_at, approved_by";
+  "id, status, location_id, branch_id, group_key, user_id, counted_by, finished_by, merge_mode, created_at, merged_at, approved_at, approved_by";
 
 export type StockCount = {
   id: string;
@@ -23,10 +23,12 @@ export type StockCount = {
   branchId: string | null;
   groupKey: string | null;
   startedBy: string | null;
+  /** Everybody counting this document (stock_counts.counted_by). */
+  counters: string[];
   /** Counters who pressed "finish my count". */
   finishedBy: string[];
-  /** Recorded at merge; null before. */
-  mergeMode: MergeMode | null;
+  /** Fixed when the count is created, from the tenant setting. */
+  mergeMode: MergeMode;
   createdAt: string;
   mergedAt: string | null;
   approvedAt: string | null;
@@ -59,12 +61,15 @@ const numeric = (value: unknown): number | null => {
 const isStatus = (value: unknown): value is CountStatus =>
   typeof value === "string" && (COUNT_STATUSES as readonly string[]).includes(value);
 
+const ids = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+
 export function parseCount(row: unknown): StockCount | null {
   if (!isRecord(row)) return null;
   const id = text(row.id);
   const locationId = text(row.location_id);
   const createdAt = text(row.created_at);
-  if (!id || !locationId || !createdAt || !isStatus(row.status)) return null;
+  if (!id || !locationId || !createdAt || !isStatus(row.status) || !isMergeMode(row.merge_mode)) return null;
   return {
     id,
     status: row.status,
@@ -72,8 +77,9 @@ export function parseCount(row: unknown): StockCount | null {
     branchId: text(row.branch_id),
     groupKey: text(row.group_key),
     startedBy: text(row.user_id),
-    finishedBy: Array.isArray(row.counted_by) ? row.counted_by.filter((value): value is string => typeof value === "string") : [],
-    mergeMode: isMergeMode(row.merge_mode) ? row.merge_mode : null,
+    counters: ids(row.counted_by),
+    finishedBy: ids(row.finished_by),
+    mergeMode: row.merge_mode,
     createdAt,
     mergedAt: text(row.merged_at),
     approvedAt: text(row.approved_at),
@@ -119,6 +125,7 @@ export type CountErrorCode =
   | "forbidden"
   | "count_not_found"
   | "location_not_found"
+  | "location_required"
   | "product_not_found"
   | "invalid_status"
   | "already_finished"
@@ -133,6 +140,7 @@ const RAISED: Record<string, { code: CountErrorCode; status: number }> = {
   forbidden: { code: "forbidden", status: 403 },
   count_not_found: { code: "count_not_found", status: 404 },
   location_not_found: { code: "location_not_found", status: 404 },
+  "location_id required": { code: "location_required", status: 400 },
   product_not_found: { code: "product_not_found", status: 404 },
   invalid_status: { code: "invalid_status", status: 409 },
   already_finished: { code: "already_finished", status: 409 },
@@ -147,4 +155,4 @@ export function mapCountError(message: string): { code: CountErrorCode; status: 
 }
 
 export const isCountErrorCode = (value: unknown): value is CountErrorCode =>
-  typeof value === "string" && (value === "save_failed" || Object.prototype.hasOwnProperty.call(RAISED, value));
+  typeof value === "string" && (value === "save_failed" || Object.values(RAISED).some((raised) => raised.code === value));

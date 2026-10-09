@@ -2,14 +2,17 @@ import { NextResponse } from "next/server";
 import { requireTenant } from "@/lib/api/tenant";
 import type { TenantScope } from "@/lib/anbar/scope";
 import { ANBAR_COUNT_PATH } from "@/lib/auth-redirect";
-import { countByGroupKey, countLines, getCount } from "@/lib/count/load";
-import { GROUP_KEY_MAX_LENGTH, isUuid, mapCountError, parseCountedQuantity } from "@/lib/count/model";
+import { countAtLocation, countByGroupKey, countLines, getCount, isTenantLocation } from "@/lib/count/load";
+import { GROUP_KEY_MAX_LENGTH, isUuid, mapCountError, parseCountedQuantity, type StockCount } from "@/lib/count/model";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Saves the caller's entries of an open count (form: count_id, qty_<product id>, intent=save|finish).
- * Only stock_count_items are written; stock changes when a chef approves the count.
+ * Saves the caller's entries (form: count_id or location_id, qty_<product id>, intent=save|finish).
+ * With location_id the place's open count is joined or created (the storage card's "start"/"join"
+ * button posts only location_id); branch and counters are set by the
+ * database from the place and the session, never from the request. Only stock_count_items are
+ * written; stock changes when a chef approves the count.
  */
 export async function POST(request: Request) {
   const current = await requireTenant();
@@ -17,11 +20,25 @@ export async function POST(request: Request) {
   const scope: TenantScope = { client: current.supabase, tenantId: current.tenantId };
 
   const form = await request.formData();
-  const countId = String(form.get("count_id") ?? "");
+  const rawCount = form.get("count_id");
+  const rawLocation = form.get("location_id");
   const finish = form.get("intent") === "finish";
-  if (!isUuid(countId)) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
 
-  let count;
+  let countId: string;
+  if (rawCount !== null) {
+    if (!isUuid(rawCount)) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
+    countId = rawCount;
+  } else {
+    if (!isUuid(rawLocation)) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
+    const started = await current.supabase.rpc("start_stock_count", { p_location_id: rawLocation });
+    if (started.error || typeof started.data !== "string") {
+      const mapped = mapCountError(started.error?.message ?? "");
+      return NextResponse.json({ error: mapped.code }, { status: mapped.status });
+    }
+    countId = started.data;
+  }
+
+  let count: StockCount | null;
   try {
     count = await getCount(scope, countId);
   } catch (error) {
@@ -29,10 +46,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "save_failed" }, { status: 500 });
   }
   if (!count) return NextResponse.json({ error: "count_not_found" }, { status: 404 });
+  const locationId = count.locationId;
 
   const back = (params: Record<string, string>) => {
     const next = new URL(ANBAR_COUNT_PATH, request.url);
-    next.searchParams.set("location", count.locationId);
+    next.searchParams.set("location", locationId);
     for (const [key, value] of Object.entries(params)) next.searchParams.set(key, value);
     return NextResponse.redirect(next, 303);
   };
@@ -54,13 +72,15 @@ export async function POST(request: Request) {
     const finished = await current.supabase.rpc("finish_my_stock_count", { p_count_id: countId });
     if (finished.error) return back({ error: mapCountError(finished.error.message ?? "").code });
   }
-  return back({ notice: finish ? "finished" : "saved" });
+  return back({ notice: finish ? "finished" : items.length === 0 && rawCount === null ? "started" : "saved" });
 }
 
 /**
- * Merged list of a count: GET ?count_id=<uuid> or ?group_key=<label> (the open count with that label,
- * else the latest). Products entered by several people are combined by the tenant's merge mode
- * (latest entry or sum). The system quantity stays hidden while the count is blind.
+ * Merged list of a count: GET ?count_id=<uuid>, ?location_id=<uuid> (the place's open count, else its
+ * latest closed one) or ?group_key=<value>. group_key is an alias: a storage place id is used as
+ * location_id, anything else is the count's label (open count with that label, else the latest).
+ * Entries of several people for one product are combined by the count's merge mode (latest or sum).
+ * The system quantity stays hidden while the count is blind.
  */
 export async function GET(request: Request) {
   const current = await requireTenant();
@@ -69,14 +89,24 @@ export async function GET(request: Request) {
 
   const params = new URL(request.url).searchParams;
   const countId = params.get("count_id");
+  const locationId = params.get("location_id");
   const groupKey = params.get("group_key")?.trim() ?? "";
-  if (countId !== null ? !isUuid(countId) : groupKey === "" || groupKey.length > GROUP_KEY_MAX_LENGTH) {
+  if (
+    (countId !== null && !isUuid(countId)) ||
+    (locationId !== null && !isUuid(locationId)) ||
+    (countId === null && locationId === null && (groupKey === "" || groupKey.length > GROUP_KEY_MAX_LENGTH))
+  ) {
     return NextResponse.json({ error: "invalid_input" }, { status: 400 });
   }
 
   try {
-    const count = countId !== null ? await getCount(scope, countId) : await countByGroupKey(scope, groupKey);
+    let count: StockCount | null;
+    if (countId !== null) count = await getCount(scope, countId);
+    else if (locationId !== null) count = await countAtLocation(scope, locationId);
+    else if (isUuid(groupKey) && (await isTenantLocation(scope, groupKey))) count = await countAtLocation(scope, groupKey);
+    else count = await countByGroupKey(scope, groupKey);
     if (!count) return NextResponse.json({ error: "count_not_found" }, { status: 404 });
+
     const lines = await countLines(scope, count.id);
     return NextResponse.json({
       count: {
@@ -85,6 +115,7 @@ export async function GET(request: Request) {
         locationId: count.locationId,
         groupKey: count.groupKey,
         mergeMode: count.mergeMode,
+        counters: count.counters.length,
         finished: count.finishedBy.length,
         createdAt: count.createdAt,
         approvedAt: count.approvedAt,

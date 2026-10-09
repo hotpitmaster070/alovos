@@ -19,9 +19,27 @@ export type SignUpResult =
   | { status: "confirmation_required" }
   | { status: "email_taken" };
 
-export async function signUp({ email, password }: Credentials): Promise<SignUpResult> {
+/** The new restaurant's currency (ISO code) and time zone (IANA), applied by apply_signup_settings. */
+export type SignUpRestaurant = { currency: string | null; timezone: string | null };
+
+/**
+ * With an invitation token the database joins the inviting restaurant instead of creating one
+ * (handle_new_user reads raw_user_meta_data.invite_token); otherwise restaurant sets its currency and zone.
+ */
+export async function signUp(
+  { email, password }: Credentials,
+  inviteToken: string | null = null,
+  restaurant: SignUpRestaurant | null = null,
+): Promise<SignUpResult> {
   if (!isValidEmail(email)) throw new Error("Email address is invalid");
-  const { data, error } = await createClient().auth.signUp({ email, password });
+  const metadata = inviteToken
+    ? { invite_token: inviteToken }
+    : Object.fromEntries(Object.entries(restaurant ?? {}).filter(([, value]) => value !== null));
+  const { data, error } = await createClient().auth.signUp({
+    email,
+    password,
+    ...(Object.keys(metadata).length > 0 ? { options: { data: metadata } } : {}),
+  });
   if (error) throw error;
   // Supabase answers an existing, confirmed address with a user that has no identities.
   if (data.user && data.user.identities?.length === 0) return { status: "email_taken" };

@@ -33,7 +33,7 @@ const { getExpiryInfo } = load("lib/expiry.js");
 const time = load("lib/tenant-settings/time.js");
 const validation = load("lib/anbar/validation.js");
 const status = load("lib/anbar/catalog-status.js");
-const { safeNextPath, loginPath, onboardingPath } = load("lib/auth-redirect.js");
+const { safeNextPath, loginPath, onboardingPath, registerPath } = load("lib/auth-redirect.js");
 const { getSupabaseConfig, SupabaseConfigError } = load("lib/supabase/config.js");
 const { mapAuthError } = load("lib/auth-errors.js");
 const { mapRpcError } = load("lib/anbar/errors.js");
@@ -44,10 +44,16 @@ const actions = load("lib/anbar/actions.js");
 const { createWastage, mapWasteError } = load("lib/wastage/create.js");
 const { fetchAll } = load("lib/supabase/fetch-all.js");
 const pagination = load("lib/pagination.js");
+const numbers = load("lib/anbar/storage-numbers.js");
+const storageTypes = load("lib/anbar/types.js");
 const countModel = load("lib/count/model.js");
 const countLoad = load("lib/count/load.js");
 const { validateTenantSettingsInput } = load("lib/tenant-settings/validation.js");
 const { parseTenantSettings } = load("lib/tenant-settings/parse.js");
+const purchasing = load("lib/purchasing/model.js");
+const purchasingFormat = load("lib/purchasing/format.js");
+const qr = load("lib/qr.js");
+const labels = load("lib/labels/model.js");
 
 const TENANT = "11111111-1111-1111-1111-111111111111";
 const B1 = "bbbbbbbb-0000-0000-0000-000000000001";
@@ -216,6 +222,36 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
   const beyond = await repo.listCatalog({ client: past, tenantId: TENANT }, repo.NO_CATALOG_FILTERS, 9);
   ok("repo.listCatalog: page past the end -> no lines, total still known", beyond.lines.length === 0 && beyond.total === 7);
 
+  // ---- fixed storage numbering
+  ok("storage: number ranges", numbers.formatNumberRanges([4, 1, 2, 3, 7, 9, 10]) === "#1–4, #7, #9–10" && numbers.formatNumberRanges([]) === "");
+  ok("storage: next number is MAX+1, gaps are not reused", numbers.nextStorageNumber([]) === 1 && numbers.nextStorageNumber([1, 2, 4]) === 5);
+  const places = [
+    { id: "a", name: "x", type: "soyuducu", number: 3, code: "NIZ-SOY-3", branchId: B1, active: false },
+    { id: "b", name: "y", type: "soyuducu", number: 1, code: "NIZ-SOY-1", branchId: B1, active: true },
+    { id: "c", name: "z", type: "dondurucu", number: 1, code: "NIZ-DON-1", branchId: B1, active: true },
+    { id: "d", name: "w", type: "soyuducu", number: 8, code: "CEN-SOY-8", branchId: L1, active: true },
+  ];
+  ok("storage: used numbers per branch and type, inactive included", JSON.stringify(numbers.usedStorageNumbers(places, B1, "soyuducu")) === "[1,3]");
+  ok("storage: display order soyuducu, dondurucu, anbar, other; then number", JSON.stringify([...places, { ...places[2], id: "e", type: "quru" }, { ...places[2], id: "f", type: "custom" }].sort(storageTypes.compareStorageLocations).map((p) => p.id)) === '["b","a","d","c","e","f"]');
+  ok("storage: code preview", storageTypes.storageLocationCode("NIZ", "quru", 2) === "NIZ-ANB-2");
+  const bulk = validation.validateStorageLocationInput(fd({ type: "dondurucu", branch_id: B1, count: "3", name_prefix: " Dondurucu " }));
+  ok("storage input: bulk with prefix", bulk.ok && bulk.value.count === 3 && bulk.value.number === null && bulk.value.name === null && bulk.value.namePrefix === "Dondurucu");
+  const fixed = validation.validateStorageLocationInput(fd({ type: "soyuducu", branchId: B1, number: "5", name: "Bar" }));
+  ok("storage input: one place with a chosen number", fixed.ok && fixed.value.count === 1 && fixed.value.number === 5);
+  ok(
+    "storage input: rejected",
+    [
+      { type: "soyuducu", branch_id: B1 },
+      { type: "soyuducu", branch_id: B1, name: "A", count: "2" },
+      { type: "soyuducu", branch_id: B1, name_prefix: "A", count: "2", number: "4" },
+      { type: "soyuducu", branch_id: B1, name: "A", number: "0" },
+      { type: "soyuducu", branch_id: B1, name_prefix: "A", count: "51" },
+      { type: "garage", branch_id: B1, name: "A" },
+      { type: "soyuducu", branch_id: "x", name: "A" },
+    ].every((input) => !validation.validateStorageLocationInput(fd(input)).ok),
+  );
+  ok("storage errors: number taken, open count", mapRpcError({ message: "number_taken" }) === "numberTaken" && mapRpcError({ message: 'duplicate key value violates unique constraint "uniq_location_number_per_branch"' }) === "numberTaken" && mapRpcError({ message: "open_count" }) === "openCount");
+
   // ---- pagination helpers
   ok("pagination: page param", pagination.parsePage("3") === 3 && pagination.parsePage("0") === 1 && pagination.parsePage("x") === 1 && pagination.parsePage(["2"]) === 2 && pagination.parsePage(undefined) === 1);
   ok("pagination: range of page 2", pagination.pageRange(2).from === 50 && pagination.pageRange(2).to === 99);
@@ -301,12 +337,14 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     const C1 = "eeeeeeee-0000-4000-8000-000000000001";
     const C2 = "eeeeeeee-0000-4000-8000-000000000002";
     const countRow = (id, status, extra = {}) => ({
-      id, status, location_id: L1, branch_id: B1, group_key: "friday", user_id: S1, counted_by: [S2],
-      merge_mode: null, created_at: "2026-10-08T10:00:00Z", merged_at: null, approved_at: null, approved_by: null, ...extra,
+      id, status, location_id: L1, branch_id: B1, group_key: "friday", user_id: S1, counted_by: [S1, S2], finished_by: [S2],
+      merge_mode: "last", created_at: "2026-10-08T10:00:00Z", merged_at: null, approved_at: null, approved_by: null, ...extra,
     });
     const parsed = countModel.parseCount(countRow(C1, "counting"));
-    ok("count: parses a stock_counts row", parsed && parsed.status === "counting" && parsed.locationId === L1 && parsed.finishedBy[0] === S2 && parsed.mergeMode === null, parsed);
+    ok("count: parses a stock_counts row", parsed && parsed.status === "counting" && parsed.locationId === L1 && parsed.counters.length === 2 && parsed.finishedBy[0] === S2 && parsed.mergeMode === "last", parsed);
     ok("count: unknown status rejected", countModel.parseCount(countRow(C1, "done")) === null);
+    ok("count: merge mode is required", countModel.parseCount(countRow(C1, "counting", { merge_mode: null })) === null);
+    ok("count: location_id required maps to its own code", countModel.mapCountError("location_id required").code === "location_required" && countModel.mapCountError("insufficient_stock for product Rice").code === "insufficient_stock");
     const line = countModel.parseCountLine({ product_id: P1, product_name: "Milk", unit: "l", counted_quantity: "8", counters: 2, expected_quantity: null, difference: null, difference_value: null });
     ok("count: blind line keeps expected/difference null", line && line.counted === 8 && line.counters === 2 && line.expected === null && line.difference === null, line);
     const revealed = countModel.parseCountLine({ product_id: P1, product_name: "Milk", unit: "l", counted_quantity: 8, counters: 2, expected_quantity: "10", difference: "-2", difference_value: "-4.4" });
@@ -314,13 +352,20 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     const q = countModel.parseCountedQuantity;
     ok("count: quantity parsing", q("").ok && q("").value === null && q(" 2,5 ").value === 2.5 && q("0").value === 0 && !q("-1").ok && !q("abc").ok && !q("1000001").ok && q(null).value === null);
     ok("count: error mapping", countModel.mapCountError("invalid_status").code === "invalid_status" && countModel.mapCountError("x forbidden").status === 403 && countModel.mapCountError("boom").code === "save_failed");
-    ok("count: error code guard", countModel.isCountErrorCode("already_finished") && countModel.isCountErrorCode("save_failed") && !countModel.isCountErrorCode("toString") && !countModel.isCountErrorCode("nope"));
+    ok("count: error code guard", countModel.isCountErrorCode("already_finished") && countModel.isCountErrorCode("location_required") && countModel.isCountErrorCode("save_failed") && !countModel.isCountErrorCode("toString") && !countModel.isCountErrorCode("location_id required") && !countModel.isCountErrorCode("nope"));
 
     const scope = (client) => ({ client, tenantId: TENANT });
     let client = makeClient({ tables: { stock_counts: [countRow(C2, "approved"), countRow(C1, "counting")] } });
     const byKey = await countLoad.countByGroupKey(scope(client), "friday");
     ok("count: group key prefers the open count", byKey && byKey.id === C1, byKey);
     ok("count: group key query is tenant-scoped", client.calls[0].filters.some(([op, c, v]) => op === "eq" && c === "tenant_id" && v === TENANT));
+
+    client = makeClient({ tables: { stock_counts: [] } });
+    ok("count: place without counts -> null", (await countLoad.countAtLocation(scope(client), L1)) === null && client.calls.length === 2);
+    const closedQuery = client.calls[1];
+    ok("count: closed fallback asks for approved/cancelled at the place",
+      closedQuery.filters.some(([op, c, v]) => op === "in" && c === "status" && v.includes("approved") && v.includes("cancelled")) &&
+      closedQuery.filters.some(([op, c, v]) => op === "eq" && c === "location_id" && v === L1), closedQuery.filters);
 
     const many = Array.from({ length: 1500 }, (_, i) => ({ product_id: `${P1.slice(0, -4)}${String(i).padStart(4, "0")}`, product_name: `P${i}`, unit: "kg", counted_quantity: i, counters: 1 }));
     client = makeClient({ rpc: { stock_count_lines: () => ({ data: many, error: null }) } });
@@ -336,10 +381,41 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("count: own entries by product", mine[P1] === 3.5, mine);
     ok("count: roles", countLoad.canApproveCounts("chef") && countLoad.canApproveCounts("owner") && !countLoad.canApproveCounts("cook") && countLoad.canCount("cook") && !countLoad.canCount("staff"));
 
-    const settingsForm = { currency: "AZN", timezone: "Asia/Baku", expiry_warn_days: 3, expiry_critical_days: 7, low_stock_default: 5 };
+    const settingsForm = { currency: "AZN", timezone: "Asia/Baku", expiry_warn_days: 3, expiry_critical_days: 7, low_stock_default: 5, usage_window_days: 7, invite_ttl_days: 7, default_shelf_life_days: 3, prep_balance_tolerance: "0,3", prep_balance_tolerance_percent: 5, default_portion_weight_kg: "", default_density_kg_per_l: "", default_trim_value_percent: "100" };
+    const withPortion = validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", default_portion_weight_kg: "0,25" }));
+    ok(
+      "settings: default portion weight optional, positive",
+      validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last" })).default_portion_weight_kg === null &&
+        withPortion.default_portion_weight_kg === 0.25 &&
+        validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", default_portion_weight_kg: "0" })) === null,
+      withPortion,
+    );
+    const withTolerance = validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last" }));
+    ok("settings: prep balance tolerance saved", withTolerance.prep_balance_tolerance === 0.3 && withTolerance.prep_balance_tolerance_percent === 5, withTolerance);
+    ok(
+      "settings: prep balance tolerance checked",
+      [{ prep_balance_tolerance: "-1" }, { prep_balance_tolerance: "" }, { prep_balance_tolerance_percent: "101" }].every(
+        (bad) => validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", ...bad })) === null,
+      ),
+    );
+    ok("settings: default shelf life saved", validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", default_shelf_life_days: 90 })).default_shelf_life_days === 90);
+    ok(
+      "settings: default shelf life stays within 0..3650",
+      ["", "-1", "3651", "2.5"].every((bad) => validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", default_shelf_life_days: bad })) === null),
+    );
     ok("settings: count_merge_mode saved", validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "sum" })).count_merge_mode === "sum");
     ok("settings: unknown count_merge_mode rejected", validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "max" })) === null);
-    const row = { currency: "AZN", timezone: "Asia/Baku", expiry_warn_days: 3, expiry_critical_days: 7, low_stock_default: 5 };
+    const saved = validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", usage_window_days: 14, invite_ttl_days: 3 }));
+    ok("settings: usage window and invite ttl saved", saved && saved.usage_window_days === 14 && saved.invite_ttl_days === 3, saved);
+    ok(
+      "settings: usage window and invite ttl stay within 1..365",
+      ["0", "366", "", "1.5"].every(
+        (bad) =>
+          validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", usage_window_days: bad })) === null &&
+          validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", invite_ttl_days: bad })) === null,
+      ),
+    );
+    const row = { currency: "AZN", timezone: "Asia/Baku", expiry_warn_days: 3, expiry_critical_days: 7, low_stock_default: 5, usage_window_days: 7, invite_ttl_days: 7, default_shelf_life_days: 3, prep_balance_tolerance: "0.3", prep_balance_tolerance_percent: 5, default_portion_weight_kg: null, default_density_kg_per_l: null, default_trim_value_percent: "100" };
     ok("settings: count_merge_mode parsed", parseTenantSettings({ ...row, count_merge_mode: "last" }).countMergeMode === "last");
     let threw = false;
     try {
@@ -348,6 +424,646 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
       threw = true;
     }
     ok("settings: missing count_merge_mode is an error, not a default", threw);
+    const parsedSettings = parseTenantSettings({ ...row, count_merge_mode: "last", usage_window_days: "10", invite_ttl_days: 2 });
+    ok("settings: usage window and invite ttl parsed", parsedSettings.usageWindowDays === 10 && parsedSettings.inviteTtlDays === 2, parsedSettings);
+    ok("settings: default shelf life parsed", parsedSettings.defaultShelfLifeDays === 3, parsedSettings);
+    ok("settings: prep balance tolerance parsed", parsedSettings.prepBalanceTolerance === 0.3 && parsedSettings.prepBalanceTolerancePercent === 5, parsedSettings);
+    ok("settings: no default portion weight parsed as null", parsedSettings.defaultPortionWeightKg === null, parsedSettings);
+    ok(
+      "settings: density and trim value parsed from the row",
+      parsedSettings.defaultDensityKgPerL === null && parsedSettings.defaultTrimValuePercent === 100 &&
+        parseTenantSettings({ ...row, count_merge_mode: "last", default_density_kg_per_l: "1.03" }).defaultDensityKgPerL === 1.03,
+      parsedSettings,
+    );
+    let noTrimValue = false;
+    try {
+      parseTenantSettings({ ...row, count_merge_mode: "last", default_trim_value_percent: undefined });
+    } catch {
+      noTrimValue = true;
+    }
+    ok("settings: missing trim value is an error, not a default", noTrimValue);
+    const withDensity = validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", default_density_kg_per_l: "0,92", default_trim_value_percent: "50" }));
+    ok(
+      "settings: density optional positive, trim value 0..100",
+      withDensity.default_density_kg_per_l === 0.92 && withDensity.default_trim_value_percent === 50 &&
+        validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last" })).default_density_kg_per_l === null &&
+        [{ default_density_kg_per_l: "0" }, { default_trim_value_percent: "101" }, { default_trim_value_percent: "" }].every(
+          (bad) => validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", ...bad })) === null,
+        ),
+      withDensity,
+    );
+
+    // Purchasing: limits, suppliers, invitations, forecast rows.
+    const SUP = "eeeeeeee-0000-4000-8000-000000000001";
+    const PRODUCT = "cccccccc-0000-4000-8000-000000000001";
+    const supplierOk = purchasing.validateSupplierInput({ name: "  Bazar  MMC ", code: "baz1", delivery_days: ["4", 1, 1], lead_time_days: "2" });
+    ok("purchasing: supplier input normalised", supplierOk.ok && supplierOk.value.name === "Bazar MMC" && supplierOk.value.code === "BAZ1" && supplierOk.value.deliveryDays.join() === "1,4" && supplierOk.value.leadTimeDays === 2, supplierOk);
+    ok("purchasing: empty code is generated by the database", purchasing.validateSupplierInput({ name: "Bazar" }).value.code === null);
+    ok(
+      "purchasing: bad supplier input rejected",
+      [{ name: "" }, { name: "X", delivery_days: [7] }, { name: "X", delivery_days: "1" }, { name: "X", code: "AB-1" }, { name: "X", branch_id: "nope" }, { name: "X", lead_time_days: "1.5" }].every(
+        (body) => !purchasing.validateSupplierInput(body).ok,
+      ),
+    );
+    const patch = purchasing.validateSupplierPatch({ is_active: false });
+    ok("purchasing: supplier patch only touches given fields", patch.ok && patch.value.active === false && !("name" in patch.value) && !("deliveryDays" in patch.value), patch);
+    ok("purchasing: empty supplier patch rejected", !purchasing.validateSupplierPatch({}).ok && !purchasing.validateSupplierPatch({ name: " " }).ok && !purchasing.validateSupplierPatch({ is_active: "no" }).ok);
+    const limits = purchasing.validateLimitsInput({ par_level: "20,5", min_stock: "5", supplier_id: SUP });
+    ok("purchasing: limits parsed in the product's unit", limits.ok && limits.value.parLevel === 20.5 && limits.value.minStock === 5 && limits.value.supplierId === SUP, limits);
+    ok("purchasing: limits can be cleared", purchasing.validateLimitsInput({ par_level: "", min_stock: "", supplier_id: "" }).value.parLevel === null);
+    ok(
+      "purchasing: bad limits rejected",
+      !purchasing.validateLimitsInput({ par_level: "0" }).ok && !purchasing.validateLimitsInput({ par_level: "5", min_stock: "6" }).ok && !purchasing.validateLimitsInput({ par_level: "-1" }).ok && !purchasing.validateLimitsInput({ supplier_id: "x" }).ok,
+    );
+    ok("purchasing: phone normalised", purchasing.normalizePhone("+994 (50) 123-45-67") === "+994501234567");
+    const invite = purchasing.validateInvitationInput({ phone: "+994 50 123 45 67" });
+    ok("purchasing: invitation defaults to chef", invite.ok && invite.value.role === "chef" && invite.value.phone === "+994501234567", invite);
+    ok("purchasing: bad invitation rejected", !purchasing.validateInvitationInput({ phone: "123" }).ok && !purchasing.validateInvitationInput({ phone: "+994501234567", role: "cook" }).ok);
+    const items = purchasing.validateRequestItems([{ product_id: PRODUCT, qty: "2.5" }]);
+    ok("purchasing: request items", items.ok && items.value[0].qty === 2.5, items);
+    ok(
+      "purchasing: bad request items rejected",
+      !purchasing.validateRequestItems([]).ok &&
+        !purchasing.validateRequestItems([{ product_id: PRODUCT, qty: 0 }]).ok &&
+        !purchasing.validateRequestItems([{ product_id: PRODUCT, qty: 1 }, { product_id: PRODUCT, qty: 2 }]).ok &&
+        !purchasing.validateRequestItems([{ product_id: "x", qty: 1 }]).ok,
+    );
+    ok(
+      "purchasing: database errors mapped",
+      purchasing.mapPurchasingError({ message: "invitation_expired" }).status === 410 &&
+        purchasing.mapPurchasingError({ message: 'duplicate key value violates unique constraint "uniq_supplier_code_per_tenant"' }).code === "duplicate_code" &&
+        purchasing.mapPurchasingError({ message: "x", code: "42501" }).code === "forbidden" &&
+        purchasing.mapPurchasingError({ message: "new row violates check constraint products_par_level_check" }).code === "invalid_input" &&
+        purchasing.mapPurchasingError({ message: "boom" }).code === "save_failed",
+    );
+    const forecastRow = purchasing.parseForecastRow({
+      product_id: P1, branch_id: B1, name: "Un", unit: "kg", current_stock: "8", par_level: "10", min_stock: "3", supplier_id: SUP, supplier_name: "Bazar",
+      delivery_days: [1, 4], next_delivery_date: "2026-10-08", days_until_delivery: 3, avg_daily_usage: "2", projected_stock: "2",
+      need_to_order: "8", on_order: "0", will_run_out: true, status: "order",
+    });
+    ok("purchasing: forecast row parsed", forecastRow && forecastRow.currentStock === 8 && forecastRow.projectedStock === 2 && forecastRow.needToOrder === 8 && forecastRow.willRunOut && forecastRow.deliveryDays.join() === "1,4", forecastRow);
+    ok("purchasing: unknown forecast status rejected", purchasing.parseForecastRow({ product_id: P1, current_stock: 1, status: "panic" }) === null);
+    ok("purchasing: roles", purchasing.canManagePurchasing("chef") && purchasing.canManagePurchasing("owner") && !purchasing.canManagePurchasing("cook") && purchasing.canInvite("owner") && !purchasing.canInvite("chef"));
+    const inviteToken = "a".repeat(64);
+    ok(
+      "purchasing: register link carries the invitation token",
+      registerPath(`/invite/${inviteToken}`, inviteToken) === `/register?next=${encodeURIComponent(`/invite/${inviteToken}`)}&invite=${inviteToken}` &&
+        !registerPath("/app/anbar").includes("invite="),
+    );
+    ok(
+      "purchasing: invitation preview states",
+      purchasing.parseInvitationPreview({ tenant_name: "Acme", role: "chef", state: "joined" }).state === "joined" &&
+        purchasing.parseInvitationPreview({ state: "weird" }) === null &&
+        purchasing.INVITE_TOKEN_PATTERN.test(inviteToken) &&
+        !purchasing.INVITE_TOKEN_PATTERN.test("A".repeat(64)),
+    );
+    ok("purchasing: qty format", purchasingFormat.formatQty(2.34567) === "2.346" && purchasingFormat.formatQty(8) === "8");
+    ok(
+      "purchasing: weekday names follow the stored numbers",
+      purchasingFormat.weekdayName(1, "en", "long") === "Monday" && purchasingFormat.weekdayName(0, "en", "long") === "Sunday" && purchasingFormat.weekdayName(4, "en", "long") === "Thursday",
+    );
+  }
+
+  // QR encoder (labels) and the labels model.
+  {
+    const ec = qr.reedSolomon([32, 91, 11, 120, 209, 114, 220, 77, 67, 64, 236, 17, 236, 17, 236, 17], 10);
+    ok("qr: Reed-Solomon matches the ISO 18004 example", ec.join() === "196,35,39,119,235,215,231,226,93,23", ec);
+    ok("qr: format bits for level M, mask 0", qr.formatBits(0) === 0b101010000010010, qr.formatBits(0).toString(2));
+    ok("qr: version 7 information bits", qr.versionBits(7) === 0x07c94, qr.versionBits(7).toString(16));
+    ok("qr: smallest version that fits", qr.qrVersionFor(14) === 1 && qr.qrVersionFor(15) === 2 && qr.qrVersionFor(213) === 10 && qr.qrVersionFor(214) === null);
+    const matrix = qr.encodeQr("NIZ-SOY1-1610-001");
+    const finder = (x, y) => [0, 1, 2, 3, 4, 5, 6].every((i) => matrix[y][x + i] && matrix[y + 6][x + i] && matrix[y + i][x] && matrix[y + i][x + 6]);
+    ok("qr: a lot number fits version 2 with three finder patterns", matrix.length === 25 && finder(0, 0) && finder(18, 0) && finder(0, 18) && matrix[17][8] === true);
+    ok("qr: svg path covers the dark modules", /^M\d+ \d+h\d+v1h-\d+z/.test(qr.qrSvgPath(matrix, 2)));
+    ok("qr: too long text is refused", qr.encodeQr("x".repeat(300)) === null);
+
+    const P = "cccccccc-0000-4000-8000-000000000001";
+    const P2 = "cccccccc-0000-4000-8000-000000000002";
+    const P3 = "cccccccc-0000-4000-8000-000000000003";
+    const L = "dddddddd-0000-4000-8000-000000000001";
+    const L2 = "dddddddd-0000-4000-8000-000000000002";
+    const info = { productId: P, productDays: 5, defaultDays: 3, rules: { [L]: 90 } };
+    ok(
+      "labels: shelf life = place rule, else product, else tenant default",
+      labels.resolveShelfLife(info, L).days === 90 && labels.resolveShelfLife(info, L).source === "rule" &&
+        labels.resolveShelfLife(info, L2).days === 5 && labels.resolveShelfLife({ ...info, productDays: null }, L2).source === "default" &&
+        labels.resolveShelfLife({ ...info, productDays: null }, L2).days === 3,
+    );
+    ok("labels: expiry = production + shelf life", time.addDays("2026-10-16", labels.resolveShelfLife(info, L).days) === "2027-01-14");
+    const parsedInfo = labels.parseShelfLifeInfo({ product_id: P, product_shelf_life_days: null, default_shelf_life_days: 3, rules: [{ storage_location_id: L, shelf_life_days: 90 }, { bad: 1 }] });
+    ok("labels: shelf-life info parsed", parsedInfo && parsedInfo.productDays === null && parsedInfo.rules[L] === 90 && Object.keys(parsedInfo.rules).length === 1, parsedInfo);
+
+    const recipe = labels.parsePreparation({
+      id: P3,
+      name: "Shashlik",
+      inputs: [{ product_id: P, qty: "10" }],
+      outputs: [{ product_id: P2, qty: 5 }, { product_id: P3, qty: 8, portions: 8, name: "Koreyka" }],
+      is_active: true,
+    });
+    ok("labels: recipe parsed", recipe && recipe.inputs[0].qty === 10 && recipe.outputs[1].portions === 8 && recipe.outputs[1].name === "Koreyka", recipe);
+    const scaled = labels.scalePreparation(recipe, 2);
+    ok("labels: recipe scales with the source amount", scaled[0].qty === 1 && scaled[1].qty === 1.6 && scaled[1].portions === 2, scaled);
+    ok("labels: portions follow the actual yield", labels.portionsFor(recipe.outputs[1], 4) === 4 && labels.portionsFor(recipe.outputs[0], 3) === null);
+
+    const lot = labels.parseLot({
+      id: P, lot_number: "NIZ-SOY1-1610-001", product_id: P2, branch_id: P3, production_date: "2026-10-16", expiry_date: "2026-10-19",
+      quantity: "5.000", unit: "kg", portions: null, storage_location_id: L, lot_type: "semi", parent_lot_id: null,
+      composition_json: [{ product_id: P, name: "Baranina", qty: 10, unit: "kg", lot_number: "NIZ-SOY1-1610-000" }, "junk"], preparation_id: P3,
+    });
+    ok("labels: lot parsed with its composition", lot && lot.quantity === 5 && lot.lotType === "semi" && lot.composition.length === 1 && lot.composition[0].lotNumber === "NIZ-SOY1-1610-000", lot);
+    ok("labels: unknown lot type rejected", labels.parseLot({ ...lot, lot_type: "cooked" }) === null);
+
+    const receive = labels.validateReceiveLotInput({ product_id: P, qty: "2,5", storage_location_id: L, price: "", shelf_life_days: "4", remember: true });
+    ok("labels: receipt input", receive.ok && receive.value.qty === 2.5 && receive.value.price === null && receive.value.shelfLifeDays === 4 && receive.value.remember, receive);
+    ok(
+      "labels: bad receipt input rejected",
+      [
+        { product_id: P, qty: 0, storage_location_id: L },
+        { product_id: "x", qty: 1, storage_location_id: L },
+        { product_id: P, qty: 1, storage_location_id: L, shelf_life_days: 3651 },
+        { product_id: P, qty: 1, storage_location_id: L, remember: true },
+        { product_id: P, qty: 1, storage_location_id: L, production_date: "2026-02-30" },
+      ].every((body) => !labels.validateReceiveLotInput(body).ok),
+    );
+    ok("labels: lot input defaults to raw", labels.validateLotInput({ product_id: P, qty: 1, storage_location_id: L }).value.lotType === "raw");
+    const run = labels.validatePreparationRunInput({ preparation_id: P3, source_qty: "10", storage_location_id: L, outputs: [{ product_id: P2, qty: 5, storage_location_id: L2 }] });
+    ok("labels: preparation run input", run.ok && run.value.sourceLocationId === null && run.value.outputs[0].storageLocationId === L2, run);
+    ok("labels: empty yields rejected", !labels.validatePreparationRunInput({ preparation_id: P3, source_qty: 1, storage_location_id: L, outputs: [] }).ok);
+    const print = labels.validatePrintInput({ lot_ids: [P, P], copies: "3" });
+    ok("labels: print input deduplicates lots", print.ok && print.value.lotIds.length === 1 && print.value.copies === 3, print);
+    ok(
+      "labels: print limits",
+      !labels.validatePrintInput({ lot_ids: [], copies: 1 }).ok && !labels.validatePrintInput({ lot_ids: [P], copies: 0 }).ok &&
+        !labels.validatePrintInput({ lot_ids: [P], copies: labels.LABEL_COPIES_MAX + 1 }).ok,
+    );
+    const draft = labels.validatePreparationDraft({ name: "  Shashlik   kit ", inputs: [{ product_id: P, qty: "10" }], outputs: [{ product_id: P2, qty: 5, portions: "", name: " " }] });
+    ok("labels: recipe draft normalised", draft.ok && draft.value.name === "Shashlik kit" && draft.value.outputs[0].portions === null && draft.value.outputs[0].name === null, draft);
+    ok(
+      "labels: recipe with a repeated product rejected",
+      !labels.validatePreparationDraft({ name: "X", inputs: [{ product_id: P, qty: 1 }, { product_id: P, qty: 2 }], outputs: [{ product_id: P2, qty: 1 }] }).ok,
+    );
+    ok("labels: rule input; null removes the rule", labels.validateShelfLifeRuleInput({ product_id: P, storage_location_id: L, shelf_life_days: null }).value.days === null);
+    ok(
+      "labels: database errors mapped",
+      labels.mapLabelsError({ message: "insufficient_stock" }).code === "insufficient_stock" && labels.mapLabelsError({ message: "insufficient_stock" }).status === 409 &&
+        labels.mapLabelsError({ message: "preparation_not_found" }).status === 404 && labels.mapLabelsError({ code: "42501", message: "x" }).code === "forbidden" &&
+        labels.mapLabelsError({ message: "boom" }).code === "save_failed",
+    );
+    ok("labels: roles", labels.canSetShelfLife("cook") && !labels.canSetShelfLife("staff") && labels.canEditPreparations("chef") && !labels.canEditPreparations("cook"));
+
+    // Preparation waste: norm, balance and the waste API input (same rules as 20261018_wastage_in_prep.sql).
+    ok("waste: old recipe draft keeps the stored norm and items", draft.value.wastageNormPercent === null && draft.value.wastageItems === null, draft);
+    const withItems = labels.validatePreparationDraft({
+      name: "Baranina",
+      inputs: [{ product_id: P, qty: 10 }],
+      outputs: [{ product_id: P2, qty: 5 }],
+      wastage_norm_percent: "30",
+      wastage_items: [{ name: " sümük ", norm_percent: "3" }, { name: "yağ", norm_percent: 2.5 }],
+    });
+    ok("waste: items set the norm to their sum", withItems.ok && withItems.value.wastageNormPercent === 5.5 && withItems.value.wastageItems[0].name === "sümük", withItems);
+    const normOnly = labels.validatePreparationDraft({ name: "X", inputs: [{ product_id: P, qty: 1 }], outputs: [{ product_id: P2, qty: 1 }], wastage_norm_percent: "7,5", wastage_items: [] });
+    ok("waste: norm without items", normOnly.ok && normOnly.value.wastageNormPercent === 7.5 && normOnly.value.wastageItems.length === 0, normOnly);
+    ok(
+      "waste: bad norm or items rejected",
+      [
+        { wastage_norm_percent: 101 },
+        { wastage_norm_percent: -1 },
+        { wastage_items: [{ name: "a", norm_percent: 60 }, { name: "b", norm_percent: 41 }] },
+        { wastage_items: [{ name: "Sümük", norm_percent: 1 }, { name: "sümük", norm_percent: 1 }] },
+        { wastage_items: [{ name: "", norm_percent: 1 }] },
+        { wastage_items: [{ name: "x".repeat(labels.WASTE_ITEM_NAME_MAX + 1), norm_percent: 1 }] },
+        { wastage_items: "sümük" },
+      ].every((extra) => !labels.validatePreparationDraft({ name: "X", inputs: [{ product_id: P, qty: 1 }], outputs: [{ product_id: P2, qty: 1 }], ...extra }).ok),
+    );
+    const parsedPrep = labels.parsePreparation({
+      id: P3, name: "Baranina", inputs: [{ product_id: P, qty: 10 }], outputs: [{ product_id: P2, qty: 5 }],
+      wastage_norm_percent: "5", wastage_items: [{ name: "sümük", norm_percent: 5 }, { bad: true }],
+    });
+    ok("waste: recipe norm parsed", parsedPrep.wastageNormPercent === 5 && parsedPrep.wastageItems.length === 1, parsedPrep);
+
+    const wasteRun = labels.validatePreparationRunInput({
+      preparation_id: P3, source_qty: "10", storage_location_id: L, wastage: { qty: "0,5", reason: "cutting", note: " bony " }, confirm_loss: true,
+    });
+    ok("waste: run carries waste and the confirmation", wasteRun.ok && wasteRun.value.wastage.qty === 0.5 && wasteRun.value.wastage.note === "bony" && wasteRun.value.confirmLoss, wasteRun);
+    ok("waste: zero waste is no waste", labels.validatePreparationRunInput({ preparation_id: P3, source_qty: 1, storage_location_id: L, wastage: { qty: 0 } }).value.wastage === null);
+    ok(
+      "waste: bad run waste rejected",
+      [{ wastage: { qty: 11 } }, { wastage: { qty: 1, reason: "expired" } }, { wastage: { qty: -1 } }, { wastage: { qty: 1, note: "x".repeat(501) } }, { confirm_loss: "yes" }].every(
+        (extra) => !labels.validatePreparationRunInput({ preparation_id: P3, source_qty: 10, storage_location_id: L, ...extra }).ok,
+      ),
+    );
+    ok("waste: balance_mismatch mapped", labels.mapLabelsError({ message: "balance_mismatch" }).code === "balance_mismatch" && labels.mapLabelsError({ message: "balance_mismatch" }).status === 409);
+
+    const trimRunInput = labels.validatePreparationRunInput({
+      preparation_id: P3, source_qty: 10, storage_location_id: L, trims: [{ product_id: P2, qty: "2", note: " bulyon " }],
+    });
+    ok(
+      "trim: run carries returned trim",
+      trimRunInput.ok && trimRunInput.value.trims.length === 1 && trimRunInput.value.trims[0].qty === 2 && trimRunInput.value.trims[0].note === "bulyon" &&
+        trimRunInput.value.trims[0].storageLocationId === null,
+      trimRunInput,
+    );
+    ok("trim: no trim sent is no trim", labels.validatePreparationRunInput({ preparation_id: P3, source_qty: 1, storage_location_id: L }).value.trims.length === 0);
+    ok(
+      "trim: bad trim rejected",
+      [
+        { trims: [{ product_id: P2, qty: 0 }] },
+        { trims: [{ product_id: "x", qty: 1 }] },
+        { trims: [{ product_id: P2, qty: 1 }, { product_id: P2, qty: 1 }] },
+        { trims: [{ product_id: P2, qty: 1, note: "x".repeat(501) }] },
+        { trims: [{ product_id: P2, qty: 1, storage_location_id: "x" }] },
+        { trims: "bones" },
+      ].every((extra) => !labels.validatePreparationRunInput({ preparation_id: P3, source_qty: 10, storage_location_id: L, ...extra }).ok),
+    );
+    const trimDraft = labels.validatePreparationDraft({
+      name: "Baranina",
+      inputs: [{ product_id: P, qty: 10 }],
+      outputs: [{ product_id: P2, qty: 5 }],
+      wastage_items: [{ name: "sümük", norm_percent: 20, usable: true, product_id: P3 }, { name: "yağ", norm_percent: 10 }, { name: "damar", norm_percent: 2, product_id: P3 }],
+      evaporation_percent: "5",
+    });
+    ok(
+      "trim: draft items usable with their product, waste norm without them",
+      trimDraft.ok && trimDraft.value.wastageNormPercent === 12 && trimDraft.value.evaporationPercent === 5 &&
+        trimDraft.value.wastageItems[0].usable && trimDraft.value.wastageItems[0].productId === P3 && trimDraft.value.wastageItems[2].productId === null,
+      trimDraft,
+    );
+    ok(
+      "trim: draft norms plus evaporation stay within 100%",
+      [
+        { wastage_items: [{ name: "a", norm_percent: 60, usable: true }, { name: "b", norm_percent: 30 }], evaporation_percent: 11 },
+        { evaporation_percent: 101 },
+        { evaporation_percent: -1 },
+        { wastage_items: [{ name: "a", norm_percent: 1, usable: "yes" }] },
+        { wastage_items: [{ name: "a", norm_percent: 1, usable: true, product_id: "x" }] },
+      ].every((extra) => !labels.validatePreparationDraft({ name: "X", inputs: [{ product_id: P, qty: 1 }], outputs: [{ product_id: P2, qty: 1 }], ...extra }).ok),
+    );
+    const trimPrep = labels.parsePreparation({
+      id: P3, name: "Baranina", inputs: [{ product_id: P, qty: 10 }], outputs: [{ product_id: P2, qty: 5 }],
+      wastage_norm_percent: 1, trim_norm_percent: "20", evaporation_percent: "5",
+      wastage_items: [{ name: "sümük", norm_percent: 20, usable: true, product_id: P2 }, { name: "yağ", norm_percent: 1, product_id: P2 }],
+    });
+    ok(
+      "trim: recipe parsed with trim norm, evaporation and usable items",
+      trimPrep.trimNormPercent === 20 && trimPrep.evaporationPercent === 5 && trimPrep.wastageItems[0].usable && trimPrep.wastageItems[0].productId === P2 &&
+        !trimPrep.wastageItems[1].usable && trimPrep.wastageItems[1].productId === null,
+      trimPrep,
+    );
+    ok(
+      "trim: trim lots exist, hand labels stay raw or semi",
+      labels.LOT_TYPES.includes("trim") && labels.parseLot({ id: P, lot_number: "L-1", product_id: P2, branch_id: L, quantity: 2, unit: "kg", storage_location_id: L, lot_type: "trim", expiry_date: "2026-10-10", production_date: "2026-10-08" })?.lotType === "trim" &&
+        !labels.validateLotInput({ product_id: P, qty: 1, storage_location_id: L, lot_type: "trim" }).ok,
+    );
+
+    // Final scheme: run cost, stock by kind, product economics (lib/labels/final.ts).
+    const final = load("lib/labels/final.js");
+    const lambCost = final.runCost({
+      inputCost: 100,
+      firstCostPerBase: 10,
+      trims: [{ qty: 2, factor: 1, valuePercent: 100 }],
+      outputs: [{ qty: 5, mass: 5 }, { qty: 2, mass: 2 }],
+    });
+    ok(
+      "final: 100 gross - 20 trim = 80 net over 7 kg = 11.43 per kg",
+      lambCost.trimCost === 20 && lambCost.netCost === 80 && lambCost.trimCostPerUnit[0] === 10 &&
+        Math.abs(lambCost.outputCostPerUnit[0] - 80 / 7) < 1e-9 && Math.abs(lambCost.outputCostPerUnit[1] - 80 / 7) < 1e-9 &&
+        Math.round(lambCost.outputCostPerUnit[0] * 100) / 100 === 11.43,
+      lambCost,
+    );
+    const halfTrim = final.runCost({ inputCost: 100, firstCostPerBase: 10, trims: [{ qty: 2, factor: 1, valuePercent: 50 }], outputs: [{ qty: 7, mass: 7 }] });
+    ok("final: trim value percent from the product or tenant", halfTrim.trimCost === 10 && halfTrim.netCost === 90, halfTrim);
+    const byQty = final.runCost({ inputCost: 90, firstCostPerBase: 9, trims: [], outputs: [{ qty: 5, mass: 5 }, { qty: 4, mass: null }] });
+    ok("final: without every weight the cost is shared by quantity", byQty.netCost === 90 && byQty.outputCostPerUnit.every((cost) => cost === 10), byQty);
+    ok("final: no trim, the net cost is the input cost", final.runCost({ inputCost: 50, firstCostPerBase: 5, trims: [], outputs: [{ qty: 10, mass: 10 }] }).outputCostPerUnit[0] === 5);
+
+    ok(
+      "final: product types and stock kinds",
+      final.stockKindOf("ready") === "semi" && final.stockKindOf("trim") === "trim" && final.stockKindOf("waste") === "raw" && final.productType("trim") === "trim" &&
+        final.productType("meat") === null && final.stockFilter("semi") === "semi" && final.stockFilter("x") === "all",
+    );
+    ok("final: costs for owners and chefs only", final.canSeeCosts("owner") && final.canSeeCosts("chef") && !final.canSeeCosts("cook") && !final.canSeeCosts(null));
+    ok(
+      "final: stock links keep the branch",
+      final.stockHref("/app/anbar/saxlama", L, "trim") === `/app/anbar/saxlama?branch=${L}&type=trim` && final.stockHref("/app/anbar/saxlama", null, "all") === "/app/anbar/saxlama",
+    );
+    const summaryRows = [
+      final.parseStockSummary({ kind: "raw", lines: 3, kg: "10", liters: 0, pieces: 2, cost_value: "100", sale_value: "150", margin: "40", unpriced: 1 }),
+      final.parseStockSummary({ kind: "trim", lines: 1, kg: 2, liters: 0, pieces: 0, cost_value: 20, sale_value: 0, margin: 0, unpriced: 1 }),
+      final.parseStockSummary({ kind: "bad", lines: 1 }),
+    ];
+    const value = final.stockValue(summaryRows.filter(Boolean), 12, true);
+    ok(
+      "final: stock value by kind with totals and waste",
+      summaryRows[2] === null && value.kinds.semi.lines === 0 && value.kinds.semi.costValue === 0 && value.kinds.raw.saleValue === 150 &&
+        value.total.costValue === 120 && value.total.kg === 12 && value.total.margin === 40 && value.total.wasteCost === 12 && value.total.unpriced === 2,
+      value,
+    );
+    const cookValue = final.stockValue(
+      [final.parseStockSummary({ kind: "raw", lines: 3, kg: 10, liters: 0, pieces: 0, cost_value: null, sale_value: null, margin: null, unpriced: 3 })],
+      null,
+      false,
+    );
+    ok("final: no money for cooks", cookValue.total.costValue === null && cookValue.total.wasteCost === null && cookValue.kinds.trim.saleValue === null && cookValue.total.kg === 10, cookValue);
+    const kitchenValue = final.stockValue(summaryRows.filter(Boolean), 12, false);
+    ok("final: kitchen view drops money even when the rows carry it", kitchenValue.kinds.raw.costValue === null && kitchenValue.total.saleValue === null && kitchenValue.total.wasteCost === null, kitchenValue);
+    const item = final.parseStockItem({
+      stock_id: P, product_id: P2, product_name: "Sümük", unit: "kg", kind: "trim", quantity: "2", expiry_date: "2026-10-10", days_left: 2,
+      location_name: "Soyuducu 1", lot_number: "L-7", cost_per_unit: null, sale_price: null,
+    });
+    ok("final: stock row parsed, prices null for cooks", item.kind === "trim" && item.quantity === 2 && item.lotNumber === "L-7" && item.costPerUnit === null, item);
+    const eco = final.validateProductEconomics({ product_type: "trim", sale_price: "", density_kg_per_l: "1,03", trim_value_percent: "60" });
+    ok("final: product economics validated", eco.ok && eco.value.salePrice === null && eco.value.densityKgPerL === 1.03 && eco.value.trimValuePercent === 60, eco);
+    ok(
+      "final: bad product economics rejected",
+      [
+        { product_type: "meat" },
+        { product_type: "raw", sale_price: -1 },
+        { product_type: "raw", density_kg_per_l: 0 },
+        { product_type: "trim", trim_value_percent: 101 },
+      ].every((body) => !final.validateProductEconomics(body).ok),
+    );
+
+    const logInput = labels.validateWastageInput({ product_id: P, quantity: "1,5", reason: "expired", parent_lot_id: P3 });
+    ok("waste: log input from a lot", logInput.ok && logInput.value.quantity === 1.5 && logInput.value.storageLocationId === null && logInput.value.reasonNote === null, logInput);
+    ok(
+      "waste: bad log input rejected",
+      [
+        { product_id: P, quantity: 1, reason: "expired" },
+        { product_id: P, quantity: 0, reason: "expired", storage_location_id: L },
+        { product_id: P, quantity: 1, reason: "theft", storage_location_id: L },
+        { product_id: P, quantity: 1, reason: "other", storage_location_id: "x" },
+        { product_id: P, quantity: 1, reason: "other", storage_location_id: L, reason_note: 5 },
+      ].every((body) => !labels.validateWastageInput(body).ok),
+    );
+
+    const weightDraft = (weights) =>
+      labels.validatePreparationDraft({ name: "X", inputs: [{ product_id: P, qty: 10 }], outputs: [{ product_id: P2, qty: 8, portions: 8 }], portion_weights: weights });
+    const withWeight = weightDraft([{ product_id: P2, portion_weight_kg: "0,25" }]);
+    ok("waste: recipe carries portion weights", withWeight.ok && withWeight.value.portionWeights[0].kg === 0.25 && withWeight.value.portionWeights[0].productId === P2, withWeight);
+    ok("waste: no portion weights sent", weightDraft(undefined).ok && weightDraft(undefined).value.portionWeights.length === 0);
+    ok(
+      "waste: bad portion weights rejected",
+      [
+        [{ product_id: P2, portion_weight_kg: 0 }],
+        [{ product_id: P3, portion_weight_kg: 1 }],
+        [{ product_id: "x", portion_weight_kg: 1 }],
+        [{ product_id: P2, portion_weight_kg: 1 }, { product_id: P2, portion_weight_kg: 2 }],
+        "0.25",
+      ].every((weights) => !weightDraft(weights).ok),
+    );
+
+    const waste = load("lib/labels/waste.js");
+    const tol = { prepBalanceTolerance: 0.3, prepBalanceTolerancePercent: 5 };
+    const kg = (qty) => ({ qty, unit: "kg", portions: null, portionWeightKg: null, densityKgPerL: null });
+    const lt = (qty, density = null) => ({ qty, unit: "l", portions: null, portionWeightKg: null, densityKgPerL: density });
+    const por = (qty, weight) => ({ qty, unit: "pcs", portions: qty, portionWeightKg: weight, densityKgPerL: null });
+    const balance = (inputs, outputs, actual, wasteQty, extra = {}) =>
+      waste.calculateBalance({
+        inputs, outputs, trims: [], normPercent: 0, trimNormPercent: 0, evaporationPercent: 0, scale: 1, actual, waste: wasteQty, tolerance: tol, ...extra,
+      });
+    const even = balance([kg(10)], [kg(5), kg(2), { ...kg(2500), unit: "g" }], [5, 2, 2500], 0.5);
+    ok("waste: balanced run", even && even.difference === 0 && !even.exceeds && even.baseUnit === "kg", even);
+    const short = balance([kg(10)], [kg(5), kg(2)], [5, 2], 0.7);
+    ok("waste: 2.3 kg missing exceeds", short.difference === 2.3 && short.exceeds, short);
+    ok("waste: within the absolute tolerance", !balance([kg(10)], [kg(9.8)], [9.8], 0).exceeds);
+    ok("waste: percent tolerance on small runs", balance([kg(2)], [kg(1.75)], [1.75], 0).exceeds);
+    ok("waste: surplus also exceeds", balance([kg(10)], [kg(11)], [11], 0).exceeds);
+    ok("waste: tenant tolerance used", !balance([kg(10)], [kg(8)], [8], 0, { tolerance: { prepBalanceTolerance: 3, prepBalanceTolerancePercent: 30 } }).exceeds);
+    ok("waste: taken amount scales the input", balance([kg(10)], [kg(5)], [10], 0, { scale: 2 }).difference === 10);
+
+    const mixed = balance([kg(10)], [kg(5), por(8, 0.25)], [5, 8], 3, { normPercent: 5 });
+    ok("waste: kg + portions balance by portion weight", mixed && mixed.difference === 0 && !mixed.exceeds && mixed.outputs[1].mass === 2 && !mixed.outputs[1].estimated, mixed);
+    const lostPortions = balance([kg(10)], [kg(5), por(8, 0.25)], [5, 6], 3, { normPercent: 5 });
+    ok("waste: missing portions exceed", lostPortions.difference === 0.5 && lostPortions.exceeds, lostPortions);
+    const unknown = balance([kg(10)], [kg(5), por(8, null)], [5, 8], 0.5, { normPercent: 5 });
+    ok(
+      "waste: output without weight estimated, balance still counted",
+      unknown && unknown.difference === 0 && !unknown.exceeds && unknown.outputs[1].estimated && unknown.outputs[1].mass === 4.5 && !unknown.outputs[0].estimated,
+      unknown,
+    );
+    ok("waste: missing unweighed portions still exceed", balance([kg(10)], [kg(5), por(8, null)], [5, 6], 0.5, { normPercent: 5 }).exceeds);
+    const noRoom = balance([kg(10)], [kg(10), por(8, null)], [10, 8], 0, { normPercent: 5 });
+    ok("waste: no recipe room, unweighed output skipped", noRoom && noRoom.outputs[1].mass === null && noRoom.difference === 0, noRoom);
+    ok(
+      "waste: no balance without input weight or across kg and l inputs",
+      balance([por(8, null)], [kg(2)], [2], 0) === null && balance([kg(1)], [lt(1)], [1], 0).outputs[0].estimated &&
+        balance([kg(1), lt(1)], [kg(2)], [2], 0) === null,
+    );
+    const fromPortions = balance([por(40, 0.25)], [kg(9.5)], [9.5], 2);
+    ok("waste: input in portions, waste in portions", fromPortions.input === 10 && fromPortions.waste === 0.5 && fromPortions.difference === 0, fromPortions);
+    ok(
+      "waste: line factor by portions per unit, by density across kg and l",
+      waste.lineFactor({ qty: 2, unit: "pcs", portions: 8, portionWeightKg: 0.25, densityKgPerL: null }, "kg") === 1 &&
+        waste.lineFactor(por(8, null), "kg") === null && waste.lineFactor(lt(1, 0.92), "kg") === 0.92 &&
+        Math.abs(waste.lineFactor({ ...kg(1), densityKgPerL: 0.8 }, "l") - 1.25) < 1e-9 && waste.lineFactor(lt(1), "kg") === null,
+    );
+    ok(
+      "waste: balance base kg when every line converts, else l",
+      waste.massBase([kg(1), lt(1, 1.03)]) === "kg" && waste.massBase([lt(1), lt(2)]) === "l" && waste.massBase([kg(1), lt(1)]) === null && waste.massBase([]) === null,
+    );
+    const dense = balance([kg(5), lt(5, 1.06)], [kg(10)], [10], 0.3);
+    ok("waste: density from the product puts litres into the kg balance", dense && dense.baseUnit === "kg" && dense.input === 10.3 && dense.difference === 0, dense);
+
+    // Trim: 10 kg lamb, 2 kg bones back, net 8 = 5 shashlik + 2 farsh + 1 waste.
+    const lamb = { inputs: [kg(10)], outputs: [kg(5), kg(2)], actual: [5, 2] };
+    const bones = (qty) => ({ ...kg(qty) });
+    const trimRun = balance(lamb.inputs, lamb.outputs, lamb.actual, 1, { trims: [bones(2)] });
+    ok(
+      "trim: net use is gross minus returned trim and balances",
+      trimRun && trimRun.input === 10 && trimRun.trim === 2 && trimRun.net === 8 && trimRun.output === 7 && trimRun.waste === 1 && trimRun.difference === 0 && !trimRun.exceeds,
+      trimRun,
+    );
+    const trimOnly = balance(lamb.inputs, lamb.outputs, lamb.actual, 0, { trims: [bones(2)] });
+    ok("trim: trim without the waste is 1 kg missing", trimOnly.difference === 1 && trimOnly.exceeds, trimOnly);
+    const noTrim = balance(lamb.inputs, [kg(5), kg(2)], [5, 2], 3);
+    ok("trim: without trim net = gross", noTrim.trim === 0 && noTrim.net === noTrim.input && noTrim.difference === 0, noTrim);
+    ok("trim: tolerance percent is of the net use", balance([kg(2)], [kg(1)], [1], 0, { trims: [bones(0.8)] }).exceeds && !balance([kg(10)], [kg(7.9)], [7.9], 0, { trims: [bones(2)] }).exceeds);
+    ok("trim: trim in grams converts", balance(lamb.inputs, lamb.outputs, lamb.actual, 1, { trims: [{ ...kg(2000), unit: "g" }] }).net === 8);
+    ok("trim: trim without a weight gives no balance", balance(lamb.inputs, lamb.outputs, lamb.actual, 1, { trims: [por(3, null)] }) === null);
+    const evap = balance([kg(10)], [kg(7)], [7], 0, { evaporationPercent: 30 });
+    ok("trim: evaporation of the gross input balances the yield", evap.evaporation === 3 && evap.difference === 0 && !evap.exceeds, evap);
+    const implied = balance([kg(10)], [kg(5), por(8, null)], [5, 8], 0, { trims: [bones(2)], trimNormPercent: 20, normPercent: 10 });
+    ok("trim: unweighed output implied after norms and trim", implied.outputs[1].estimated && implied.outputs[1].mass === 2 && implied.difference === 1, implied);
+
+    const items = [
+      { name: "sümük", normPercent: 20, usable: true, productId: P2 },
+      { name: "yağ", normPercent: 3, usable: false, productId: null },
+      { name: "damar", normPercent: 2, usable: false, productId: null },
+    ];
+    ok("trim: waste norm sums only waste items, trim norm the usable ones", waste.wasteNormOf(9, items) === 5 && waste.trimNormOf(items) === 20 && waste.wasteNormOf(9, []) === 9);
+    const plannedTrim = waste.trimPlan([kg(10)], items);
+    ok("trim: planned trim per usable item", plannedTrim.length === 1 && plannedTrim[0].qty === 2 && plannedTrim[0].productId === P2, plannedTrim);
+    ok(
+      "trim: items serialized with usable and the trim product",
+      JSON.stringify(waste.serializeWasteItem(items[0])) === JSON.stringify({ name: "sümük", norm_percent: 20, usable: true, product_id: P2 }) &&
+        !("product_id" in waste.serializeWasteItem(items[1])),
+    );
+
+    const norm = waste.wasteNorm([kg(10)], 5, [{ name: "sümük", normPercent: 3, usable: false, productId: null }, { name: "yağ", normPercent: 2, usable: false, productId: null }]);
+    ok("waste: plan norm in the input unit", norm.qty === 0.5 && norm.items[0].qty === 0.3 && norm.items[1].qty === 0.2, norm);
+    ok("waste: plan norm in grams", waste.wasteNorm([{ ...kg(2000), unit: "g" }, kg(1)], 10, []).qty === 300);
+    ok("trim: usable items are not waste in the plan", waste.wasteNorm([kg(10)], 5, items).items.length === 2);
+    ok(
+      "waste: journal reads causes and notes",
+      waste.describeWaste("cutting", "bony").cause === "bony" && waste.describeWaste("cutting", "fatty").note === null &&
+        waste.describeWaste("cutting", null).cause === "norm" && waste.describeWaste("other", "balance").cause === "balance" &&
+        waste.describeWaste("other", "çürük").cause === "other" && waste.describeWaste("other", "çürük").note === "çürük" &&
+        waste.describeWaste("spoiled", "soyuducu xarab").cause === null && waste.describeWaste("spoiled", "soyuducu xarab").note === "soyuducu xarab",
+    );
+    ok(
+      "waste: causes map to reasons and note codes",
+      waste.causeToWaste("norm", "x").reason === "cutting" && waste.causeToWaste("norm", "x").note === null &&
+        waste.causeToWaste("bony", "").note === "bony" && waste.causeToWaste("other", " çürük ").reason === "other" &&
+        waste.causeToWaste("other", " çürük ").note === "çürük" && waste.causeToWaste("other", "  ").note === null,
+    );
+    const summary = waste.parseWasteSummary({ day: "2026-10-08", waste_kg: "3.2", waste_cost: null, runs: 2, input_kg: 40, norm_kg: 2, prep_waste_kg: 2.8 });
+    const pct = waste.wastePercents(summary);
+    ok("waste: owner percents", summary.wasteCost === null && pct.norm === 5 && pct.actual === 7 && pct.over === 2, { summary, pct });
+    ok("waste: no runs, no percents", waste.wastePercents({ ...summary, runs: 0, inputKg: 0 }) === null);
+    const expiredRow = waste.parseExpiredStockRow({
+      stock_id: P, product_id: P2, product_name: "Toyuq", unit: "kg", quantity: "2", expiry_date: "2026-10-07", days_left: -1, location_id: L, location_name: "Soyuducu", lot_number: null,
+    });
+    ok("waste: expired stock row parsed", expiredRow.quantity === 2 && expiredRow.daysLeft === -1 && expiredRow.lotNumber === null, expiredRow);
+    ok("waste: writers", waste.canWriteOffWaste("cook") && !waste.canWriteOffWaste("staff"));
+  }
+
+  // ---- waste photo AI add-on: verdict, model call, reserve / record flow, plans
+  {
+    const ai = load("lib/waste/ai-check.js");
+    const plan = load("lib/waste/plan.js");
+    const reservation = ai.parseReservation({
+      status: "pending", photo_path: `${TENANT}/2026-10-09/x.jpg`, product_name: "Süd", quantity: "2", unit: "l",
+      logged_kg: "2.06", reason: "spoiled", tolerance_percent: "50",
+    });
+    ok("ai: reservation parsed", reservation && reservation.loggedKg === 2.06 && reservation.tolerancePercent === 50 && reservation.quantity === 2, reservation);
+    ok("ai: bad reservation rejected", ai.parseReservation({ status: "approved", quantity: 1, tolerance_percent: 50 }) === null);
+    ok("ai: prompt carries the logged amount and reason", /2 l of "Süd" \(= 2\.06 kg\), reason "spoiled"/.test(ai.wastePrompt(reservation)));
+    ok("ai: no config without key or model", ai.wasteAiConfig({ OPENAI_API_KEY: "k" }) === null && ai.wasteAiConfig({ WASTE_AI_MODEL: "m" }) === null);
+    const config = ai.wasteAiConfig({ OPENAI_API_KEY: "k", WASTE_AI_MODEL: "m", WASTE_AI_INPUT_USD_PER_1M: "0.15", WASTE_AI_OUTPUT_USD_PER_1M: "0.6" });
+    ok("ai: config with token prices", config && config.model === "m" && config.inputUsdPer1M === 0.15 && config.outputUsdPer1M === 0.6, config);
+    const model = (o) => ai.parseModelAnalysis({ detected: "milk", estimated_kg: 2, reason_match: true, suspicious: false, confidence: 95, notes: "", ...o });
+    ok("ai: model answer parsed, 0..1 confidence scaled", model({}).confidence === 95 && model({ confidence: 0.9 }).confidence === 90);
+    ok("ai: model answer without booleans rejected", ai.parseModelAnalysis({ confidence: 90 }) === null);
+    ok("ai: weight diff", ai.weightDiffPercent(2, 3) === 50 && ai.weightDiffPercent(null, 3) === null && ai.weightDiffPercent(2, null) === null);
+    ok("ai: approved within tolerance", ai.decideVerdict(reservation, model({ estimated_kg: 2.5 }), null).status === "approved");
+    const far = ai.decideVerdict(reservation, model({ estimated_kg: 5 }), 0.001);
+    ok("ai: weight above tolerance -> suspicious", far.status === "suspicious" && far.analysis.suspicious && far.analysis.diff_percent > 50 && far.analysis.cost_usd === 0.001, far);
+    ok("ai: reason mismatch -> suspicious", ai.decideVerdict(reservation, model({ reason_match: false }), null).status === "suspicious");
+    ok("ai: model flag -> suspicious", ai.decideVerdict(reservation, model({ suspicious: true }), null).status === "suspicious");
+    ok("ai: unknown weight judged by the photo only", ai.decideVerdict({ ...reservation, loggedKg: null }, model({ estimated_kg: 50 }), null).status === "approved");
+    ok("ai: tolerance from the tenant", ai.decideVerdict({ ...reservation, tolerancePercent: 200 }, model({ estimated_kg: 5 }), null).status === "approved");
+    ok("ai: cost from usage", Math.abs(ai.aiCostUsd({ usage: { prompt_tokens: 1000000, completion_tokens: 1000000 } }, config) - 0.75) < 1e-12);
+
+    const answer = (content, okStatus = true) => async () => ({
+      ok: okStatus,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify(content) } }], usage: { prompt_tokens: 100, completion_tokens: 10 } }),
+    });
+    const photo = { bytes: new Uint8Array([1, 2, 3]), mime: "image/jpeg" };
+    let sent = null;
+    const verdict = await ai.analyzeWastePhoto(reservation, photo, config, async (url, init) => {
+      sent = JSON.parse(init.body);
+      return answer({ detected: "milk", estimated_kg: 2, reason_match: true, suspicious: false, confidence: 95, notes: "" })();
+    });
+    ok("ai: approved 95% from the model", verdict && verdict.status === "approved" && verdict.confidence === 95, verdict);
+    ok("ai: model from env, photo as data url", sent.model === "m" && sent.messages[0].content[1].image_url.url.startsWith("data:image/jpeg;base64,"));
+    ok("ai: http failure -> null", (await ai.analyzeWastePhoto(reservation, photo, config, answer({}, false))) === null);
+    ok("ai: garbage answer -> null", (await ai.analyzeWastePhoto(reservation, photo, config, answer({ hello: 1 }))) === null);
+
+    const rpcClient = (reserveData) => {
+      const calls = [];
+      return {
+        calls,
+        rpc: async (fn, args) => {
+          calls.push({ fn, args });
+          return fn === "waste_ai_reserve" ? { data: reserveData, error: null } : { data: {}, error: null };
+        },
+      };
+    };
+    const raw = { status: "pending", photo_path: "p", product_name: "Süd", quantity: 2, unit: "l", logged_kg: 2, reason: "spoiled", tolerance_percent: 50 };
+    let client = rpcClient({ ...raw, status: "not_checked" });
+    let status = await ai.runWasteAiCheck(client, TENANT, P1, photo, config, async () => { throw new Error("must not call AI"); });
+    ok("ai flow: AI off -> not_checked, no model call, no record", status === "not_checked" && client.calls.length === 1, client.calls);
+    client = rpcClient({ ...raw, status: "limit_reached" });
+    status = await ai.runWasteAiCheck(client, TENANT, P1, photo, config, async () => { throw new Error("must not call AI"); });
+    ok("ai flow: over the limit -> limit_reached, no model call", status === "limit_reached" && client.calls.length === 1);
+    client = rpcClient(raw);
+    status = await ai.runWasteAiCheck(client, TENANT, P1, photo, config,
+      answer({ detected: "milk", estimated_kg: 2, reason_match: true, suspicious: false, confidence: 95, notes: "" }));
+    ok("ai flow: approved recorded", status === "approved" && client.calls[1].fn === "waste_ai_record" && client.calls[1].args.p_status === "approved" &&
+      client.calls[1].args.p_confidence === 95, client.calls);
+    client = rpcClient(raw);
+    status = await ai.runWasteAiCheck(client, TENANT, P1, photo, config,
+      answer({ detected: "bread", estimated_kg: 6, reason_match: true, suspicious: false, confidence: 80, notes: "" }));
+    ok("ai flow: 6 kg seen for 2 kg logged -> suspicious recorded", status === "suspicious" && client.calls[1].args.p_status === "suspicious");
+    client = rpcClient(raw);
+    status = await ai.runWasteAiCheck(client, TENANT, P1, photo, null);
+    ok("ai flow: no model configured -> check given back as not_checked", status === "not_checked" && client.calls[1].args.p_status === "not_checked");
+    client = rpcClient(raw);
+    status = await ai.runWasteAiCheck(client, TENANT, P1, photo, config, answer({}, false));
+    ok("ai flow: AI failure -> not_checked recorded", status === "not_checked" && client.calls[1].args.p_status === "not_checked");
+
+    const plans = [
+      { code: "base", kind: "base", price: "79", currency: "AZN", period_days: 30, trial_days: 14, ai_photos: 0 },
+      { code: "waste_ai", kind: "addon", price: 19, currency: "AZN", period_days: 30, trial_days: 0, ai_photos: 500 },
+      { code: "bad", kind: "x", price: 1, currency: "AZN", period_days: 30 },
+    ].map(plan.parseBillingPlan).filter(Boolean);
+    ok("plans: parsed from rows, bad kind dropped", plans.length === 2 && plan.basePlan(plans).price === 79 && plan.basePlan(plans).trialDays === 14);
+    ok("plans: AI add-on found", plan.aiAddon(plans).code === "waste_ai" && plan.aiAddon(plans).aiPhotos === 500);
+    const state = plan.parseWasteAiState([{ photo_enabled: true, ai_enabled: false, plan: "free", used: 0, ai_limit: 50, free_photos: 50,
+      included_photos: 500, tolerance_percent: "50", photos_this_month: 23, requested_plan: null }]);
+    ok("plans: AI state parsed", state && state.limit === 50 && state.photosThisMonth === 23 && state.requestedPlan === null, state);
+    const summary = plan.parseWastePhotoSummary([{ logs: 5, with_photo: 3, approved: 1, suspicious: 1, needs_review: 1, limit_reached: 0 }]);
+    ok("plans: photo summary parsed", summary && summary.withPhoto === 3 && summary.needsReview === 1, summary);
+    const check = (status) => ({ status, confidence: 95, detected: null, notes: null, requiresReview: false });
+    ok("plans: badges", plan.aiBadge(check("approved")) === "approved" && plan.aiBadge(check("not_checked")) === "noAi" &&
+      plan.aiBadge(check("limit_reached")) === "limitReached" && plan.aiBadge(null) === null);
+    ok("plans: roles", plan.canReviewWaste("chef") && !plan.canReviewWaste("cook") && plan.canManageBilling("owner") && !plan.canManageBilling("chef"));
+    ok("plans: settings body", JSON.stringify(plan.validateWasteSettings({ ai_enabled: true })) === JSON.stringify({ photoEnabled: null, aiEnabled: true, tolerancePercent: null }) &&
+      plan.validateWasteSettings({}) === null && plan.validateWasteSettings({ ai_enabled: "yes" }) === null && plan.validateWasteSettings({ tolerance_percent: 0 }) === null);
+  }
+
+  {
+    const money = load("lib/money.js");
+    const currency = load("lib/currency/model.js");
+    const spaces = (text) => text.replace(/[\u00a0\u202f]/g, " ");
+    const RUB = { code: "RUB", symbol: "₽", locale: "ru-RU" };
+    const AZN = { code: "AZN", symbol: "₼", locale: "az-AZ" };
+    ok("money: Moscow 1234.5 RUB -> 1 234,50 ₽", spaces(money.formatMoney(1234.5, RUB)) === "1 234,50 ₽", money.formatMoney(1234.5, RUB));
+    ok("money: Baku shows ₼, never the AZN code", money.formatMoney(1234.5, AZN).includes("₼") && !money.formatMoney(1234.5, AZN).includes("AZN") &&
+      money.formatMoney(1234.5, AZN).includes("234,50"), money.formatMoney(1234.5, AZN));
+    ok("money: no amount -> dash", money.formatMoney(null, RUB) === "—" && money.formatMoney(Number.NaN, RUB) === "—");
+    const odd = money.formatMoney(5, { code: "xx", symbol: "§", locale: "ru-RU" });
+    ok("money: unknown code falls back to amount + symbol", spaces(odd) === "5,00 §", odd);
+    ok("money: settings -> currency", JSON.stringify(money.currencyOf({ currency: " rub ", currencySymbol: "₽", locale: "ru-RU" })) === JSON.stringify(RUB));
+    ok("money: rate keeps 4 digits", spaces(money.formatRate(0.1734, { code: "TRY", symbol: "₺", locale: "tr-TR" })).includes("0,1734"));
+
+    const list = [
+      { code: "AZN", symbol: "₼", locale: "az-AZ", name_az: "Azərbaycan manatı", name_ru: "Азербайджанский манат", name_en: "Azerbaijani manat" },
+      { code: "RUB", symbol: "₽", locale: "ru-RU", name_az: "Rusiya rublu", name_ru: "Российский рубль", name_en: "Russian ruble" },
+      { code: "bad", symbol: "?", locale: "x" },
+    ].map(currency.parseCurrency).filter(Boolean);
+    ok("currency: rows parsed, bad code dropped", list.length === 2);
+    ok("currency: name in UI language", currency.currencyName(list[1], "RU") === "RUB - Российский рубль (₽)");
+    ok("currency: Moscow browser -> RUB, unknown -> first", currency.guessCurrency(list, ["ru-RU", "en"]).code === "RUB" &&
+      currency.guessCurrency(list, ["fr-FR"]).code === "AZN" && currency.guessCurrency([], ["ru-RU"]) === null);
+    ok("currency: 100 TRY at 0.17 -> 17", currency.convertPrice(100, 0.17) === 17);
+
+    const P = "11111111-1111-4111-8111-111111111111";
+    const L = "22222222-2222-4222-8222-222222222222";
+    const fx = labels.validateReceiveLotInput({ product_id: P, qty: 1, storage_location_id: L, price: "100", currency: "try", fx_rate: "0,17" });
+    ok("currency: receipt in supplier currency", fx.ok && fx.value.currency === "TRY" && fx.value.fxRate === 0.17 && fx.value.price === 100, fx);
+    ok("currency: bad receipt currency rejected", [
+      { product_id: P, qty: 1, storage_location_id: L, price: 100, currency: "TRY" },
+      { product_id: P, qty: 1, storage_location_id: L, currency: "TRY", fx_rate: 0.17 },
+      { product_id: P, qty: 1, storage_location_id: L, price: 100, currency: "TRY", fx_rate: 0 },
+      { product_id: P, qty: 1, storage_location_id: L, price: 100, currency: "LIRA", fx_rate: 1 },
+    ].every((body) => !labels.validateReceiveLotInput(body).ok));
+    const refused = labels.mapLabelsError({ message: "stock_exists", code: "P0001" });
+    ok("currency: change with stock on hand -> stock_exists 409", refused.code === "stock_exists" && refused.status === 409, refused);
+    const supplier = purchasing.validateSupplierInput({ name: "Istanbul", default_currency: "try" });
+    ok("currency: supplier currency", supplier.ok && supplier.value.currency === "TRY" &&
+      purchasing.validateSupplierInput({ name: "Bazar" }).value.currency === null &&
+      !purchasing.validateSupplierInput({ name: "Bazar", default_currency: "lira" }).ok, supplier);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

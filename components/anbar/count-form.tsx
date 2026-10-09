@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,29 +12,27 @@ import { Pager } from "@/components/ui/pager";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { lookupCodeAction } from "@/lib/anbar/actions";
-import type { Branch, StorageLocation } from "@/lib/anbar/types";
-import { ANBAR_APP_PATH, ANBAR_COUNT_PATH } from "@/lib/auth-redirect";
-import {
-  approveCountAction,
-  cancelCountAction,
-  mergeCountAction,
-  startCountAction,
-  type CountActionResult,
-} from "@/lib/count/actions";
-import { GROUP_KEY_MAX_LENGTH, type CountErrorCode, type CountProduct, type StockCount } from "@/lib/count/model";
+import type { StorageOverview } from "@/lib/anbar/repository";
+import type { Branch } from "@/lib/anbar/types";
+import { ANBAR_APP_PATH, ANBAR_COUNT_PATH, ANBAR_STORAGE_PATH } from "@/lib/auth-redirect";
+import { approveCountAction, cancelCountAction, mergeCountAction, type CountActionResult } from "@/lib/count/actions";
+import type { CountErrorCode, CountProduct, StockCount } from "@/lib/count/model";
 import { useT } from "@/lib/i18n/useT";
 import { localDateTime } from "@/lib/tenant-settings/time";
-import AddStorageLocation from "./add-storage-location";
 import BarcodeScanner from "./barcode-scanner";
+import { StorageCard, StorageGrid } from "./storage-card";
 
 type Notice = "saved" | "finished" | "started" | "merged" | "approved" | "cancelled";
 type Message = { kind: "notice"; key: Notice } | { kind: "error"; key: CountErrorCode } | { kind: "scan"; code: string };
 
 const locationHref = (id: string) => `${ANBAR_COUNT_PATH}?location=${encodeURIComponent(id)}`;
+const branchHref = (id: string) => `${ANBAR_COUNT_PATH}?branch=${encodeURIComponent(id)}`;
 
 export default function CountForm({
   branches,
+  branchId,
   locations,
+  locationNames,
   locationId,
   count,
   finishedMine,
@@ -54,8 +53,11 @@ export default function CountForm({
   timeZone,
 }: {
   branches: Branch[];
-  /** Active storage places; counting is per place. */
-  locations: StorageLocation[];
+  branchId: string | null;
+  /** Active storage places of the branch in display order; counting is per place. */
+  locations: StorageOverview[];
+  /** "<code> · <name>" of every place, for the history. */
+  locationNames: Record<string, string>;
   locationId: string | null;
   /** The open count of the place, if any. */
   count: StockCount | null;
@@ -73,7 +75,7 @@ export default function CountForm({
   pageSize: number;
   /** The user's own entries, by product id. */
   mine: Record<string, number>;
-  notice: "saved" | "finished" | null;
+  notice: "saved" | "finished" | "started" | null;
   error: CountErrorCode | null;
   history: StockCount[];
   historyTotal: number;
@@ -85,7 +87,6 @@ export default function CountForm({
   const copy = t.anbar.sayim;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [list, setList] = useState(locations);
   const [scanned, setScanned] = useState<CountProduct[]>([]);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [message, setMessage] = useState<Message | null>(
@@ -102,14 +103,9 @@ export default function CountForm({
     setFocusId(null);
   }, [focusId, scanned]);
 
-  const branchName = new Map(branches.map((branch) => [branch.id, branch.name]));
-  const locationName = new Map(list.map((location) => [location.id, location.name]));
-  const label = (location: StorageLocation) =>
-    branches.length > 1 ? `${branchName.get(location.branchId) ?? ""} · ${location.name}` : location.name;
-
-  /** Query a pager keeps: the place and the other pager's page. */
+  /** Query a pager keeps: the place (or branch) and the other pager's page. */
   const pagerQuery = (otherParam: string, otherPage: number): Record<string, string> => ({
-    ...(locationId ? { location: locationId } : {}),
+    ...(locationId ? { location: locationId } : branchId ? { branch: branchId } : {}),
     ...(otherPage > 1 ? { [otherParam]: String(otherPage) } : {}),
   });
 
@@ -167,37 +163,72 @@ export default function CountForm({
           <h1 className="font-serif text-[32px] font-bold leading-[1.1] tracking-tight">{copy.title}</h1>
           <p className="mt-2 text-sm text-white/60">{copy.hiddenUntilMerge}</p>
         </div>
-        <Link href={ANBAR_APP_PATH} className={buttonVariants("outline", "sm")}>
-          {t.anbar.title}
-        </Link>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Link
+            href={branchId ? `${ANBAR_STORAGE_PATH}?branch=${encodeURIComponent(branchId)}` : ANBAR_STORAGE_PATH}
+            className={buttonVariants("outline", "sm")}
+          >
+            {t.anbar.saxlama.open}
+          </Link>
+          <Link href={ANBAR_APP_PATH} className={buttonVariants("outline", "sm")}>
+            {t.anbar.title}
+          </Link>
+        </div>
       </div>
 
-      <div>
-        <Label htmlFor="count-location">{copy.location}</Label>
-        <div className="flex items-center gap-2">
+      {branches.length > 1 && (
+        <div className="max-w-xs">
+          <Label htmlFor="count-branch">{t.anbar.saxlama.branch}</Label>
           <Select
-            id="count-location"
-            value={locationId ?? ""}
-            disabled={pending || list.length === 0}
-            onChange={(event) => router.push(locationHref(event.target.value))}
+            id="count-branch"
+            value={branchId ?? ""}
+            disabled={pending}
+            onChange={(event) => router.push(branchHref(event.target.value))}
           >
-            {list.length === 0 && <option value="">{copy.noLocations}</option>}
-            {list.map((location) => (
-              <option key={location.id} value={location.id}>
-                {label(location)}
+            {branches.map((branch) => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name} ({branch.code})
               </option>
             ))}
           </Select>
-          <AddStorageLocation
-            branches={branches}
-            branchId={list.find((location) => location.id === locationId)?.branchId ?? null}
-            onCreated={(location) => {
-              setList((current) => [...current, location].sort((a, b) => a.name.localeCompare(b.name)));
-              router.push(locationHref(location.id));
-            }}
-          />
         </div>
-      </div>
+      )}
+
+      {locations.length === 0 ? (
+        <p className="text-sm text-white/60">{copy.noLocations}</p>
+      ) : (
+        <StorageGrid
+          locations={locations}
+          renderCard={(location) => {
+            const open = location.openCount;
+            const startable = canCount && (open === null || open.status === "draft" || open.status === "counting");
+            return (
+              <StorageCard key={location.id} location={location} selected={location.id === locationId}>
+                <div className="flex flex-wrap gap-2">
+                  {startable && (
+                    <form action="/api/stock/count" method="post">
+                      <input type="hidden" name="location_id" value={location.id} />
+                      <Button type="submit" size="sm" disabled={pending}>
+                        {open?.status === "counting" ? t.anbar.saxlama.join : t.anbar.saxlama.startCount}
+                      </Button>
+                    </form>
+                  )}
+                  {open?.status === "merging" && (
+                    <Link href={`${ANBAR_COUNT_PATH}/${open.id}`} className={buttonVariants("outline", "sm")}>
+                      {copy.discrepancies}
+                    </Link>
+                  )}
+                  {location.id !== locationId && (
+                    <Link href={locationHref(location.id)} className={buttonVariants("ghost", "sm")}>
+                      {t.anbar.saxlama.view}
+                    </Link>
+                  )}
+                </div>
+              </StorageCard>
+            );
+          }}
+        />
+      )}
 
       {message && (
         <p role={message.kind === "notice" ? "status" : "alert"} className={message.kind === "notice" ? "text-sm text-emerald-400" : "text-sm text-red-400"}>
@@ -207,15 +238,16 @@ export default function CountForm({
 
       {locationId && (
         <Card className="flex flex-col gap-4">
+          <CardTitle>{locationNames[locationId]}</CardTitle>
           {count ? (
             <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
               <span className="text-white">
                 {copy.status[count.status]}
                 {count.groupKey && <span className="text-white/50"> · {count.groupKey}</span>}
               </span>
+              <Badge>{copy.countersBadge(count.counters.length)}</Badge>
               <span className="text-white/60">
-                {copy.finishedCount(count.finishedBy.length)}
-                {count.mergeMode && ` · ${copy.mergeMode}: ${copy.mergeModes[count.mergeMode]}`}
+                {copy.finishedCount(count.finishedBy.length)} · {copy.mergeMode}: {copy.mergeModes[count.mergeMode]}
               </span>
               <Link href={`${ANBAR_COUNT_PATH}/${count.id}`} className={buttonVariants("outline", "sm")}>
                 {copy.discrepancies}
@@ -226,32 +258,6 @@ export default function CountForm({
           )}
 
           {!canCount && <p className="text-sm text-white/60">{copy.readOnly}</p>}
-
-          {canCount && (!count || count.status === "draft") && (
-            <form
-              className="flex flex-col gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const groupKey = String(new FormData(event.currentTarget).get("group_key") ?? "");
-                act(() => startCountAction(locationId, groupKey), "started");
-              }}
-            >
-              <div>
-                <Label htmlFor="count-group">{copy.groupKey}</Label>
-                <Input
-                  id="count-group"
-                  name="group_key"
-                  maxLength={GROUP_KEY_MAX_LENGTH}
-                  autoComplete="off"
-                  defaultValue={count?.groupKey ?? ""}
-                />
-                <p className="mt-1.5 text-xs text-white/50">{copy.groupHint}</p>
-              </div>
-              <Button type="submit" disabled={pending}>
-                {copy.start}
-              </Button>
-            </form>
-          )}
 
           {counting && finishedMine && <p className="text-sm text-white/60">{copy.finishedMine} {copy.waitMerge}</p>}
           {count?.status === "merging" && <p className="text-sm text-white/60">{copy.waitApprove}</p>}
@@ -362,7 +368,7 @@ export default function CountForm({
                       {localDateTime(item.createdAt, timeZone)}
                     </Link>
                   </TableCell>
-                  <TableCell>{locationName.get(item.locationId) ?? "—"}</TableCell>
+                  <TableCell>{locationNames[item.locationId] ?? "—"}</TableCell>
                   <TableCell>{copy.status[item.status]}</TableCell>
                 </TableRow>
               ))}

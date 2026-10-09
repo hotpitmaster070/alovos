@@ -6,9 +6,11 @@ import {
   createProductWithBarcode,
   findProductByBarcode,
   getCatalogLine,
+  createStorageLocations,
   insertStorageLocation,
   receiveStock,
   updateExpiry,
+  updateStorageLocation,
 } from "./repository";
 import { resolveScope, type TenantScope } from "./scope";
 import type { CatalogLine, CatalogProduct, StorageLocation } from "./types";
@@ -111,6 +113,44 @@ export async function addStorageLocationAction(data: FormData): Promise<StorageL
   } catch (error) {
     console.error("addStorageLocationAction failed", error instanceof Error ? error.message : "unknown");
     return { ok: false, error: "saveFailed" };
+  }
+}
+
+export type StorageLocationsResult = { ok: true; locations: StorageLocation[] } | { ok: false; error: AnbarErrorCode };
+
+/** One or more places of a type (fields: type, branchId, count, name or name_prefix, number). */
+export async function createStorageLocationsAction(data: FormData): Promise<StorageLocationsResult> {
+  const input = validateStorageLocationInput(data);
+  if (!input.ok) return { ok: false, error: input.error };
+  const current = await scopeOrFailure();
+  if ("error" in current) return { ok: false, error: current.error };
+  try {
+    const created = await createStorageLocations(current.scope, input.value);
+    if (created.ok) {
+      revalidatePath(ANBAR_PATH, "layout");
+      revalidatePath(SETTINGS_PATH);
+    }
+    return created;
+  } catch (error) {
+    console.error("createStorageLocationsAction failed", error instanceof Error ? error.message : "unknown");
+    return { ok: false, error: "saveFailed" };
+  }
+}
+
+/** Soft delete or restore; refused while a stock count is open there. */
+export async function setStorageLocationActiveAction(id: string, active: boolean): Promise<ActionResult> {
+  if (!UUID.test(id)) return failure("invalidInput");
+  const current = await scopeOrFailure();
+  if ("error" in current) return failure(current.error);
+  try {
+    const error = await updateStorageLocation(current.scope, id, { isActive: active });
+    if (error) return failure(error);
+    revalidatePath(ANBAR_PATH, "layout");
+    revalidatePath(SETTINGS_PATH);
+    return success;
+  } catch (error) {
+    console.error("setStorageLocationActiveAction failed", error instanceof Error ? error.message : "unknown");
+    return failure("saveFailed");
   }
 }
 

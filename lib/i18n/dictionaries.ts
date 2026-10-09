@@ -2,6 +2,9 @@ import type { BlockSlug } from "@/lib/block-slugs";
 import type { AnbarErrorCode } from "@/lib/anbar/errors";
 import type { StorageType, Unit } from "@/lib/anbar/types";
 import type { LoginErrorCode } from "@/lib/auth-errors";
+import { LABELS_AZ, LABELS_EN, LABELS_RU, type LabelsDictionary } from "./labels";
+import { ruPlural } from "./plural";
+import { PURCHASING_AZ, PURCHASING_EN, PURCHASING_RU, type PurchasingDictionary } from "./purchasing";
 
 export type BlockDetails = {
   spec: string;
@@ -70,15 +73,12 @@ export type AnbarDictionary = {
     title: string;
     open: string;
     blind: string;
-    groupKey: string;
-    groupHint: string;
     location: string;
     noLocations: string;
     counted: string;
     submit: string;
     empty: string;
     noCount: string;
-    start: string;
     finish: string;
     merge: string;
     approve: string;
@@ -87,6 +87,7 @@ export type AnbarDictionary = {
     confirmCancel: string;
     finishedMine: string;
     finishedCount: (finished: number) => string;
+    countersBadge: (counters: number) => string;
     waitMerge: string;
     waitApprove: string;
     readOnly: string;
@@ -104,6 +105,7 @@ export type AnbarDictionary = {
       | "forbidden"
       | "count_not_found"
       | "location_not_found"
+      | "location_required"
       | "product_not_found"
       | "invalid_status"
       | "already_finished"
@@ -221,6 +223,27 @@ export type AnbarDictionary = {
     none: string;
     types: Record<StorageType, string>;
   };
+  saxlama: {
+    title: string;
+    open: string;
+    branch: string;
+    add: string;
+    count: string;
+    code: string;
+    nextNumber: (next: string, taken: string | null) => string;
+    products: (count: number) => string;
+    counting: (counters: number) => string;
+    active: string;
+    inactive: string;
+    deactivate: string;
+    activate: string;
+    empty: string;
+    created: (count: number) => string;
+    startCount: string;
+    join: string;
+    view: string;
+    noCount: string;
+  };
   emptyTitle: string;
   emptyHint: string;
   noMatchTitle: string;
@@ -260,7 +283,7 @@ export type AnbarDictionary = {
   errors: Record<AnbarErrorCode, string>;
 };
 
-export type WasteReasonKey = "spoiled" | "overcooked" | "dropped" | "expired" | "theft" | "other";
+export type WasteReasonKey = "spoiled" | "overcooked" | "dropped" | "expired" | "theft" | "other" | "cutting" | "cooking";
 
 export type WasteDictionary = {
   title: string;
@@ -388,16 +411,9 @@ export type Dictionary = {
   scanner: ScannerDictionary;
   login: LoginDictionary;
   onboarding: OnboardingDictionary;
+  purchasing: PurchasingDictionary;
+  labels: LabelsDictionary;
 };
-
-function ruPlural(count: number, one: string, few: string, many: string): string {
-  const n = Math.abs(count) % 100;
-  const last = n % 10;
-  if (n >= 11 && n <= 14) return many;
-  if (last === 1) return one;
-  if (last >= 2 && last <= 4) return few;
-  return many;
-}
 
 const AZ: Dictionary = {
   languageLabel: "Dil",
@@ -544,15 +560,12 @@ const AZ: Dictionary = {
       title: "Kor sayım",
       open: "Sayım",
       blind: "Sistem qalığı göstərilmir.",
-      groupKey: "Qrup açarı",
-      groupHint: "Bir neçə nəfər eyni açarı yazır.",
       location: "Saxlama yeri",
       noLocations: "Saxlama yeri yoxdur. Əvvəlcə yer əlavə edin.",
       counted: "Sayılan",
       submit: "Saxla",
       empty: "Bu yerdə məhsul yoxdur",
       noCount: "Bu yerdə sayım başlanmayıb.",
-      start: "Sayıma başla",
       finish: "Mənim sayımımı bitir",
       merge: "Birləşdir",
       approve: "Təsdiqlə",
@@ -561,6 +574,7 @@ const AZ: Dictionary = {
       confirmCancel: "Sayım ləğv edilsin? Qalıq dəyişməyəcək.",
       finishedMine: "Siz sayımınızı bitirdiniz.",
       finishedCount: (finished) => `Bitirənlər: ${finished}`,
+      countersBadge: (counters) => `Sayanlar: ${counters} nəfər`,
       waitMerge: "Şef nəticələri birləşdirəcək.",
       waitApprove: "Nəticələr birləşdirilib, şefin təsdiqi gözlənilir.",
       readOnly: "Sayımı yalnız aşpaz, şef və sahib apara bilər.",
@@ -591,6 +605,7 @@ const AZ: Dictionary = {
         forbidden: "Bu addım üçün icazəniz yoxdur.",
         count_not_found: "Sayım tapılmadı.",
         location_not_found: "Saxlama yeri tapılmadı.",
+        location_required: "Sayımın saxlama yeri yoxdur.",
         product_not_found: "Məhsul tapılmadı.",
         invalid_status: "Sayım artıq bu mərhələdə deyil. Səhifəni yeniləyin.",
         already_finished: "Siz sayımınızı artıq bitirmisiniz.",
@@ -707,7 +722,28 @@ const AZ: Dictionary = {
       branch: "Filial",
       submit: "Əlavə et",
       none: "Seçilməyib",
-      types: { quru: "Quru anbar", soyuducu: "Soyuducu", dondurucu: "Dondurucu", custom: "Digər" },
+      types: { quru: "Anbar", soyuducu: "Soyuducu", dondurucu: "Dondurucu", custom: "Digər" },
+    },
+    saxlama: {
+      title: "Saxlama yerləri",
+      open: "Saxlama yerləri",
+      branch: "Filial",
+      add: "Yeni yer əlavə et",
+      count: "Say",
+      code: "Kod",
+      nextNumber: (next, taken) => `Növbəti nömrə: ${next}${taken ? ` (artıq ${taken} var)` : ""}`,
+      products: (count) => `Məhsul: ${count}`,
+      counting: (counters) => `Sayım gedir: ${counters} nəfər`,
+      active: "Aktiv",
+      inactive: "Deaktiv",
+      deactivate: "Deaktiv et",
+      activate: "Aktiv et",
+      empty: "Bu filialda saxlama yeri yoxdur.",
+      created: (count) => (count === 1 ? "Saxlama yeri əlavə edildi." : `${count} saxlama yeri əlavə edildi.`),
+      startCount: "Sayıma başla",
+      join: "Qoşul",
+      view: "Bax",
+      noCount: "Sayım yoxdur",
     },
     emptyTitle: "Anbar boşdur",
     emptyHint: "İlk məkanı və məhsulu əlavə edin.",
@@ -756,6 +792,8 @@ const AZ: Dictionary = {
       unitMismatch: "Hədəf məkandakı eyni barkodlu məhsulun vahidi fərqlidir.",
       duplicateBarcode: "Bu məkanda həmin barkodlu məhsul artıq var.",
       duplicateLocation: "Bu filialda həmin adda saxlama yeri artıq var.",
+      numberTaken: "Bu nömrə bu filialda həmin növ üçün artıq var.",
+      openCount: "Bu yerdə sayım gedir. Əvvəlcə sayımı bitirin və ya ləğv edin.",
       concurrent: "Məlumat dəyişdi. Səhifəni yeniləyib yenidən cəhd edin.",
       saveFailed: "Yadda saxlamaq mümkün olmadı.",
     },
@@ -787,6 +825,8 @@ const AZ: Dictionary = {
       expired: "Vaxtı keçib",
       theft: "Oğurluq",
       other: "Digər",
+      cutting: "Kəsim (zaqotovka)",
+      cooking: "Bişirmə (zaqotovka)",
     },
     errors: {
       invalid_input: "Məlumat səhvdir",
@@ -858,6 +898,8 @@ const AZ: Dictionary = {
     body: "Bu hesaba təşkilat bağlamaq mümkün olmadı. Yenidən cəhd edin və ya başqa hesabla daxil olun.",
     retry: "Yenidən cəhd et",
   },
+  purchasing: PURCHASING_AZ,
+  labels: LABELS_AZ,
 };
 
 const RU: Dictionary = {
@@ -1005,15 +1047,12 @@ const RU: Dictionary = {
       title: "Слепой подсчёт",
       open: "Подсчёт",
       blind: "Системный остаток не показывается.",
-      groupKey: "Ключ группы",
-      groupHint: "Несколько человек вводят один и тот же ключ.",
       location: "Место хранения",
       noLocations: "Мест хранения нет. Сначала добавьте место.",
       counted: "Посчитано",
       submit: "Сохранить",
       empty: "В этом месте нет товаров",
       noCount: "Подсчёт в этом месте не начат.",
-      start: "Начать подсчёт",
       finish: "Завершить мой подсчёт",
       merge: "Объединить",
       approve: "Утвердить",
@@ -1022,6 +1061,7 @@ const RU: Dictionary = {
       confirmCancel: "Отменить подсчёт? Остаток не изменится.",
       finishedMine: "Вы завершили свой подсчёт.",
       finishedCount: (finished) => `Завершили: ${finished}`,
+      countersBadge: (counters) => `Считают: ${counters} ${ruPlural(counters, "человек", "человека", "человек")}`,
       waitMerge: "Шеф объединит результаты.",
       waitApprove: "Результаты объединены, ждём утверждения шефа.",
       readOnly: "Считать могут повар, шеф и владелец.",
@@ -1052,6 +1092,7 @@ const RU: Dictionary = {
         forbidden: "Нет прав на это действие.",
         count_not_found: "Подсчёт не найден.",
         location_not_found: "Место хранения не найдено.",
+        location_required: "У подсчёта не указано место хранения.",
         product_not_found: "Товар не найден.",
         invalid_status: "Подсчёт уже на другом этапе. Обновите страницу.",
         already_finished: "Вы уже завершили свой подсчёт.",
@@ -1168,7 +1209,28 @@ const RU: Dictionary = {
       branch: "Точка",
       submit: "Добавить",
       none: "Не выбрано",
-      types: { quru: "Сухой склад", soyuducu: "Холодильник", dondurucu: "Морозильник", custom: "Другое" },
+      types: { quru: "Склад", soyuducu: "Холодильник", dondurucu: "Морозильник", custom: "Другое" },
+    },
+    saxlama: {
+      title: "Места хранения",
+      open: "Места хранения",
+      branch: "Точка",
+      add: "Добавить место",
+      count: "Количество",
+      code: "Код",
+      nextNumber: (next, taken) => `Следующий номер: ${next}${taken ? ` (уже есть ${taken})` : ""}`,
+      products: (count) => `Товаров: ${count}`,
+      counting: (counters) => `Идёт подсчёт: ${counters} ${ruPlural(counters, "человек", "человека", "человек")}`,
+      active: "Активно",
+      inactive: "Отключено",
+      deactivate: "Отключить",
+      activate: "Включить",
+      empty: "В этой точке нет мест хранения.",
+      created: (count) => (count === 1 ? "Место хранения добавлено." : `Добавлено мест хранения: ${count}.`),
+      startCount: "Начать подсчёт",
+      join: "Присоединиться",
+      view: "Открыть",
+      noCount: "Подсчёта нет",
     },
     emptyTitle: "Склад пуст",
     emptyHint: "Добавьте первую локацию и товар.",
@@ -1217,6 +1279,8 @@ const RU: Dictionary = {
       unitMismatch: "У товара с тем же штрихкодом в целевой локации другая единица измерения.",
       duplicateBarcode: "Товар с таким штрихкодом в этой локации уже есть.",
       duplicateLocation: "Место хранения с таким названием в этой точке уже есть.",
+      numberTaken: "Этот номер для такого типа в этой точке уже занят.",
+      openCount: "В этом месте идёт подсчёт. Сначала завершите или отмените его.",
       concurrent: "Данные изменились. Обновите страницу и повторите.",
       saveFailed: "Не удалось сохранить.",
     },
@@ -1248,6 +1312,8 @@ const RU: Dictionary = {
       expired: "Просрочено",
       theft: "Кража",
       other: "Другое",
+      cutting: "Обрезка (заготовка)",
+      cooking: "Готовка (заготовка)",
     },
     errors: {
       invalid_input: "Проверьте поля",
@@ -1319,6 +1385,8 @@ const RU: Dictionary = {
     body: "Не удалось привязать организацию к этому аккаунту. Повторите попытку или войдите в другой аккаунт.",
     retry: "Повторить",
   },
+  purchasing: PURCHASING_RU,
+  labels: LABELS_RU,
 };
 
 const EN: Dictionary = {
@@ -1466,15 +1534,12 @@ const EN: Dictionary = {
       title: "Blind count",
       open: "Count",
       blind: "System quantity stays hidden.",
-      groupKey: "Group key",
-      groupHint: "Several people enter the same key.",
       location: "Storage location",
       noLocations: "No storage locations. Add one first.",
       counted: "Counted",
       submit: "Save",
       empty: "No products at this location",
       noCount: "No count started at this location.",
-      start: "Start count",
       finish: "Finish my count",
       merge: "Merge",
       approve: "Approve",
@@ -1483,6 +1548,7 @@ const EN: Dictionary = {
       confirmCancel: "Cancel the count? Stock will not change.",
       finishedMine: "You finished your count.",
       finishedCount: (finished) => `Finished: ${finished}`,
+      countersBadge: (counters) => `Counting: ${counters} ${counters === 1 ? "person" : "people"}`,
       waitMerge: "The chef will merge the results.",
       waitApprove: "Results merged, waiting for the chef to approve.",
       readOnly: "Cooks, chefs and owners can count.",
@@ -1513,6 +1579,7 @@ const EN: Dictionary = {
         forbidden: "You are not allowed to do this.",
         count_not_found: "Count not found.",
         location_not_found: "Storage location not found.",
+        location_required: "The count has no storage location.",
         product_not_found: "Product not found.",
         invalid_status: "The count has moved on. Reload the page.",
         already_finished: "You already finished your count.",
@@ -1629,7 +1696,28 @@ const EN: Dictionary = {
       branch: "Branch",
       submit: "Add",
       none: "Not selected",
-      types: { quru: "Dry store", soyuducu: "Fridge", dondurucu: "Freezer", custom: "Other" },
+      types: { quru: "Storeroom", soyuducu: "Fridge", dondurucu: "Freezer", custom: "Other" },
+    },
+    saxlama: {
+      title: "Storage locations",
+      open: "Storage locations",
+      branch: "Branch",
+      add: "Add location",
+      count: "How many",
+      code: "Code",
+      nextNumber: (next, taken) => `Next number: ${next}${taken ? ` (taken: ${taken})` : ""}`,
+      products: (count) => `Products: ${count}`,
+      counting: (counters) => `Count in progress: ${counters} ${counters === 1 ? "person" : "people"}`,
+      active: "Active",
+      inactive: "Inactive",
+      deactivate: "Deactivate",
+      activate: "Activate",
+      empty: "No storage locations in this branch.",
+      created: (count) => (count === 1 ? "Storage location added." : `${count} storage locations added.`),
+      startCount: "Start count",
+      join: "Join",
+      view: "Open",
+      noCount: "No count",
     },
     emptyTitle: "The warehouse is empty",
     emptyHint: "Add your first location and product.",
@@ -1678,6 +1766,8 @@ const EN: Dictionary = {
       unitMismatch: "The product with the same barcode at the target location uses a different unit.",
       duplicateBarcode: "A product with this barcode already exists at this location.",
       duplicateLocation: "This branch already has a storage location with that name.",
+      numberTaken: "This number is already used for this type in the branch.",
+      openCount: "A stock count is going on here. Finish or cancel it first.",
       concurrent: "The data changed. Refresh the page and try again.",
       saveFailed: "Could not save.",
     },
@@ -1709,6 +1799,8 @@ const EN: Dictionary = {
       expired: "Expired",
       theft: "Theft",
       other: "Other",
+      cutting: "Trimming (prep)",
+      cooking: "Cooking (prep)",
     },
     errors: {
       invalid_input: "Check the fields",
@@ -1780,6 +1872,8 @@ const EN: Dictionary = {
     body: "This account has no organization yet. Try again, or sign in with a different account.",
     retry: "Try again",
   },
+  purchasing: PURCHASING_EN,
+  labels: LABELS_EN,
 };
 
 export const dictionaries = { AZ, RU, EN } satisfies Record<string, Dictionary>;

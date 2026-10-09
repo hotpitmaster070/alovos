@@ -522,16 +522,17 @@ declare
   r record;
   v_cols text;
 begin
+  -- products.sale_price (20261019_final_world_scheme.sql) is money too.
   for r in
     select * from (values
-      ('product_stocks', 'cost_per_unit'),
-      ('stock_movements', 'cost_per_unit'),
-      ('products', 'cost')
+      ('product_stocks', array['cost_per_unit']),
+      ('stock_movements', array['cost_per_unit']),
+      ('products', array['cost', 'sale_price'])
     ) as v(tbl, hidden)
   loop
     if not exists (
       select 1 from information_schema.columns
-      where table_schema = 'public' and table_name = r.tbl and column_name = r.hidden
+      where table_schema = 'public' and table_name = r.tbl and column_name = r.hidden[1]
     ) then
       continue;
     end if;
@@ -539,10 +540,12 @@ begin
     select string_agg(quote_ident(column_name), ', ' order by ordinal_position)
     into v_cols
     from information_schema.columns
-    where table_schema = 'public' and table_name = r.tbl and column_name <> r.hidden;
+    where table_schema = 'public' and table_name = r.tbl and column_name <> all (r.hidden);
 
     execute format('revoke select on table public.%I from authenticated', r.tbl);
-    execute format('revoke select (%I) on table public.%I from authenticated', r.hidden, r.tbl);
+    execute format('revoke select (%s) on table public.%I from authenticated',
+      (select string_agg(quote_ident(c.column_name), ', ') from information_schema.columns c
+       where c.table_schema = 'public' and c.table_name = r.tbl and c.column_name = any (r.hidden)), r.tbl);
     execute format('grant select (%s) on table public.%I to authenticated', v_cols, r.tbl);
   end loop;
 end;

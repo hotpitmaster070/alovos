@@ -27,11 +27,12 @@ let r = await as(A, `insert into products(tenant_id, name, cost, unit, storage_l
   ('${tA}','Milk',2,'l',null),('${tA}','Rice',1,'kg',null),('${tA}','Beans',3,'kg','${storeA}'),('${tA}','Salt',1,'kg','${storeB}')
   returning id, name`);
 const id = Object.fromEntries(r.rows.map((row) => [row.name, row.id]));
-r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date) values
-  ('${tA}','${id.Milk}','${branchA}','${storeA}',6,'prihod',2,'l','2026-11-01'),
-  ('${tA}','${id.Milk}','${branchA}','${storeA}',4,'prihod',2.5,'l','2026-12-01'),
-  ('${tA}','${id.Rice}','${branchA}','${storeA}',5,'prihod',1,'kg',null)`);
-ok("seed lots: milk 10, rice 5 at the place", !r.err, r);
+const receive = (product, location, quantity, cost, unit, expiry) =>
+  as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date)
+    values ('${tA}','${product}','${branchA}','${location}',${quantity},'prihod',${cost},'${unit}',${expiry ? `'${expiry}'` : "null"})`);
+// Separate deliveries (one transaction each), so the last purchase price is the 2.5 one.
+r = [await receive(id.Milk, storeA, 6, 2, "l", "2026-11-01"), await receive(id.Milk, storeA, 4, 2.5, "l", "2026-12-01"), await receive(id.Rice, storeA, 5, 1, "kg", null)];
+ok("seed lots: milk 10, rice 5 at the place", r.every((res) => !res.err), r);
 
 // ---- a count made the old way (it already moved stock)
 await q(`insert into stock_counts(tenant_id, location_id, user_id) values ('${tA}','${storeA}','${C1}')`);
@@ -42,8 +43,12 @@ for (const run of [1, 2]) {
   failure = await apply(migrationFiles.filter((f) => f >= COUNT));
   ok(`${COUNT} and later apply (run ${run})`, !failure, failure);
 }
-const old = (await q(`select status, approved_by, branch_id from stock_counts where id='${legacy}'`))[0];
+const old = (await q(`select status, approved_by, branch_id, counted_by, finished_by, merge_mode from stock_counts where id='${legacy}'`))[0];
 ok("legacy count is approved, attributed and has its branch", old.status === "approved" && old.approved_by === C1 && old.branch_id === branchA, old);
+ok("legacy count: its author is its counter, mode 'last'", JSON.stringify(old.counted_by) === JSON.stringify([C1]) && old.finished_by.length === 0 && old.merge_mode === "last", old);
+ok("one open-count index, under its final name",
+  (await q("select count(*)::int c from pg_indexes where indexname in ('uniq_open_count_per_location','stock_counts_one_open_per_location')"))[0].c === 1 &&
+  (await q("select count(*)::int c from pg_indexes where indexname = 'uniq_open_count_per_location'"))[0].c === 1);
 ok("legacy entry keeps its counter", (await q(`select user_id from stock_count_items where stock_count_id='${legacy}'`))[0].user_id === C1);
 
 const balance = async (product, location = storeA) =>
@@ -62,6 +67,11 @@ r = await call(H, "select public.start_stock_count($1) id", [storeA]);
 ok("chef joins the same document", r.rows?.[0]?.id === countId, r);
 ok("one open count for the place, status counting",
   (await q(`select count(*)::int c, max(status) s from stock_counts where location_id='${storeA}' and status in ('draft','counting','merging')`))[0].s === "counting");
+const opened = (await q(`select counted_by, finished_by, merge_mode, branch_id from stock_counts where id='${countId}'`))[0];
+ok("counted_by lists the three counters, creator first; nobody finished", opened.counted_by.length === 3 && opened.counted_by.includes(C1) && opened.counted_by.includes(C2) && opened.counted_by.includes(H) && opened.finished_by.length === 0, opened);
+ok("merge mode and branch fixed at creation", opened.merge_mode === "last" && opened.branch_id === branchA, opened);
+await call(C2, "select public.start_stock_count($1)", [storeA]);
+ok("joining twice does not duplicate a counter", (await q(`select cardinality(counted_by) n from stock_counts where id='${countId}'`))[0].n === 3);
 r = await call(S, "select public.start_stock_count($1) id", [storeA]);
 ok("staff cannot count", /forbidden/.test(r.err ?? ""), r);
 
@@ -109,7 +119,10 @@ r = await save(C1, countId, [{ product_id: id.Milk, quantity: 1 }]);
 ok("finished counter cannot change entries", /already_finished/.test(r.err ?? ""), r);
 r = await call(C1, `update stock_count_items set counted_quantity = 1 where stock_count_id='${countId}' and user_id='${C1}'`);
 ok("not even directly", !r.err && r.affected === 0, r);
-ok("counted_by lists the finished counter", (await q(`select counted_by from stock_counts where id='${countId}'`))[0].counted_by.includes(C1));
+const afterFinish = (await q(`select counted_by, finished_by from stock_counts where id='${countId}'`))[0];
+ok("finished_by lists the finished counter, counted_by still all three", JSON.stringify(afterFinish.finished_by) === JSON.stringify([C1]) && afterFinish.counted_by.length === 3, afterFinish);
+r = await call(C1, "select public.finish_my_stock_count($1)", [countId]);
+ok("finishing twice keeps one entry", !r.err && (await q(`select cardinality(finished_by) n from stock_counts where id='${countId}'`))[0].n === 1, r);
 
 // ---- merge
 r = await call(H, "select public.merge_stock_count($1) n", [countId]);
@@ -118,7 +131,7 @@ r = await save(C2, countId, [{ product_id: id.Milk, quantity: 9 }]);
 ok("no entries after the merge", /invalid_status/.test(r.err ?? ""), r);
 r = await call(H, "select product_name, counted_quantity::float c, expected_quantity::float e, difference::float d, difference_value::float v from public.stock_count_lines($1)", [countId]);
 const chefMilk = r.rows?.find((row) => row.product_name === "Milk");
-ok("chef sees the discrepancies once merged (milk: should 10, counted 8, -2)", chefMilk && chefMilk.e === 10 && chefMilk.c === 8 && chefMilk.d === -2 && chefMilk.v === -4.4, r);
+ok("chef sees the discrepancies once merged (milk: should 10, counted 8, -2, x last purchase 2.5 = -5)", chefMilk && chefMilk.e === 10 && chefMilk.c === 8 && chefMilk.d === -2 && chefMilk.v === -5, r);
 r = await call(C2, "select expected_quantity from public.stock_count_lines($1)", [countId]);
 ok("cook still counts blind after the merge", r.rows?.every((row) => row.expected_quantity === null), r);
 ok("merging did not touch stock either", (await balance(id.Milk)) === 10 && (await countMoves()) === 0);
@@ -132,6 +145,7 @@ r = await call(H, "select public.approve_stock_count($1) n", [countId]);
 ok("chef approves: 3 movements (milk -2, rice -1, beans +3)", !r.err && r.rows[0].n === 3, r);
 ok("milk is 8, taken FEFO from the earliest lot", (await balance(id.Milk)) === 8 &&
   Number((await q(`select quantity from product_stocks where product_id='${id.Milk}' and expiry_date='2026-11-01'`))[0].quantity) === 4);
+ok("the milk movement names its lot and cost", JSON.stringify(await q(`select quantity::float q, expiry_date::text e, cost_per_unit::float c from stock_movements where movement_type='count' and product_id='${id.Milk}'`)) === JSON.stringify([{ q: 2, e: "2026-11-01", c: 2 }]));
 ok("rice is the counted 5", (await balance(id.Rice)) === 5);
 ok("beans surplus became a lot of 3 in the place's branch, valued at the product cost",
   JSON.stringify(await q(`select quantity::float q, branch_id, cost_per_unit::float c from product_stocks where product_id='${id.Beans}'`)) === JSON.stringify([{ q: 3, branch_id: branchA, c: 3 }]));
@@ -156,6 +170,8 @@ ok("owner switches merge mode to sum", !r.err && r.affected === 1, r);
 r = await call(C1, "select public.start_stock_count($1) id", [storeA]);
 const second = r.rows?.[0]?.id;
 ok("a new count opens after approval", second && second !== countId, r);
+r = await call(A, "update tenant_settings set count_merge_mode = 'last'");
+ok("switching the setting mid-count does not change this count's mode", !r.err && (await q(`select merge_mode from stock_counts where id='${second}'`))[0].merge_mode === "sum", r);
 await save(C1, second, [{ product_id: id.Milk, quantity: 5 }]);
 await save(C2, second, [{ product_id: id.Milk, quantity: 3 }]);
 r = await call(H, "select public.merge_stock_count($1)", [second]);
@@ -177,5 +193,49 @@ r = await call(C1, "select name from public.count_products_page($1)", [storeB]);
 ok("place B lists Salt only", JSON.stringify(r.rows?.map((row) => row.name)) === JSON.stringify(["Salt"]), r);
 r = await call(C1, "select product_id, counted_quantity::float c from public.my_stock_count_items($1)", [second]);
 ok("own entries only", r.rows?.length === 1 && r.rows[0].c === 5, r);
+
+// ---- FEFO: shortage taken lot by lot, earliest expiry first; surplus into the nearest-expiry lot
+r = await as(A, `insert into products(tenant_id, name, cost, unit) values ('${tA}','Basmati',1,'kg'),('${tA}','Flour',1,'kg') returning id, name`);
+Object.assign(id, Object.fromEntries(r.rows.map((row) => [row.name, row.id])));
+r = [
+  await receive(id.Basmati, storeB, 5, 1, "kg", "2026-01-15"),
+  await receive(id.Basmati, storeB, 5, 1.2, "kg", "2026-06-01"),
+  await receive(id.Flour, storeB, 1, 0.8, "kg", "2026-09-01"),
+  await receive(id.Flour, storeB, 1, 0.7, "kg", "2026-02-01"),
+];
+ok("seed: rice lots 5 (2026-01-15) + 5 (2026-06-01), flour lots 1 (2026-02-01) + 1 (2026-09-01)", r.every((res) => !res.err), r);
+r = await call(C1, "select public.start_stock_count($1) id", [storeB]);
+const fefo = r.rows?.[0]?.id;
+r = await save(C1, fefo, [{ product_id: id.Basmati, quantity: 3 }, { product_id: id.Flour, quantity: 5 }]);
+ok("cook counts rice 3 kg (short 7), flour 5 kg (over 3)", !r.err, r);
+await call(C1, "select public.finish_my_stock_count($1)", [fefo]);
+await call(H, "select public.merge_stock_count($1)", [fefo]);
+const movesBefore = await countMoves();
+r = await call(H, "select public.approve_stock_count($1) n", [fefo]);
+ok("approve: 3 movements (rice 5 + 2, flour +3)", !r.err && r.rows[0].n === 3, r);
+const lotsOf = (product) => q(`select expiry_date::text e, quantity::float q from product_stocks where product_id='${product}' order by expiry_date`);
+ok("rice: 5 from the 2026-01-15 lot, 2 from the 2026-06-01 lot, 3 left in the second",
+  JSON.stringify(await lotsOf(id.Basmati)) === JSON.stringify([{ e: "2026-01-15", q: 0 }, { e: "2026-06-01", q: 3 }]), await lotsOf(id.Basmati));
+ok("rice movements per lot, earliest first",
+  JSON.stringify(await q(`select quantity::float q, expiry_date::text e from stock_movements where movement_type='count' and product_id='${id.Basmati}' order by expiry_date`)) ===
+  JSON.stringify([{ q: 5, e: "2026-01-15" }, { q: 2, e: "2026-06-01" }]));
+ok("flour surplus went into the nearest-expiry lot (2026-02-01), cost kept",
+  JSON.stringify(await lotsOf(id.Flour)) === JSON.stringify([{ e: "2026-02-01", q: 4 }, { e: "2026-09-01", q: 1 }]) &&
+  Number((await q(`select cost_per_unit from product_stocks where product_id='${id.Flour}' and expiry_date='2026-02-01'`))[0].cost_per_unit) === 0.7);
+ok("stock changed once: 3 new movements", (await countMoves()) === movesBefore + 3 && (await balance(id.Basmati, storeB)) === 3 && (await balance(id.Flour, storeB)) === 5);
+r = await call(H, "select difference_value::float v from public.stock_count_lines($1) where product_name = 'Basmati'", [fefo]);
+ok("rice difference value = -7 x last purchase 1.2", r.rows?.[0]?.v === -8.4, r);
+r = await call(C1, "select difference_value from public.stock_count_lines($1)", [fefo]);
+ok("cook sees no money after approval", r.rows?.every((row) => row.difference_value === null), r);
+
+// ---- a count without a storage place cannot be merged or approved
+await q(`insert into stock_counts(tenant_id, user_id, status) values ('${tA}','${H}','counting')`);
+const placeless = (await q("select id from stock_counts where location_id is null and status = 'counting'"))[0].id;
+await q(`insert into stock_count_items(tenant_id, stock_count_id, product_id, counted_quantity, user_id) values ('${tA}','${placeless}','${id.Salt}',1,'${H}')`);
+r = await call(H, "select public.merge_stock_count($1)", [placeless]);
+ok("merge: location_id required", /location_id required/.test(r.err ?? ""), r);
+await q(`update stock_counts set status = 'merging' where id='${placeless}'`);
+r = await call(H, "select public.approve_stock_count($1)", [placeless]);
+ok("approve: location_id required", /location_id required/.test(r.err ?? ""), r);
 
 done();

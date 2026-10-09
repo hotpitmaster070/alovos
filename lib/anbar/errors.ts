@@ -9,6 +9,8 @@ export const ANBAR_ERROR_CODES = [
   "unitMismatch",
   "duplicateBarcode",
   "duplicateLocation",
+  "numberTaken",
+  "openCount",
   "concurrent",
   "saveFailed",
 ] as const;
@@ -27,6 +29,10 @@ export function mapRpcError(error: PostgrestErrorLike): AnbarErrorCode {
   const message = typeof error.message === "string" ? error.message : "";
   const code = typeof error.code === "string" ? error.code : "";
 
+  if (message.includes("number_taken") || message.includes("uniq_location_number_per_branch")) return "numberTaken";
+  if (message.includes("duplicate_name") || message.includes("storage_locations_branch_id_name_key")) return "duplicateLocation";
+  if (message.includes("open_count")) return "openCount";
+  if (message.includes("branch_not_found")) return "invalidInput";
   if (message.includes("insufficient_stock")) return "exceedsQty";
   if (message.includes("invalid_qty")) return "invalidQty";
   if (message.includes("same_location")) return "sameLocation";

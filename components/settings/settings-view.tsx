@@ -1,15 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { STORAGE_NAME_MAX_LENGTH } from "@/lib/anbar/constants";
-import { STORAGE_TYPES, type StorageLocation } from "@/lib/anbar/types";
+import { STORAGE_TYPES, type Branch, type StorageLocation } from "@/lib/anbar/types";
+import { BILLING_PATH, INVITE_PATH, ORDERS_PATH, OWNER_PATH, SUPPLIERS_PATH } from "@/lib/auth-redirect";
 import { getBlock, getBlockLabel } from "@/lib/blocks";
 import { MERGE_MODES } from "@/lib/count/model";
 import type { TenantSettings } from "@/lib/tenant-settings/parse";
+import { MAX_DAYS, PERCENT_MAX, PERIOD_DAYS_MAX, PERIOD_DAYS_MIN } from "@/lib/tenant-settings/validation";
 import {
   addBranch,
   addStorageLocation,
@@ -19,9 +22,10 @@ import {
   setStorageLocationActive,
 } from "@/lib/settings/actions";
 import { useT } from "@/lib/i18n/useT";
+import type { Currency } from "@/lib/currency/model";
+import { currencyOf } from "@/lib/money";
 import { cn } from "@/lib/utils";
-
-type Named = { id: string; name: string };
+import CurrencySettings from "./currency-settings";
 
 function Field({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return (
@@ -36,8 +40,6 @@ function Field({ id, label, children }: { id: string; label: string; children: R
 
 const COPY = {
   AZ: {
-    currency: "Valyuta",
-    symbol: "Simvol",
     language: "Dil",
     stock: "Anbar",
     timezone: "Saat qurşağı",
@@ -45,6 +47,14 @@ const COPY = {
     expiryCritical: "Sarı: qalan gün azdırsa",
     lowStock: "Az qalıq həddi (min_stock yoxdursa)",
     countMerge: "Sayımda eyni məhsulu bir neçə nəfər sayanda",
+    usageWindow: "Gündəlik sərf neçə günə görə hesablansın",
+    inviteTtl: "Dəvət linki neçə gün etibarlıdır",
+    shelfLife: "Saxlama müddəti (məhsul üçün norma yoxdursa), gün",
+    balanceTolerance: "Zaqotovka balansı: icazə verilən fərq, kq/l",
+    balanceTolerancePercent: "Zaqotovka balansı: icazə verilən fərq, %",
+    portionWeight: "1 porsiya default çəki, kq (məhsulda göstərilməyibsə)",
+    density: "Default sıxlıq, kq/l (litr ↔ kq; məhsulda göstərilməyibsə)",
+    trimValue: "Qaytarılan trimin dəyəri, xammal mayasının %-i (məhsulda göstərilməyibsə)",
     branch: "Filial",
     address: "Ünvan",
     location: "Saxlama yeri",
@@ -57,8 +67,6 @@ const COPY = {
     inactive: "deaktiv",
   },
   RU: {
-    currency: "Валюта",
-    symbol: "Символ",
     language: "Язык",
     stock: "Склад",
     timezone: "Часовой пояс",
@@ -66,6 +74,14 @@ const COPY = {
     expiryCritical: "Жёлтый: осталось меньше дней",
     lowStock: "Порог «мало» (если у товара нет min_stock)",
     countMerge: "Если один товар посчитали несколько человек",
+    usageWindow: "За сколько дней считать средний расход",
+    inviteTtl: "Сколько дней действует ссылка-приглашение",
+    shelfLife: "Срок хранения по умолчанию (если у товара нет нормы), дней",
+    balanceTolerance: "Баланс заготовки: допустимая разница, кг/л",
+    balanceTolerancePercent: "Баланс заготовки: допустимая разница, %",
+    portionWeight: "Вес 1 порции по умолчанию, кг (если не указан у товара)",
+    density: "Плотность по умолчанию, кг/л (литры ↔ кг; если не указана у товара)",
+    trimValue: "Стоимость возвращённого трима, % от себестоимости сырья (если не указана у товара)",
     branch: "Точка",
     address: "Адрес",
     location: "Место хранения",
@@ -78,8 +94,6 @@ const COPY = {
     inactive: "отключено",
   },
   EN: {
-    currency: "Currency",
-    symbol: "Symbol",
     language: "Language",
     stock: "Stock",
     timezone: "Time zone",
@@ -87,6 +101,14 @@ const COPY = {
     expiryCritical: "Yellow: fewer days left than",
     lowStock: "Low stock threshold (products without min_stock)",
     countMerge: "When several people count the same product",
+    usageWindow: "Days the average daily usage is based on",
+    inviteTtl: "Days an invitation link stays valid",
+    shelfLife: "Default shelf life (products without a rule), days",
+    balanceTolerance: "Prep balance: allowed difference, kg/l",
+    balanceTolerancePercent: "Prep balance: allowed difference, %",
+    portionWeight: "Default weight of 1 portion, kg (when the product has none)",
+    density: "Default density, kg/l (litres ↔ kg; when the product has none)",
+    trimValue: "Value of returned trim, % of the raw cost (when the product has none)",
     branch: "Branch",
     address: "Address",
     location: "Storage location",
@@ -105,11 +127,16 @@ export default function SettingsView({
   branches,
   locations,
   units,
+  currencies,
+  isOwner,
 }: {
   settings: TenantSettings;
-  branches: Named[];
+  branches: Branch[];
   locations: StorageLocation[];
   units: { id: string; code: string; name: string }[];
+  currencies: Currency[];
+  /** Only the owner changes the currency. */
+  isOwner: boolean;
 }) {
   const { lang, t } = useT();
   const copy = COPY[lang];
@@ -122,11 +149,28 @@ export default function SettingsView({
         {block ? getBlockLabel(block, lang) : "sebeke"}
       </h1>
 
+      <nav className="flex flex-wrap gap-2">
+        <Link href={OWNER_PATH} className={buttonVariants("outline", "sm")}>
+          {t.purchasing.owner.open}
+        </Link>
+        <Link href={SUPPLIERS_PATH} className={buttonVariants("outline", "sm")}>
+          {t.purchasing.suppliers.open}
+        </Link>
+        <Link href={ORDERS_PATH} className={buttonVariants("outline", "sm")}>
+          {t.purchasing.orders.open}
+        </Link>
+        <Link href={INVITE_PATH} className={buttonVariants("outline", "sm")}>
+          {t.purchasing.invite.open}
+        </Link>
+        <Link href={BILLING_PATH} className={buttonVariants("outline", "sm")}>
+          {t.labels.billing.open}
+        </Link>
+      </nav>
+
+      <CurrencySettings current={currencyOf(settings)} currencies={currencies} canManage={isOwner} />
+
       <Card>
         <form action={saveTenantSettings} className="flex flex-col gap-3">
-          <CardTitle className="text-[10px] uppercase tracking-widest text-muted">{copy.currency}</CardTitle>
-          <Input name="currency" defaultValue={settings.currency} placeholder={copy.currency} required />
-          <Input name="currency_symbol" defaultValue={settings.currencySymbol ?? ""} placeholder={copy.symbol} />
           <Input name="language" defaultValue={settings.language ?? ""} placeholder={copy.language} />
           <CardTitle className="mt-2 text-[10px] uppercase tracking-widest text-muted">{copy.stock}</CardTitle>
           <Field id="settings-timezone" label={copy.timezone}>
@@ -176,6 +220,102 @@ export default function SettingsView({
               ))}
             </Select>
           </Field>
+          <Field id="settings-usage-window" label={copy.usageWindow}>
+            <Input
+              id="settings-usage-window"
+              name="usage_window_days"
+              type="number"
+              min={PERIOD_DAYS_MIN}
+              max={PERIOD_DAYS_MAX}
+              step="1"
+              defaultValue={settings.usageWindowDays}
+              required
+            />
+          </Field>
+          <Field id="settings-invite-ttl" label={copy.inviteTtl}>
+            <Input
+              id="settings-invite-ttl"
+              name="invite_ttl_days"
+              type="number"
+              min={PERIOD_DAYS_MIN}
+              max={PERIOD_DAYS_MAX}
+              step="1"
+              defaultValue={settings.inviteTtlDays}
+              required
+            />
+          </Field>
+          <Field id="settings-shelf-life" label={copy.shelfLife}>
+            <Input
+              id="settings-shelf-life"
+              name="default_shelf_life_days"
+              type="number"
+              min="0"
+              max={MAX_DAYS}
+              step="1"
+              defaultValue={settings.defaultShelfLifeDays}
+              required
+            />
+          </Field>
+          <Field id="settings-balance-tolerance" label={copy.balanceTolerance}>
+            <Input
+              id="settings-balance-tolerance"
+              name="prep_balance_tolerance"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              defaultValue={settings.prepBalanceTolerance}
+              required
+            />
+          </Field>
+          <Field id="settings-balance-tolerance-percent" label={copy.balanceTolerancePercent}>
+            <Input
+              id="settings-balance-tolerance-percent"
+              name="prep_balance_tolerance_percent"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max={PERCENT_MAX}
+              step="any"
+              defaultValue={settings.prepBalanceTolerancePercent}
+              required
+            />
+          </Field>
+          <Field id="settings-portion-weight" label={copy.portionWeight}>
+            <Input
+              id="settings-portion-weight"
+              name="default_portion_weight_kg"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              defaultValue={settings.defaultPortionWeightKg ?? ""}
+            />
+          </Field>
+          <Field id="settings-density" label={copy.density}>
+            <Input
+              id="settings-density"
+              name="default_density_kg_per_l"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="any"
+              defaultValue={settings.defaultDensityKgPerL ?? ""}
+            />
+          </Field>
+          <Field id="settings-trim-value" label={copy.trimValue}>
+            <Input
+              id="settings-trim-value"
+              name="default_trim_value_percent"
+              type="number"
+              inputMode="decimal"
+              min="0"
+              max={PERCENT_MAX}
+              step="any"
+              defaultValue={settings.defaultTrimValuePercent}
+              required
+            />
+          </Field>
           <Button type="submit">{copy.save}</Button>
         </form>
       </Card>
@@ -184,7 +324,9 @@ export default function SettingsView({
         <CardTitle className="text-[10px] uppercase tracking-widest text-muted">{copy.branch}</CardTitle>
         <ul className="mt-3 flex flex-col gap-2 text-sm text-white">
           {branches.map((branch) => (
-            <li key={branch.id}>{branch.name}</li>
+            <li key={branch.id}>
+              {branch.name} <span className="font-mono text-xs text-white/50">{branch.code}</span>
+            </li>
           ))}
         </ul>
         <form action={addBranch} className="mt-4 flex flex-col gap-3">
@@ -217,7 +359,7 @@ export default function SettingsView({
                           className={cn("min-w-0 flex-1", !location.active && "text-white/40")}
                         />
                         <span className="shrink-0 text-xs text-white/50">
-                          {storage.types[location.type]}
+                          <span className="font-mono">{location.code}</span> · {storage.types[location.type]}
                           {!location.active && ` · ${copy.inactive}`}
                         </span>
                         <Button type="submit" variant="outline" size="sm">

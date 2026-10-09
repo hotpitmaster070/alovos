@@ -46,7 +46,8 @@ export function parseBranch(row: unknown): Branch | null {
   if (!isRecord(row)) return null;
   const id = asString(row.id);
   const name = asString(row.name);
-  return id && name !== null ? { id, name } : null;
+  const code = asString(row.code);
+  return id && name !== null && code ? { id, name, code } : null;
 }
 
 export function parseStorageLocation(row: unknown): StorageLocation | null {
@@ -55,8 +56,10 @@ export function parseStorageLocation(row: unknown): StorageLocation | null {
   const name = asString(row.name);
   const type = asString(row.type) ?? "";
   const branchId = asString(row.branch_id);
-  if (!id || name === null || !branchId) return null;
-  return { id, name, type: isStorageType(type) ? type : "custom", branchId, active: row.is_active !== false };
+  const number = asNumber(row.number);
+  const code = asString(row.code);
+  if (!id || name === null || !branchId || number === null || !code) return null;
+  return { id, name, type: isStorageType(type) ? type : "custom", number, code, branchId, active: row.is_active !== false };
 }
 
 export type StockLot = { id: string; productId: string; quantity: number; expiryDate: string | null };

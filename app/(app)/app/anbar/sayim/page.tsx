@@ -1,6 +1,6 @@
 import CountForm from "@/components/anbar/count-form";
 import { redirectIfNoOrg } from "@/lib/app-gate";
-import { listBranches, listStorageLocations } from "@/lib/anbar/repository";
+import { listBranches, listStorageLocations, storageOverview } from "@/lib/anbar/repository";
 import { resolveScope } from "@/lib/anbar/scope";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 import { ANBAR_COUNT_PATH } from "@/lib/auth-redirect";
@@ -21,7 +21,8 @@ import { getSettings } from "@/lib/tenant-settings/getSettings";
 export const dynamic = "force-dynamic";
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
-const isNotice = (value: unknown): value is "saved" | "finished" => value === "saved" || value === "finished";
+type Notice = "saved" | "finished" | "started";
+const isNotice = (value: unknown): value is Notice => value === "saved" || value === "finished" || value === "started";
 
 export default async function CountPage({ searchParams }: { searchParams: RawSearchParams }) {
   const resolved = await resolveScope();
@@ -35,15 +36,20 @@ export default async function CountPage({ searchParams }: { searchParams: RawSea
 
   const [branches, allLocations, role, user, history, settings] = await Promise.all([
     listBranches(scope),
-    listStorageLocations(scope),
+    listStorageLocations(scope, { includeInactive: true }),
     memberRole(scope),
     scope.client.auth.getUser(),
     listCounts(scope, historyPage),
     getSettings(scope),
   ]);
-  const locations = allLocations.filter((location) => location.active);
-  const requested = first(searchParams.location);
-  const location = locations.find((item) => item.id === requested) ?? locations[0] ?? null;
+  const requested = allLocations.find((item) => item.id === first(searchParams.location) && item.active) ?? null;
+  const branch =
+    branches.find((item) => item.id === requested?.branchId) ??
+    branches.find((item) => item.id === first(searchParams.branch)) ??
+    branches[0] ??
+    null;
+  const locations = branch ? await storageOverview(scope, { branchId: branch.id }) : [];
+  const location = locations.find((item) => item.id === requested?.id) ?? null;
 
   const [count, catalog] = location
     ? await Promise.all([openCountAt(scope, location.id), countProducts(scope, location.id, page)])
@@ -62,9 +68,11 @@ export default async function CountPage({ searchParams }: { searchParams: RawSea
 
   return (
     <CountForm
-      key={location?.id ?? ""}
+      key={location?.id ?? branch?.id ?? ""}
       branches={branches}
+      branchId={branch?.id ?? null}
       locations={locations}
+      locationNames={Object.fromEntries(allLocations.map((item) => [item.id, `${item.code} · ${item.name}`]))}
       locationId={location?.id ?? null}
       count={count}
       finishedMine={count !== null && userId !== null && count.finishedBy.includes(userId)}

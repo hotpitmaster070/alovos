@@ -3,8 +3,49 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const TENANT_TABLES = ["products", "product_stocks", "storage_locations", "stock_movements", "kitchen_tasks"];
-const ROOTS = ["lib/anbar", "app/(app)/app/anbar", "app/api/stock", "components/anbar", "components/auth"];
+const TENANT_TABLES = [
+  "products",
+  "product_stocks",
+  "storage_locations",
+  "stock_movements",
+  "kitchen_tasks",
+  "suppliers",
+  "purchase_requests",
+  "invitations",
+  "low_stock_with_forecast",
+  "product_lots",
+  "product_shelf_life_rules",
+  "preparations",
+  "label_print_logs",
+  "tenant_settings",
+  "wastage_logs",
+  "preparation_runs",
+];
+const ROOTS = [
+  "lib/anbar",
+  "lib/purchasing",
+  "lib/labels",
+  "app/(app)/app/anbar",
+  "app/(app)/app/zaqotovka",
+  "app/api/lots",
+  "app/api/labels",
+  "app/api/shelf-life-rules",
+  "app/api/preparations",
+  "app/api/wastage",
+  "components/labels",
+  "app/(app)/app/sebeke",
+  "app/(app)/app/sifarisler",
+  "app/api/stock",
+  "app/api/anbar",
+  "app/api/suppliers",
+  "app/api/purchase-requests",
+  "app/api/products",
+  "app/api/invitations",
+  "components/anbar",
+  "components/auth",
+  "components/purchasing",
+];
+const FROM_TENANT_TABLE = new RegExp(`\\.from\\(\\s*["'](${TENANT_TABLES.join("|")})["']\\s*\\)`, "g");
 const files = [];
 const walk = (dir) => {
   for (const entry of readdirSync(dir)) {
@@ -19,7 +60,7 @@ const violations = [];
 let checked = 0;
 for (const file of files) {
   const source = readFileSync(file, "utf8");
-  for (const match of source.matchAll(/\.from\(\s*["'](products|product_stocks|storage_locations|stock_movements|kitchen_tasks)["']\s*\)/g)) {
+  for (const match of source.matchAll(FROM_TENANT_TABLE)) {
     const end = source.indexOf(";", match.index);
     const statement = source.slice(match.index, end === -1 ? undefined : end);
     checked += 1;

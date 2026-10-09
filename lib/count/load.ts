@@ -44,6 +44,35 @@ export async function getCount(scope: TenantScope, id: string): Promise<StockCou
   return single(data);
 }
 
+/** The count of a storage place: the open one, else the latest closed one. */
+export async function countAtLocation(scope: TenantScope, locationId: string): Promise<StockCount | null> {
+  const open = await openCountAt(scope, locationId);
+  if (open) return open;
+  const { data, error } = await scope.client
+    .from("stock_counts")
+    .select(COUNT_COLUMNS)
+    .eq("tenant_id", scope.tenantId)
+    .eq("location_id", locationId)
+    .in("status", ["approved", "cancelled"])
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(0, 0);
+  if (error) throw new Error(error.message);
+  return single(data?.[0] ?? null);
+}
+
+/** Whether the id is a storage place of the tenant. */
+export async function isTenantLocation(scope: TenantScope, id: string): Promise<boolean> {
+  const { data, error } = await scope.client
+    .from("storage_locations")
+    .select("id")
+    .eq("tenant_id", scope.tenantId)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data !== null;
+}
+
 /** The count labelled with a group key: the open one, else the latest. */
 export async function countByGroupKey(scope: TenantScope, groupKey: string): Promise<StockCount | null> {
   const { data, error } = await scope.client

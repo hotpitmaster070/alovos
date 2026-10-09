@@ -5,12 +5,13 @@ import { listBranches, listStorageLocations } from "@/lib/anbar/repository";
 import { resolveScope } from "@/lib/anbar/scope";
 import { parseLocationFilter } from "@/lib/anbar/stock-view";
 import { ANBAR_APP_PATH } from "@/lib/auth-redirect";
-import { formatMoney } from "@/lib/money";
+import { memberRole } from "@/lib/count/load";
+import { currencyOf, formatMoney } from "@/lib/money";
 import { PAGE_SIZE, parsePage, parseSearch } from "@/lib/pagination";
+import { canManagePurchasing } from "@/lib/purchasing/model";
+import { listForecast, listSuppliers } from "@/lib/purchasing/repository";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 import { getSettings } from "@/lib/tenant-settings/getSettings";
-import { currencyLabel } from "@/lib/tenant-settings/parse";
-
 export const dynamic = "force-dynamic";
 export const metadata = { title: "alovos" };
 
@@ -20,19 +21,26 @@ export default async function AnbarPage({ searchParams }: { searchParams: RawSea
   const search = parseSearch(searchParams.q);
   const page = parsePage(searchParams.page);
   const notice = Array.isArray(searchParams.notice) ? searchParams.notice[0] : searchParams.notice;
+  const forecastAll = searchParams.forecast === "all";
   const resolved = await resolveScope();
   const gated = redirectIfNoOrg(resolved, ANBAR_APP_PATH);
   if (gated.status === "error") {
     throw gated.cause instanceof Error ? gated.cause : new Error("Tenant lookup failed");
   }
 
-  const [stock, value, locations, branches, settings] = await Promise.all([
+  const [stock, value, locations, branches, settings, role, attention, suppliers] = await Promise.all([
     listStockLines(gated.scope, { branchId, locationId, search }, page),
     stockValueTotal(gated.scope, { branchId, locationId }),
     listStorageLocations(gated.scope, { includeInactive: true }),
     listBranches(gated.scope),
     getSettings(gated.scope),
+    memberRole(gated.scope),
+    listForecast(gated.scope, { statuses: forecastAll ? null : ["critical", "order"] }),
+    listSuppliers(gated.scope),
   ]);
+  const onPage = Array.from(new Set(stock.lines.map((line) => line.productId)));
+  const known = new Set(attention.map((row) => row.productId));
+  const pageForecast = await listForecast(gated.scope, { productIds: onPage.filter((id) => !known.has(id)) });
 
   return (
     <StockBoard
@@ -45,8 +53,13 @@ export default async function AnbarPage({ searchParams }: { searchParams: RawSea
       branches={branches}
       locationId={locationId}
       branchId={branchId}
-      money={value === null ? "—" : formatMoney(value, currencyLabel(settings))}
+      money={formatMoney(value, currencyOf(settings))}
       updated={notice === "1"}
+      forecast={[...attention, ...pageForecast]}
+      attention={attention}
+      forecastAll={forecastAll}
+      suppliers={suppliers}
+      canSetLimits={canManagePurchasing(role)}
     />
   );
 }

@@ -4,10 +4,13 @@ import { listBranches, listStorageLocations } from "@/lib/anbar/repository";
 import { resolveScope } from "@/lib/anbar/scope";
 import { parseLocationFilter } from "@/lib/anbar/stock-view";
 import { PAGE_SIZE, parsePage } from "@/lib/pagination";
-import { listWasteCards, wasteTotal } from "@/lib/wastage/load";
+import { listWasteCards, wasteDay, wasteTotal } from "@/lib/wastage/load";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 import { getSettings } from "@/lib/tenant-settings/getSettings";
-import { currencyLabel } from "@/lib/tenant-settings/parse";
+import { currencyOf } from "@/lib/money";
+import { memberRole } from "@/lib/count/load";
+import { wasteAiState } from "@/lib/waste/load";
+import { canReviewWaste } from "@/lib/waste/plan";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "alovos" };
@@ -26,11 +29,15 @@ export default async function TullantiPage({ searchParams }: { searchParams: Raw
 
   const settings = await getSettings(gated.scope);
   const filters = { branchId, locationId };
-  const [locations, branches, waste, total] = await Promise.all([
+  const today = wasteDay(null, settings);
+  const day = wasteDay(typeof searchParams.day === "string" ? searchParams.day : null, settings);
+  const [locations, branches, waste, total, ai, role] = await Promise.all([
     listStorageLocations(gated.scope, { includeInactive: true }),
     listBranches(gated.scope),
-    listWasteCards(gated.scope, filters, settings, page),
-    wasteTotal(gated.scope, filters, settings),
+    listWasteCards(gated.scope, filters, settings, page, day),
+    wasteTotal(gated.scope, filters, settings, day),
+    wasteAiState(gated.scope),
+    memberRole(gated.scope),
   ]);
 
   return (
@@ -44,7 +51,12 @@ export default async function TullantiPage({ searchParams }: { searchParams: Raw
       page={page}
       pageSize={PAGE_SIZE}
       total={total}
-      symbol={currencyLabel(settings)}
+      currency={currencyOf(settings)}
+      day={day}
+      today={today}
+      timeZone={settings.timezone}
+      photoEnabled={ai.photoEnabled}
+      canReview={canReviewWaste(role)}
     />
   );
 }

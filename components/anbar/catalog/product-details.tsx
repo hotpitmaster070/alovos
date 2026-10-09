@@ -7,10 +7,11 @@ import { expiryStatus, isLowStock } from "@/lib/anbar/catalog-status";
 import { isUnit, type CatalogProduct } from "@/lib/anbar/types";
 import { ANBAR_RECEIPT_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
-import { formatMoney } from "@/lib/money";
-import { currencyLabel, type TenantSettings } from "@/lib/tenant-settings/parse";
+import { currencyOf, formatMoney } from "@/lib/money";
+import type { TenantSettings } from "@/lib/tenant-settings/parse";
 import { useAction } from "../use-action";
 import { useExpiryLabel } from "./expiry-label";
+import ProductEconomics from "./product-economics";
 import {
   ErrorText,
   LightInput,
@@ -59,7 +60,7 @@ export default function ProductDetails({
   const qty = stock?.stock ?? 0;
   const expiryDate = stock?.nearestExpiry ?? product.expiryDate;
   const status = expiryStatus(expiryDate, now, settings);
-  const currency = currencyLabel(settings);
+  const currency = currencyOf(settings);
   const receiveHref = `${ANBAR_RECEIPT_PATH}?code=${encodeURIComponent(product.barcode ?? product.internalCode)}`;
 
   return (
@@ -101,6 +102,8 @@ export default function ProductDetails({
           <span className="truncate font-mono text-[14px]">{product.internalCode}</span>
         </Row>
       </Group>
+
+      <ProductEconomics productId={product.id} />
 
       <form onSubmit={onSubmit} className="flex flex-col gap-2">
         <input type="hidden" name="productId" value={product.id} />

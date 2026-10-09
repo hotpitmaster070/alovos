@@ -1,72 +1,19 @@
-"use client";
+import Landing from "@/components/landing";
+import { createClient } from "@/lib/supabase/server";
+import { listBillingPlans } from "@/lib/waste/load";
+import { basePlan, type BillingPlan } from "@/lib/waste/plan";
 
-import Link from "next/link";
-import LangSwitcher from "@/components/lang-switcher";
-import Logo from "@/components/logo";
-import ModuleCard from "@/components/module-card";
-import { BLOCKS } from "@/lib/blocks";
-import { useT } from "@/lib/i18n/useT";
-import { PLAN } from "@/lib/pricing";
+export const dynamic = "force-dynamic";
 
-const CONTAINER = "mx-auto max-w-[390px] px-4";
+async function loadPlan(): Promise<BillingPlan | null> {
+  try {
+    return basePlan(await listBillingPlans(createClient()));
+  } catch (error) {
+    console.error("billing_plans:", error instanceof Error ? error.message : error);
+    return null;
+  }
+}
 
-export default function Home() {
-  const { t } = useT();
-  const { hero, price, footer } = t;
-
-  return (
-    <>
-      <header className={`${CONTAINER} flex items-center justify-between py-4`}>
-        <Logo />
-        <LangSwitcher />
-      </header>
-
-      <main className="pb-20">
-        <section className={`${CONTAINER} mt-12 text-center`}>
-          <h1 className="font-serif text-[32px] font-bold leading-[1.15] tracking-tight text-white">
-            {hero.title}
-          </h1>
-          <div className="mt-6 flex justify-center gap-3">
-            <Link
-              href="/app/dashboard"
-              className="rounded-full bg-beige px-8 py-3 text-sm font-medium text-black"
-            >
-              {hero.ctaPrimary}
-            </Link>
-            <Link
-              href="/app/dashboard"
-              className="rounded-full border border-beige px-8 py-3 text-sm text-beige"
-            >
-              {hero.ctaSecondary}
-            </Link>
-          </div>
-        </section>
-
-        <section
-          aria-label={t.modulesLabel}
-          className={`${CONTAINER} mt-10 grid grid-cols-3 gap-2`}
-        >
-          {BLOCKS.map((block) => (
-            <ModuleCard key={block.slug} block={block} />
-          ))}
-        </section>
-
-        <section className={`${CONTAINER} mt-12 text-center`}>
-          <p className="text-3xl font-bold text-white">
-            {PLAN.amount} {PLAN.currency} / {price.period}
-          </p>
-          <p className="mt-2 text-sm text-white">
-            {price.included} {price.trial(PLAN.trialDays)}
-          </p>
-          <Link
-            href="/app/dashboard"
-            className="mt-4 inline-block rounded-full border border-edge bg-black px-6 py-3 text-white"
-          >
-            {price.cta}
-          </Link>
-          <p className="mt-3 text-[11px] text-muted">{footer.tagline}</p>
-        </section>
-      </main>
-    </>
-  );
+export default async function Home() {
+  return <Landing plan={await loadPlan()} />;
 }

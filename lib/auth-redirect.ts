@@ -3,8 +3,19 @@ export const ANBAR_CATALOG_PATH = `${ANBAR_APP_PATH}/kataloq`;
 export const ANBAR_MOVEMENTS_PATH = `${ANBAR_APP_PATH}/movements`;
 export const ANBAR_COUNT_PATH = `${ANBAR_APP_PATH}/sayim`;
 export const ANBAR_RECEIPT_PATH = `${ANBAR_APP_PATH}/qebul`;
+export const ANBAR_STORAGE_PATH = `${ANBAR_APP_PATH}/saxlama`;
+export const SETTINGS_PATH = "/app/sebeke";
+export const SUPPLIERS_PATH = `${SETTINGS_PATH}/tedarikciler`;
+export const INVITE_PATH = `${SETTINGS_PATH}/davet`;
+export const OWNER_PATH = `${SETTINGS_PATH}/dashboard`;
+export const BILLING_PATH = `${SETTINGS_PATH}/billing`;
+export const ORDERS_PATH = "/app/sifarisler";
+export const ZAQOTOVKA_PATH = "/app/zaqotovka";
+export const WASTE_PATH = "/app/tullanti";
+export const KITCHEN_STOCK_PATH = "/app/menim-isim";
 export const DEFAULT_AFTER_LOGIN = ANBAR_CATALOG_PATH;
 export const LOGIN_PATH = "/login";
+export const REGISTER_PATH = "/register";
 export const ONBOARDING_PATH = "/onboarding";
 
 /** Request header set by middleware so server layouts know the path they are rendering. */
@@ -46,6 +57,11 @@ export function requestPathname(nextPath: string): string {
 
 export function loginPath(nextPath: string): string {
   return `${LOGIN_PATH}?next=${encodeURIComponent(safeNextPath(nextPath))}`;
+}
+
+export function registerPath(nextPath: string, inviteToken: string | null = null): string {
+  const invite = inviteToken ? `&invite=${encodeURIComponent(inviteToken)}` : "";
+  return `${REGISTER_PATH}?next=${encodeURIComponent(safeNextPath(nextPath))}${invite}`;
 }
 
 export function onboardingPath(nextPath: string): string {

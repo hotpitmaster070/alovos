@@ -5,6 +5,7 @@ import {
   SHELF_LIFE_MAX_DAYS,
   STORAGE_NAME_MAX_LENGTH,
 } from "./constants";
+import { productType, type ProductType } from "@/lib/labels/final";
 import { isStorageType, isUnit, type StorageType, type Unit } from "./types";
 
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -49,6 +50,8 @@ export type BarcodeProductInput = {
   expiryDate: string | null;
   branchId: string | null;
   storageLocationId: string | null;
+  /** null: the column default. */
+  productType: ProductType | null;
 };
 
 const optionalShelfLife = (raw: string): number | null | undefined => {
@@ -70,8 +73,11 @@ export function validateBarcodeProductInput(
   const pricePerUnit = optionalNonNegative(field(data, "pricePerUnit"));
   const shelfLifeDays = optionalShelfLife(field(data, "shelfLifeDays"));
   const minStock = optionalNonNegative(field(data, "minStock"));
+  const typeText = field(data, "productType");
+  const type = typeText === "" ? null : productType(typeText);
 
   if (
+    (typeText !== "" && type === null) ||
     name === "" ||
     name.length > NAME_MAX_LENGTH ||
     barcode.length > BARCODE_MAX_LENGTH ||
@@ -100,22 +106,58 @@ export function validateBarcodeProductInput(
       expiryDate: expiryDate === "" ? null : expiryDate,
       branchId: branchId === "" ? null : branchId,
       storageLocationId: storageLocationId === "" ? null : storageLocationId,
+      productType: type,
     },
   };
 }
 
-export type StorageLocationInput = { name: string; type: StorageType; branchId: string };
+/** Places created at once; public.create_storage_locations_bulk() enforces the same bounds. */
+export const STORAGE_BULK_MAX = 50;
+export const STORAGE_NUMBER_MAX = 9999;
 
+/**
+ * New storage places of one type in a branch. number: a free number for a single place, else the
+ * next ones (MAX+1). name: a single place's name; namePrefix: "<prefix> #<number>" for each place.
+ */
+export type StorageLocationInput = {
+  type: StorageType;
+  branchId: string;
+  count: number;
+  number: number | null;
+  name: string | null;
+  namePrefix: string | null;
+};
+
+const wholeInRange = (raw: string, min: number, max: number): number | null => {
+  if (!/^\d+$/.test(raw)) return null;
+  const value = Number(raw);
+  return value >= min && value <= max ? value : null;
+};
+
+/** Fields: type, branchId (or branch_id), name, name_prefix, count, number. */
 export function validateStorageLocationInput(
   data: FormData,
 ): { ok: true; value: StorageLocationInput } | { ok: false; error: "invalidInput" } {
-  const name = field(data, "name").replace(/\s+/g, " ");
   const type = field(data, "type");
-  const branchId = field(data, "branchId");
-  if (name === "" || name.length > STORAGE_NAME_MAX_LENGTH || !isStorageType(type) || !isUuid(branchId)) {
+  const branchId = field(data, "branchId") || field(data, "branch_id");
+  const name = field(data, "name").replace(/\s+/g, " ") || null;
+  const namePrefix = field(data, "name_prefix").replace(/\s+/g, " ") || null;
+  const rawCount = field(data, "count");
+  const rawNumber = field(data, "number");
+  const count = rawCount === "" ? 1 : wholeInRange(rawCount, 1, STORAGE_BULK_MAX);
+  const number = rawNumber === "" ? null : wholeInRange(rawNumber, 1, STORAGE_NUMBER_MAX);
+  if (
+    !isStorageType(type) ||
+    !isUuid(branchId) ||
+    count === null ||
+    (rawNumber !== "" && (number === null || count !== 1)) ||
+    (name === null && namePrefix === null) ||
+    (name !== null && (count !== 1 || name.length > STORAGE_NAME_MAX_LENGTH)) ||
+    (namePrefix !== null && namePrefix.length > STORAGE_NAME_MAX_LENGTH - 6)
+  ) {
     return { ok: false, error: "invalidInput" };
   }
-  return { ok: true, value: { name, type, branchId } };
+  return { ok: true, value: { type, branchId, count, number, name, namePrefix } };
 }
 
 export function validateStorageLocationRename(

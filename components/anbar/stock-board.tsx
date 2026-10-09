@@ -19,7 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ANBAR_CATALOG_PATH, ANBAR_COUNT_PATH, ANBAR_MOVEMENTS_PATH } from "@/lib/auth-redirect";
+import { ANBAR_CATALOG_PATH, ANBAR_COUNT_PATH, ANBAR_MOVEMENTS_PATH, ANBAR_STORAGE_PATH } from "@/lib/auth-redirect";
 import {
   MOVEMENT_TYPES,
   type KitchenBranch,
@@ -27,7 +27,9 @@ import {
   type MovementType,
   type StockLine,
 } from "@/lib/anbar/stock-view";
+import { ForecastPanel, ForecastStatusCell, LimitsButton } from "@/components/purchasing/forecast";
 import { useT } from "@/lib/i18n/useT";
+import type { ForecastRow, Supplier } from "@/lib/purchasing/model";
 import AddStorageLocation from "./add-storage-location";
 
 function unitLabel(unit: string, units: { kg: string; litr: string; sht: string }): string {
@@ -76,6 +78,11 @@ export default function StockBoard({
   branchId,
   money,
   updated,
+  forecast,
+  attention,
+  forecastAll,
+  suppliers,
+  canSetLimits,
 }: {
   lines: StockLine[];
   total: number;
@@ -88,6 +95,13 @@ export default function StockBoard({
   branchId: string | "all";
   money: string;
   updated: boolean;
+  /** Forecast of the products on this page and of those needing attention. */
+  forecast: ForecastRow[];
+  /** Out of stock / to order (every product with ?forecast=all). */
+  attention: ForecastRow[];
+  forecastAll: boolean;
+  suppliers: Supplier[];
+  canSetLimits: boolean;
 }) {
   const { t } = useT();
   const copy = t.anbar.kitchen;
@@ -121,6 +135,11 @@ export default function StockBoard({
     const query = new URLSearchParams(filterQuery(nextBranch, nextLocation, nextSearch)).toString();
     return query ? `/app/anbar?${query}` : "/app/anbar";
   };
+  const forecastHref = (all: boolean) => {
+    const query = new URLSearchParams({ ...filterQuery(branchId, locationId, search), ...(all ? { forecast: "all" } : {}) }).toString();
+    return query ? `/app/anbar?${query}` : "/app/anbar";
+  };
+  const forecastByProduct = new Map(forecast.map((row) => [row.productId, row]));
 
   return (
     <div className="flex flex-col gap-6">
@@ -133,11 +152,23 @@ export default function StockBoard({
           <Link href={ANBAR_COUNT_PATH} className={buttonVariants("outline", "sm")}>
             {t.anbar.sayim.open}
           </Link>
+          <Link href={ANBAR_STORAGE_PATH} className={buttonVariants("outline", "sm")}>
+            {t.anbar.saxlama.open}
+          </Link>
           <Link href={ANBAR_MOVEMENTS_PATH} className={buttonVariants("outline", "sm")}>
             {copy.movements}
           </Link>
         </div>
       </div>
+
+      <ForecastPanel
+        rows={attention}
+        suppliers={suppliers}
+        canEdit={canSetLimits}
+        showAll={forecastAll}
+        allHref={forecastHref(true)}
+        attentionHref={forecastHref(false)}
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
@@ -205,19 +236,24 @@ export default function StockBoard({
               <TableHead>{t.anbar.fields.name}</TableHead>
               <TableHead>{copy.place}</TableHead>
               <TableHead>{copy.qty}</TableHead>
+              <TableHead>{t.purchasing.forecast.state}</TableHead>
               <TableHead>{t.anbar.fields.actions}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {lines.map((line) => (
+            {lines.map((line) => {
+              const lineForecast = forecastByProduct.get(line.productId);
+              return (
               <TableRow key={`${line.productId}-${line.locationId}`}>
                 <TableCell>{line.productName}</TableCell>
                 <TableCell>{line.locationName}</TableCell>
                 <TableCell>
                   {line.quantity} {unitLabel(line.unit, copy.units)}
                 </TableCell>
+                <TableCell>{lineForecast && <ForecastStatusCell row={lineForecast} />}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap gap-2">
+                    {canSetLimits && lineForecast && <LimitsButton row={lineForecast} suppliers={suppliers} />}
                     <Button size="sm" variant="outline" onClick={() => setDraft({ line, movementType: "spisanie" })}>
                       {copy.writeOff}
                     </Button>
@@ -230,7 +266,8 @@ export default function StockBoard({
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+              );
+            })}
           </TableBody>
         </Table>
       )}

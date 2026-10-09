@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -10,7 +11,7 @@ import { ANBAR_COUNT_PATH } from "@/lib/auth-redirect";
 import { approveCountAction, cancelCountAction, mergeCountAction, type CountActionResult } from "@/lib/count/actions";
 import type { CountErrorCode, CountLine, StockCount } from "@/lib/count/model";
 import { useT } from "@/lib/i18n/useT";
-import { formatMoney } from "@/lib/money";
+import { formatMoney, type CurrencyInfo } from "@/lib/money";
 import { localDateTime } from "@/lib/tenant-settings/time";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +34,7 @@ export default function CountReport({
   locationName: string | null;
   canApprove: boolean;
   /** Currency label for money amounts. */
-  currency: string;
+  currency: CurrencyInfo;
   timeZone: string;
 }) {
   const { t } = useT();
@@ -66,13 +67,14 @@ export default function CountReport({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="font-serif text-[32px] font-bold leading-[1.1] tracking-tight">{copy.discrepancies}</h1>
-          <p className="mt-2 text-sm text-white/60">
+          <p className="mt-2 flex flex-wrap items-center gap-2 text-sm text-white/60">
             {[locationName, count.groupKey, copy.status[count.status]].filter(Boolean).join(" · ")}
+            <Badge>{copy.countersBadge(count.counters.length)}</Badge>
           </p>
           <p className="mt-1 text-xs text-white/50">
             {copy.startedAt}: {localDateTime(count.createdAt, timeZone)}
             {count.approvedAt && ` · ${copy.approvedAt}: ${localDateTime(count.approvedAt, timeZone)}`}
-            {count.mergeMode && ` · ${copy.mergeMode}: ${copy.mergeModes[count.mergeMode]}`}
+            {` · ${copy.mergeMode}: ${copy.mergeModes[count.mergeMode]}`}
           </p>
         </div>
         <Link href={`${ANBAR_COUNT_PATH}?location=${encodeURIComponent(count.locationId)}`} className={buttonVariants("outline", "sm")}>

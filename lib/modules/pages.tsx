@@ -20,7 +20,8 @@ const query = (params: PageParams): Record<string, string> =>
 
 export async function SupplyPage({ searchParams }: PageProps) {
   const groups = await Promise.all([
-    group("/app/techizat", "suppliers", "id, name, contact, rating, delivery_days", searchParams),
+    group("/app/techizat", "suppliers", "id, code, name, contact, rating, lead_time_days", searchParams),
+    group("/app/techizat", "purchase_requests", "id, status, auto_created, request_date", searchParams),
     group("/app/techizat", "purchase_orders", "id, status, created_at", searchParams),
   ]);
   return <RecordList slug="techizat" groups={groups} query={query(searchParams)} />;

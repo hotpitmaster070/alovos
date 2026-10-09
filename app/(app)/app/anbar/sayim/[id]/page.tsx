@@ -6,7 +6,7 @@ import { resolveScope } from "@/lib/anbar/scope";
 import { ANBAR_COUNT_PATH } from "@/lib/auth-redirect";
 import { canApproveCounts, countLines, getCount, memberRole } from "@/lib/count/load";
 import { isUuid } from "@/lib/count/model";
-import { currencyLabel } from "@/lib/tenant-settings/parse";
+import { currencyOf } from "@/lib/money";
 import { getSettings } from "@/lib/tenant-settings/getSettings";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function CountReportPage({ params }: { params: { id: string
       lines={lines}
       locationName={locations.find((location) => location.id === count.locationId)?.name ?? null}
       canApprove={canApproveCounts(role)}
-      currency={currencyLabel(settings)}
+      currency={currencyOf(settings)}
       timeZone={settings.timezone}
     />
   );

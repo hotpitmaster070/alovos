@@ -92,7 +92,7 @@ Module._resolveFilename = function (request, ...rest) {
 };
 const require = createRequire(import.meta.url);
 const { getSettings } = require(path.join(OUT, "lib/tenant-settings/getSettings.js"));
-const { currencyLabel } = require(path.join(OUT, "lib/tenant-settings/parse.js"));
+const { currencyOf, formatMoney } = require(path.join(OUT, "lib/money.js"));
 const { getExpiryInfo } = require(path.join(OUT, "lib/expiry.js"));
 const status = require(path.join(OUT, "lib/anbar/catalog-status.js"));
 const time = require(path.join(OUT, "lib/tenant-settings/time.js"));
@@ -120,7 +120,8 @@ function clientAs(uid) {
 
 const settings = await getSettings({ client: clientAs(C), tenantId: tA });
 ok("getSettings reads the tenant's row (as the cook)", settings.timezone === "America/New_York" && settings.expiryWarnDays === 3 && settings.expiryCriticalDays === 10 && settings.lowStockDefault === 2, settings);
-ok("money label from settings", currencyLabel(settings) === "$");
+const money = formatMoney(1234.5, currencyOf(settings));
+ok("money from settings: USD, en-US format filled by the migration", settings.currency === "USD" && settings.locale === "en-US" && money === "$1,234.50", { settings, money });
 
 const now = new Date("2026-10-06T10:00:00Z");
 const level = (date) => getExpiryInfo(date, now, settings).level;

@@ -1,8 +1,15 @@
 import type { TenantScope } from "@/lib/anbar/scope";
 import { pageRange } from "@/lib/pagination";
 import type { TenantSettings } from "@/lib/tenant-settings/parse";
-import { todayBounds } from "@/lib/tenant-settings/time";
-import { isWasteReason, type WasteCard, type WasteReason } from "@/lib/wastage/model";
+import { dateBounds, isDateOnly, todayIn } from "@/lib/tenant-settings/time";
+import {
+  isLoggedWasteReason,
+  isWasteAiStatus,
+  type LoggedWasteReason,
+  type WasteAiCheck,
+  type WasteCard,
+  type WasteRun,
+} from "@/lib/wastage/model";
 
 const BUCKET = "wastage-photos";
 
@@ -24,10 +31,27 @@ type LogRow = {
   id: string;
   productId: string;
   quantity: number;
-  reason: WasteReason;
+  reason: LoggedWasteReason;
+  reasonNote: string | null;
+  parentLotId: string | null;
+  preparationId: string | null;
+  preparationRunId: string | null;
   photoPath: string | null;
+  ai: WasteAiCheck | null;
   userId: string | null;
 };
+
+export function parseAiCheck(row: Record<string, unknown>): WasteAiCheck | null {
+  if (!isWasteAiStatus(row.ai_status)) return null;
+  const analysis = isRecord(row.ai_analysis) ? row.ai_analysis : {};
+  return {
+    status: row.ai_status,
+    confidence: asNumber(row.ai_confidence),
+    detected: asString(analysis.detected) || null,
+    notes: asString(analysis.notes) || null,
+    requiresReview: row.requires_owner_review === true,
+  };
+}
 
 function parseLog(row: unknown): LogRow | null {
   if (!isRecord(row)) return null;
@@ -35,13 +59,18 @@ function parseLog(row: unknown): LogRow | null {
   const productId = asString(row.product_id);
   const reason = asString(row.reason);
   const quantity = asNumber(row.quantity);
-  if (!id || !productId || !reason || !isWasteReason(reason) || quantity === null) return null;
+  if (!id || !productId || !reason || !isLoggedWasteReason(reason) || quantity === null) return null;
   return {
     id,
     productId,
     quantity,
     reason,
+    reasonNote: asString(row.reason_note),
+    parentLotId: asString(row.parent_lot_id),
+    preparationId: asString(row.preparation_id),
+    preparationRunId: asString(row.preparation_run_id),
     photoPath: asString(row.photo_url),
+    ai: parseAiCheck(row),
     userId: asString(row.user_id),
   };
 }
@@ -72,18 +101,78 @@ async function signedPhoto(scope: TenantScope, path: string | null): Promise<str
   return signed.data?.signedUrl ?? null;
 }
 
-/** One page of today's waste (tenant's day), newest first, and how many logs today has. */
+/** id -> value of a tenant table's column for the given ids. */
+async function namesById(scope: TenantScope, table: "product_lots" | "preparations", column: string, ids: string[]): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  if (ids.length === 0) return names;
+  const { data, error } = await scope.client.from(table).select(`id, ${column}`).eq("tenant_id", scope.tenantId).in("id", ids);
+  if (error) throw error;
+  for (const row of (data ?? []) as unknown[]) {
+    if (!isRecord(row)) continue;
+    const id = asString(row.id);
+    const value = asString(row[column]);
+    if (id && value) names.set(id, value);
+  }
+  return names;
+}
+
+async function runInfo(scope: TenantScope, ids: string[]): Promise<Map<string, { at: string; run: WasteRun | null }>> {
+  const runs = new Map<string, { at: string; run: WasteRun | null }>();
+  if (ids.length === 0) return runs;
+  const { data, error } = await scope.client
+    .from("preparation_runs")
+    .select("id, created_at, base_unit, input_base, trim_base, net_base, waste_base, evaporation_base")
+    .eq("tenant_id", scope.tenantId)
+    .in("id", ids);
+  if (error) throw error;
+  for (const row of data ?? []) {
+    if (!isRecord(row)) continue;
+    const id = asString(row.id);
+    const at = asString(row.created_at);
+    if (!id || !at) continue;
+    const baseUnit = asString(row.base_unit);
+    const gross = asNumber(row.input_base);
+    const net = asNumber(row.net_base);
+    runs.set(id, {
+      at,
+      run:
+        baseUnit && gross !== null && net !== null
+          ? {
+              baseUnit,
+              gross,
+              trim: asNumber(row.trim_base) ?? 0,
+              net,
+              waste: asNumber(row.waste_base) ?? 0,
+              evaporation: asNumber(row.evaporation_base) ?? 0,
+            }
+          : null,
+    });
+  }
+  return runs;
+}
+
+const unique = (values: (string | null)[]): string[] => Array.from(new Set(values.filter((value): value is string => !!value)));
+
+/** The tenant-local day (YYYY-MM-DD) of the journal, today when absent or invalid. */
+export function wasteDay(value: string | null | undefined, settings: Pick<TenantSettings, "timezone">): string {
+  return value && isDateOnly(value) ? value : todayIn(settings.timezone, new Date());
+}
+
+/** One page of a day's waste (tenant's day), newest first, and how many logs the day has. */
 export async function listWasteCards(
   scope: TenantScope,
   filters: WasteFilters,
   settings: Pick<TenantSettings, "timezone">,
   page: number,
+  date: string,
 ): Promise<{ cards: WasteCard[]; total: number }> {
-  const day = todayBounds(settings.timezone, new Date());
+  const day = dateBounds(date, settings.timezone);
   const { from, to } = pageRange(page);
   let query = scope.client
     .from("wastage_logs")
-    .select("id, product_id, quantity, reason, photo_url, user_id, created_at", { count: "exact" })
+    .select("id, product_id, quantity, reason, reason_note, parent_lot_id, preparation_id, preparation_run_id, photo_url, ai_status, ai_confidence, ai_analysis, requires_owner_review, user_id, created_at", {
+      count: "exact",
+    })
     .eq("tenant_id", scope.tenantId)
     .gte("created_at", day.start)
     .lt("created_at", day.end);
@@ -102,12 +191,15 @@ export async function listWasteCards(
 
   const productIds = Array.from(new Set(logs.map((row) => row.productId)));
   const userIds = Array.from(new Set(logs.map((row) => row.userId).filter((id): id is string => !!id)));
-  const [products, profiles, costs] = await Promise.all([
+  const [products, profiles, costs, lotNumbers, preparationNames, runs] = await Promise.all([
     scope.client.from("products").select("id, name, unit").eq("tenant_id", scope.tenantId).in("id", productIds),
     userIds.length > 0
       ? scope.client.from("profiles").select("id, email").in("id", userIds)
       : Promise.resolve({ data: [], error: null }),
     wasteCosts(scope, logs.map((log) => log.id)),
+    namesById(scope, "product_lots", "lot_number", unique(logs.map((log) => log.parentLotId))),
+    namesById(scope, "preparations", "name", unique(logs.map((log) => log.preparationId))),
+    runInfo(scope, unique(logs.map((log) => log.preparationRunId))),
   ]);
   if (products.error) throw products.error;
   if (profiles.error) throw profiles.error;
@@ -133,7 +225,18 @@ export async function listWasteCards(
       quantity: log.quantity,
       unit: productInfo.get(log.productId)?.unit ?? "",
       reason: log.reason,
+      reasonNote: log.reasonNote,
+      lotNumber: log.parentLotId ? lotNumbers.get(log.parentLotId) ?? null : null,
+      preparation: log.preparationId
+        ? {
+            id: log.preparationId,
+            name: preparationNames.get(log.preparationId) ?? "",
+            runAt: log.preparationRunId ? runs.get(log.preparationRunId)?.at ?? null : null,
+            run: log.preparationRunId ? runs.get(log.preparationRunId)?.run ?? null : null,
+          }
+        : null,
       photoUrl: await signedPhoto(scope, log.photoPath),
+      ai: log.ai,
       actor: log.userId ? emails.get(log.userId) ?? null : null,
       cost: costs.has(log.id) ? (costs.get(log.id) ?? 0) : null,
     })),
@@ -141,13 +244,14 @@ export async function listWasteCards(
   return { cards, total };
 }
 
-/** Value of all of today's waste in the filter; null when the caller may not see costs. */
+/** Value of all of the day's waste in the filter; null when the caller may not see costs. */
 export async function wasteTotal(
   scope: TenantScope,
   filters: WasteFilters,
   settings: Pick<TenantSettings, "timezone">,
+  date: string,
 ): Promise<number | null> {
-  const day = todayBounds(settings.timezone, new Date());
+  const day = dateBounds(date, settings.timezone);
   const { data, error } = await scope.client.rpc("wastage_total", {
     p_start: day.start,
     p_end: day.end,

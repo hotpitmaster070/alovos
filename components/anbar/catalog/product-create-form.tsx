@@ -7,6 +7,7 @@ import { BARCODE_MAX_LENGTH, CATEGORY_MAX_LENGTH, NAME_MAX_LENGTH, SHELF_LIFE_MA
 import type { AnbarErrorCode } from "@/lib/anbar/errors";
 import { UNITS, type Branch, type CatalogProduct, type StorageLocation } from "@/lib/anbar/types";
 import { useT } from "@/lib/i18n/useT";
+import { PRODUCT_TYPES } from "@/lib/labels/final";
 import AddStorageLocation from "../add-storage-location";
 import { ErrorText, LightInput, LightLabel, LightSelect, PRIMARY_BUTTON } from "./primitives";
 
@@ -94,6 +95,17 @@ export default function ProductCreateForm({
             <option key={category} value={category} />
           ))}
         </datalist>
+      </div>
+
+      <div className="col-span-2">
+        <LightLabel htmlFor="create-type">{t.labels.stock.economics.type}</LightLabel>
+        <LightSelect id="create-type" name="productType" defaultValue={PRODUCT_TYPES[0]}>
+          {PRODUCT_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {t.labels.stock.types[type]}
+            </option>
+          ))}
+        </LightSelect>
       </div>
 
       <div>

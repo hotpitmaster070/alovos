@@ -1,15 +1,28 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import LangSwitcher from "@/components/lang-switcher";
 import Logo from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { DEMO_EMAIL, DEMO_PASSWORD, isValidEmail, signIn, signUp, type SignUpResult } from "@/lib/auth";
+import { listCurrencies } from "@/lib/currency/load";
+import { currencyName, guessCurrency, type Currency } from "@/lib/currency/model";
 import { useT } from "@/lib/i18n/useT";
+import { createClient } from "@/lib/supabase/client";
+
+/** The browser's IANA zone (Europe/Moscow); the database ignores unknown ones. */
+function browserTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
 
 type Mode = "signIn" | "signUp";
 type Feedback = { kind: "error"; message: string } | { kind: "confirm" } | null;
@@ -53,13 +66,40 @@ function needsEmailConfirm(error: unknown): boolean {
   return rawMessage(error).toLowerCase().includes("not confirmed");
 }
 
-export default function LoginForm({ next, initialMode = "signIn" }: { next: string; initialMode?: Mode }) {
-  const { t } = useT();
+export default function LoginForm({
+  next,
+  initialMode = "signIn",
+  inviteToken = null,
+}: {
+  next: string;
+  initialMode?: Mode;
+  /** Signup from an invitation link joins that restaurant instead of creating one. */
+  inviteToken?: string | null;
+}) {
+  const { lang, t } = useT();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [pending, setPending] = useState(false);
   const [feedback, setFeedback] = useState<Feedback>(null);
+  const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [currency, setCurrency] = useState("");
   const copy = t.login;
+  const asksCurrency = mode === "signUp" && !inviteToken;
+
+  useEffect(() => {
+    if (!asksCurrency || currencies.length > 0) return;
+    let live = true;
+    void listCurrencies(createClient())
+      .then((list) => {
+        if (!live) return;
+        setCurrencies(list);
+        setCurrency((current) => current || guessCurrency(list, navigator.languages ?? [navigator.language])?.code || "");
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [asksCurrency, currencies.length]);
 
   const finish = (path: string) => {
     router.replace(path);
@@ -92,7 +132,7 @@ export default function LoginForm({ next, initialMode = "signIn" }: { next: stri
         finish(next);
         return;
       }
-      applySignUp(await signUp(credentials));
+      applySignUp(await signUp(credentials, inviteToken, { currency: currency || null, timezone: browserTimeZone() }));
     } catch (err: unknown) {
       const fallback = mode === "signUp" ? "Qeydiyyat alınmadı" : copy.errors.unknown;
       setFeedback({ kind: "error", message: authMessage(err) || fallback });
@@ -139,6 +179,7 @@ export default function LoginForm({ next, initialMode = "signIn" }: { next: stri
           {mode === "signIn" ? copy.signIn : copy.signUp}
         </h1>
         <p className="mt-3 text-sm text-white/60">{copy.subtitle}</p>
+        {inviteToken && mode === "signUp" && <p className="mt-2 text-sm text-beige">{t.purchasing.accept.signUpHint}</p>}
 
         <Card className="mt-8">
           <form onSubmit={onSubmit} className="flex flex-col gap-4">
@@ -163,6 +204,19 @@ export default function LoginForm({ next, initialMode = "signIn" }: { next: stri
                 </p>
               )}
             </div>
+            {asksCurrency && currencies.length > 0 && (
+              <div>
+                <Label htmlFor="login-currency">{t.labels.currency.signup}</Label>
+                <Select id="login-currency" value={currency} onChange={(event) => setCurrency(event.target.value)}>
+                  {currencies.map((item) => (
+                    <option key={item.code} value={item.code}>
+                      {currencyName(item, lang)}
+                    </option>
+                  ))}
+                </Select>
+                <p className="mt-1.5 text-xs text-white/50">{t.labels.currency.signupHint}</p>
+              </div>
+            )}
 
             {feedback?.kind === "error" && (
               <p role="alert" className="text-sm text-red-400">

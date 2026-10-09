@@ -20,7 +20,7 @@ function StorageLocationForm({
   branchId,
   onCreated,
 }: {
-  branches: Branch[];
+  branches: Pick<Branch, "id" | "name">[];
   branchId: string | null;
   onCreated: (location: StorageLocation) => void;
 }) {
@@ -97,7 +97,7 @@ export default function AddStorageLocation({
   branchId,
   onCreated,
 }: {
-  branches: Branch[];
+  branches: Pick<Branch, "id" | "name">[];
   branchId: string | null;
   onCreated: (location: StorageLocation) => void;
 }) {

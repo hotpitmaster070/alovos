@@ -4,7 +4,7 @@ import { lotCosts, productPrices } from "./costs";
 import { mapRpcError, type AnbarErrorCode } from "./errors";
 import { parseBranch, parseCatalogProduct, parseRows, parseStockLot, parseStorageLocation } from "./parse";
 import type { TenantScope } from "./scope";
-import type { Branch, CatalogLine, CatalogProduct, StorageLocation } from "./types";
+import { compareStorageLocations, type Branch, type CatalogLine, type CatalogProduct, type StorageLocation } from "./types";
 import type { BarcodeProductInput, ReceiptInput, StorageLocationInput } from "./validation";
 
 /**
@@ -195,6 +195,7 @@ export async function createProductWithBarcode(
       expiry_date: input.expiryDate,
       branch_id: input.branchId,
       storage_location_id: input.storageLocationId,
+      ...(input.productType && { product_type: input.productType }),
     })
     .select(CATALOG_COLUMNS)
     .single();
@@ -217,14 +218,14 @@ export async function updateExpiry(
 
 export async function listBranches(scope: TenantScope): Promise<Branch[]> {
   const rows = await fetchAll((from, to) =>
-    scope.client.from("branches").select("id, name").eq("tenant_id", scope.tenantId).order("name").order("id").range(from, to),
+    scope.client.from("branches").select("id, name, code").eq("tenant_id", scope.tenantId).order("name").order("id").range(from, to),
   );
   return parseRows(rows, parseBranch);
 }
 
-export const STORAGE_COLUMNS = "id, name, type, branch_id, is_active";
+export const STORAGE_COLUMNS = "id, name, type, number, code, branch_id, is_active";
 
-/** Active locations of one branch, or of every branch when branchId is null. */
+/** Active locations of one branch, or of every branch when branchId is null; type order, then number. */
 export async function listStorageLocations(
   scope: TenantScope,
   { branchId = null, includeInactive = false }: { branchId?: string | null; includeInactive?: boolean } = {},
@@ -233,35 +234,78 @@ export async function listStorageLocations(
     let query = scope.client.from("storage_locations").select(STORAGE_COLUMNS).eq("tenant_id", scope.tenantId);
     if (branchId) query = query.eq("branch_id", branchId);
     if (!includeInactive) query = query.eq("is_active", true);
-    return query.order("name").order("id").range(from, to);
+    return query.order("id").range(from, to);
   });
-  return parseRows(rows, parseStorageLocation);
+  return parseRows(rows, parseStorageLocation).sort(compareStorageLocations);
 }
 
-const storageError = (error: { code?: unknown; message?: unknown }): AnbarErrorCode =>
-  error.code === "23505" ? "duplicateLocation" : mapRpcError(error);
+/** A storage place with its product count and the stock count going on there, if any. */
+export type StorageOverview = StorageLocation & {
+  productCount: number;
+  openCount: { id: string; status: string; counters: number } | null;
+};
+
+/** Places of one branch (or all) in display order, from public.storage_locations_overview(). */
+export async function storageOverview(
+  scope: TenantScope,
+  { branchId = null, includeInactive = false }: { branchId?: string | null; includeInactive?: boolean } = {},
+): Promise<StorageOverview[]> {
+  const rows = await fetchAll((from, to) =>
+    scope.client
+      .rpc("storage_locations_overview", { p_branch_id: branchId, p_include_inactive: includeInactive })
+      .range(from, to),
+  );
+  return rows.flatMap((row: unknown) => {
+    const location = parseStorageLocation(row);
+    if (!location || typeof row !== "object" || row === null) return [];
+    const record = row as Record<string, unknown>;
+    const openId = typeof record.open_count_id === "string" ? record.open_count_id : null;
+    return [
+      {
+        ...location,
+        productCount: Number(record.product_count ?? 0),
+        openCount:
+          openId && typeof record.open_status === "string"
+            ? { id: openId, status: record.open_status, counters: Number(record.open_counters ?? 0) }
+            : null,
+      },
+    ];
+  });
+}
+
+const storageError = (error: { code?: unknown; message?: unknown }): AnbarErrorCode => {
+  const mapped = mapRpcError(error);
+  return mapped === "duplicateBarcode" ? "duplicateLocation" : mapped;
+};
+
+/**
+ * Creates places of one type in a branch through public.create_storage_locations_bulk(): numbers
+ * continue after the highest of that branch and type unless a free number is given (one place).
+ * name names a single place; otherwise places are called "<namePrefix> #<number>".
+ */
+export async function createStorageLocations(
+  scope: TenantScope,
+  input: StorageLocationInput,
+): Promise<{ ok: true; locations: StorageLocation[] } | { ok: false; error: AnbarErrorCode }> {
+  const { data, error } = await scope.client.rpc("create_storage_locations_bulk", {
+    p_branch_id: input.branchId,
+    p_type: input.type,
+    p_count: input.count,
+    p_number: input.number,
+    p_name: input.name,
+    p_name_prefix: input.namePrefix,
+  });
+  if (error) return { ok: false, error: storageError(error) };
+  const locations = parseRows(Array.isArray(data) ? data : [], parseStorageLocation);
+  return locations.length === input.count ? { ok: true, locations } : { ok: false, error: "saveFailed" };
+}
 
 export async function insertStorageLocation(
   scope: TenantScope,
   input: StorageLocationInput,
 ): Promise<{ ok: true; location: StorageLocation } | { ok: false; error: AnbarErrorCode }> {
-  const branch = await scope.client
-    .from("branches")
-    .select("id")
-    .eq("tenant_id", scope.tenantId)
-    .eq("id", input.branchId)
-    .maybeSingle();
-  if (branch.error) return { ok: false, error: "saveFailed" };
-  if (!branch.data) return { ok: false, error: "invalidInput" };
-
-  const { data, error } = await scope.client
-    .from("storage_locations")
-    .insert({ tenant_id: scope.tenantId, branch_id: input.branchId, name: input.name, type: input.type })
-    .select(STORAGE_COLUMNS)
-    .single();
-  if (error) return { ok: false, error: storageError(error) };
-  const location = parseStorageLocation(data);
-  return location ? { ok: true, location } : { ok: false, error: "saveFailed" };
+  const created = await createStorageLocations(scope, { ...input, count: 1 });
+  return created.ok ? { ok: true, location: created.locations[0] } : created;
 }
 
 export async function updateStorageLocation(

@@ -10,3 +10,28 @@ body {
   background: #0a0a0a;
   color: #ffffff;
 }
+
+/* Expiry labels: only the label sheet goes to the 58 mm thermal printer. */
+.birka-sheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: 58mm auto;
+    margin: 0;
+  }
+
+  html,
+  body {
+    background: #ffffff;
+  }
+
+  body > *:not(.birka-sheet) {
+    display: none !important;
+  }
+
+  .birka-sheet {
+    display: block;
+  }
+}
