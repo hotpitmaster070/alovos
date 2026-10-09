@@ -15,9 +15,14 @@ alter table public.products
   alter column internal_code set default ('ALO-' || nextval('public.products_internal_code_seq')::text),
   alter column unit set default 'kg';
 
+-- The backfill does not change tenant_id. Rows of older databases may have none (no organization_id
+-- to take it from), and enforce_tenant_id() rejects those without an end-user JWT, so the trigger
+-- is off for this one statement.
+alter table public.products disable trigger user;
 update public.products
 set internal_code = 'ALO-' || nextval('public.products_internal_code_seq')::text
 where internal_code is null;
+alter table public.products enable trigger user;
 
 alter table public.products alter column internal_code set not null;
 

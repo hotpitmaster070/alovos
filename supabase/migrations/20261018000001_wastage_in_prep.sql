@@ -12,7 +12,7 @@
 -- * log_wastage(): a write-off with its 'waste' movement (POST /api/wastage).
 -- * write_off_expired_stock(): writes one stock row off as 'expired' (storage page).
 -- * wastage_list(), wastage_summary(), expired_stock(): reports.
--- Run after 20261018_labels_and_lots.sql. Idempotent; after 20261019_final_world_scheme.sql it keeps
+-- Run after 20261018000000_labels_and_lots.sql. Idempotent; after 20261019_final_world_scheme.sql it keeps
 -- that file's validator, preparation function and save_preparation().
 
 begin;
@@ -22,7 +22,7 @@ begin
   if to_regclass('public.product_lots') is null
      or to_regprocedure('public.create_lot(uuid, numeric, uuid, date, text)') is null
      or to_regprocedure('public.create_wastage_with_movement(uuid, numeric, text, uuid, text)') is null then
-    raise exception 'Run 20261012_wastage_atomic.sql and 20261018_labels_and_lots.sql first';
+    raise exception 'Run 20261012_wastage_atomic.sql and 20261018000000_labels_and_lots.sql first';
   end if;
 end;
 $$;
@@ -150,7 +150,7 @@ alter table public.preparations drop constraint if exists preparations_wastage_n
 alter table public.preparations
   add constraint preparations_wastage_norm_check check (wastage_norm_percent between 0 and 100);
 
--- Same rules as 20261018_labels_and_lots.sql, plus wastage_items [{name, norm_percent}]: names
+-- Same rules as 20261018000000_labels_and_lots.sql, plus wastage_items [{name, norm_percent}]: names
 -- 1..60 characters, unique, percents 0..100; when items are given the norm is their sum (<= 100).
 -- Superseded by 20261019_final_world_scheme.sql (trim and evaporation): once that file has run
 -- (preparations.evaporation_percent exists) this file keeps its versions of the validator,
@@ -352,7 +352,7 @@ $$;
 -- ---------------------------------------------------------------------------
 drop function if exists public.create_lots_from_preparation(uuid, numeric, uuid, uuid, jsonb);
 
--- As in 20261018_labels_and_lots.sql, plus p_wastage {qty (unit of the first input), reason
+-- As in 20261018000000_labels_and_lots.sql, plus p_wastage {qty (unit of the first input), reason
 -- cutting|cooking|other, note} and p_confirm_loss for a balance difference above the tolerance.
 -- Balance in kg (or l): units convert by their factor, pieces by the portion weight (product, else the
 -- tenant default). Inputs must all convert, else there is no balance. A yield without a known weight

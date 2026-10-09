@@ -15,6 +15,29 @@ declare
   v_tenant uuid;
   v_name text := coalesce(nullif(btrim(split_part(coalesce(p_email, ''), '@', 1)), ''), 'My Restaurant');
 begin
+  -- Older profiles tables have no organization_id: the tenant alone, until 20261009_unify_tenant.
+  -- PL/pgSQL plans a statement when it first runs, so the other branch never touches the column.
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'profiles' and column_name = 'organization_id'
+  ) then
+    select tenant_id into v_tenant from public.profiles where id = p_user_id;
+    if v_tenant is not null then
+      return v_tenant;
+    end if;
+    v_tenant := gen_random_uuid();
+    insert into public.tenants (id, name) values (v_tenant, v_name);
+    insert into public.profiles (id, tenant_id, role, email)
+    values (p_user_id, v_tenant, 'owner', p_email)
+    on conflict (id) do update
+      set tenant_id = excluded.tenant_id,
+          email = coalesce(public.profiles.email, excluded.email);
+    insert into public.branches (tenant_id, name)
+    values (v_tenant, 'Main Branch')
+    on conflict (tenant_id, name) do nothing;
+    return v_tenant;
+  end if;
+
   select organization_id, tenant_id into v_org, v_tenant
   from public.profiles
   where id = p_user_id;

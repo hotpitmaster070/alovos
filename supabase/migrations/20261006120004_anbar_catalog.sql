@@ -4,6 +4,36 @@
 -- keep working. Anbar rows are isolated by profiles.tenant_id via current_tenant_id().
 -- No branch names are inserted here. Local sample data lives in supabase/seed.sql only.
 
+-- Guards for databases whose tables predate these migrations (session-only helpers, see
+-- 20261006120003): run the statement only when the table and all listed columns exist.
+create or replace function pg_temp.has_columns(p_table text, p_columns text[])
+returns boolean
+language sql
+stable
+as $$
+  select to_regclass(format('public.%I', p_table)) is not null
+    and not exists (
+      select 1 from unnest(p_columns) as col
+      where not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public' and table_name = p_table and column_name = col
+      )
+    )
+$$;
+
+create or replace function pg_temp.exec_if(p_table text, p_columns text[], p_sql text)
+returns void
+language plpgsql
+as $$
+begin
+  if pg_temp.has_columns(p_table, p_columns) then
+    execute p_sql;
+  else
+    raise notice 'skipped, public.% or its column(s) % missing: %', p_table, p_columns, left(p_sql, 120);
+  end if;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- tenants
 -- ---------------------------------------------------------------------------
@@ -38,10 +68,8 @@ alter table public.profiles
   add column if not exists tenant_id uuid,
   add column if not exists branch_id uuid;
 
-update public.profiles
-set tenant_id = organization_id
-where tenant_id is null
-  and organization_id is not null;
+select pg_temp.exec_if('profiles', array['organization_id'],
+  'update public.profiles set tenant_id = organization_id where tenant_id is null and organization_id is not null');
 
 do $$
 begin
@@ -74,7 +102,7 @@ create index if not exists idx_profiles_branch_id on public.profiles(branch_id);
 -- ---------------------------------------------------------------------------
 do $$
 declare
-  generated char;
+  generated text;
 begin
   select is_generated into generated
   from information_schema.columns
@@ -95,16 +123,11 @@ alter table public.products
   add column if not exists branch_id uuid,
   add column if not exists quantity numeric not null default 0;
 
-update public.products
-set tenant_id = organization_id
-where tenant_id is null
-  and organization_id is not null;
+select pg_temp.exec_if('products', array['organization_id'],
+  'update public.products set tenant_id = organization_id where tenant_id is null and organization_id is not null');
 
-update public.products
-set quantity = qty::numeric
-where quantity = 0
-  and qty is not null
-  and qty <> 0;
+select pg_temp.exec_if('products', array['qty'],
+  'update public.products set quantity = qty::numeric where quantity = 0 and qty is not null and qty <> 0');
 
 do $$
 begin
@@ -493,34 +516,21 @@ create policy branches_delete on public.branches
   for delete to authenticated
   using (tenant_id = (select public.current_tenant_id()));
 
-create policy products_select on public.products
-  for select to authenticated
-  using (
-    tenant_id = (select public.current_tenant_id())
-    and organization_id = (select public.current_org_id())
-  );
-create policy products_insert on public.products
-  for insert to authenticated
-  with check (
-    tenant_id = (select public.current_tenant_id())
-    and organization_id = (select public.current_org_id())
-  );
-create policy products_update on public.products
-  for update to authenticated
-  using (
-    tenant_id = (select public.current_tenant_id())
-    and organization_id = (select public.current_org_id())
-  )
-  with check (
-    tenant_id = (select public.current_tenant_id())
-    and organization_id = (select public.current_org_id())
-  );
-create policy products_delete on public.products
-  for delete to authenticated
-  using (
-    tenant_id = (select public.current_tenant_id())
-    and organization_id = (select public.current_org_id())
-  );
+-- Products without organization_id (older databases) are isolated by tenant_id alone.
+do $$
+declare
+  v_check constant text := case
+    when pg_temp.has_columns('products', array['organization_id'])
+      then 'tenant_id = (select public.current_tenant_id()) and organization_id = (select public.current_org_id())'
+    else 'tenant_id = (select public.current_tenant_id())'
+  end;
+begin
+  execute format('create policy products_select on public.products for select to authenticated using (%s)', v_check);
+  execute format('create policy products_insert on public.products for insert to authenticated with check (%s)', v_check);
+  execute format('create policy products_update on public.products for update to authenticated using (%1$s) with check (%1$s)', v_check);
+  execute format('create policy products_delete on public.products for delete to authenticated using (%s)', v_check);
+end;
+$$;
 
 create policy stock_select on public.stock
   for select to authenticated

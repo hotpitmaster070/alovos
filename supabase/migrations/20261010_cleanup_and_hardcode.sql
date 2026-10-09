@@ -83,10 +83,24 @@ begin
     else 'coalesce(p.qty::numeric, 0)'
   end;
 
+  -- Products without a tenant (older databases without organization_id to take it from) belong to
+  -- no one and no user can see them under RLS: their balance has nowhere to go and is not moved.
   execute format($q$
     select count(*)
     from public.products p
     where %1$s > 0
+      and p.tenant_id is null
+      and not exists (select 1 from public.product_stocks ps where ps.product_id = p.id)
+  $q$, v_balance) into v_orphans;
+  if v_orphans > 0 then
+    raise notice '% products without tenant_id hold a legacy balance: not moved to product_stocks', v_orphans;
+  end if;
+
+  execute format($q$
+    select count(*)
+    from public.products p
+    where %1$s > 0
+      and p.tenant_id is not null
       and not exists (select 1 from public.product_stocks ps where ps.product_id = p.id)
       and not exists (
         select 1 from public.storage_locations s where s.tenant_id = p.tenant_id and s.is_active
@@ -120,10 +134,18 @@ end;
 $$;
 
 -- Function bodies are not dependency-tracked: stop if one still reads products.qty.
+-- Only while the column exists: once it is gone (re-run, newer schema) later functions name a
+-- local qty, which this text match cannot tell apart.
 do $$
 declare
   v_list text;
 begin
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products' and column_name = 'qty'
+  ) then
+    return;
+  end if;
   select string_agg(p.oid::regprocedure::text, ', ')
   into v_list
   from pg_proc p

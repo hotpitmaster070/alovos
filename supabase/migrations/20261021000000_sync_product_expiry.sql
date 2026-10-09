@@ -5,7 +5,7 @@
 -- lives in one security-definer transaction instead of a stock movement.
 -- Lots already past the tenant's today are left as they are. Two lots at the same place
 -- that would land on the same date are merged so product_stocks_lot_unique holds.
--- Run after 20261018_labels_and_lots.sql. Idempotent.
+-- Run after 20261018000000_labels_and_lots.sql. Idempotent.
 
 begin;
 
@@ -15,7 +15,7 @@ begin
      or to_regprocedure('public.set_product_expiry(uuid, date)') is null
      or to_regclass('public.product_stocks') is null
      or to_regclass('public.product_lots') is null then
-    raise exception 'Run 20261008000000_anbar_barcode.sql and 20261018_labels_and_lots.sql first';
+    raise exception 'Run 20261008000000_anbar_barcode.sql and 20261018000000_labels_and_lots.sql first';
   end if;
 end;
 $$;

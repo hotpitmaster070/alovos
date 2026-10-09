@@ -3,12 +3,48 @@
 -- Idempotent: create or replace / create index if not exists / guarded unique index.
 
 -- ---------------------------------------------------------------------------
+-- Guards for databases whose tables predate these migrations (session-only helpers, see
+-- 20261006120000): run the statement only when the table and all listed columns exist.
+-- ---------------------------------------------------------------------------
+create or replace function pg_temp.has_columns(p_table text, p_columns text[])
+returns boolean
+language sql
+stable
+as $$
+  select to_regclass(format('public.%I', p_table)) is not null
+    and not exists (
+      select 1 from unnest(p_columns) as col
+      where not exists (
+        select 1 from information_schema.columns
+        where table_schema = 'public' and table_name = p_table and column_name = col
+      )
+    )
+$$;
+
+create or replace function pg_temp.exec_if(p_table text, p_columns text[], p_sql text)
+returns void
+language plpgsql
+as $$
+begin
+  if pg_temp.has_columns(p_table, p_columns) then
+    execute p_sql;
+  else
+    raise notice 'skipped, public.% or its column(s) % missing: %', p_table, p_columns, left(p_sql, 120);
+  end if;
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
 -- Indexes for the ANBAR queries (every query is filtered by organization_id first)
 -- ---------------------------------------------------------------------------
-create index if not exists idx_products_org_location on public.products(organization_id, location_id);
-create index if not exists idx_products_org_expiry on public.products(organization_id, expiry_date);
-create index if not exists idx_products_org_name on public.products(organization_id, name);
-create index if not exists idx_products_org_qty on public.products(organization_id, qty);
+select pg_temp.exec_if('products', array['organization_id', 'location_id'],
+  'create index if not exists idx_products_org_location on public.products(organization_id, location_id)');
+select pg_temp.exec_if('products', array['organization_id', 'expiry_date'],
+  'create index if not exists idx_products_org_expiry on public.products(organization_id, expiry_date)');
+select pg_temp.exec_if('products', array['organization_id', 'name'],
+  'create index if not exists idx_products_org_name on public.products(organization_id, name)');
+select pg_temp.exec_if('products', array['organization_id', 'qty'],
+  'create index if not exists idx_products_org_qty on public.products(organization_id, qty)');
 -- idx_products_barcode_org (barcode, organization_id) from 20261006120000 stays as is.
 
 -- One row per barcode and location inside an organization. This makes the "add to the existing
@@ -18,6 +54,10 @@ create index if not exists idx_products_org_qty on public.products(organization_
 do $$
 begin
   if to_regclass('public.idx_products_org_location_barcode_unique') is not null then
+    return;
+  end if;
+  if not pg_temp.has_columns('products', array['organization_id', 'location_id', 'barcode']) then
+    raise notice 'idx_products_org_location_barcode_unique skipped: products lacks organization_id, location_id or barcode';
     return;
   end if;
 

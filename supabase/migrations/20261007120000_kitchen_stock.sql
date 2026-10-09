@@ -198,7 +198,26 @@ create trigger tenants_default_storage_locations
   after insert on public.tenants
   for each row execute function public.storage_locations_for_new_tenant();
 
-select public.ensure_default_storage_locations(id) from public.tenants;
+-- Existing tenants get their defaults here. A database that already has the later schema
+-- (storage_locations.branch_id with check_storage_location_branch(), 20261008020000) rejects
+-- branchless rows: that tenant is skipped with a notice, 20261008020000 creates its places.
+do $$
+declare
+  t record;
+begin
+  if to_regclass('public.tenants') is null or not exists (select 1 from public.tenants) then
+    raise notice 'no tenants: default storage locations skipped';
+    return;
+  end if;
+  for t in select id from public.tenants loop
+    begin
+      perform public.ensure_default_storage_locations(t.id);
+    exception when others then
+      raise notice 'default storage locations skipped for tenant %: %', t.id, sqlerrm;
+    end;
+  end loop;
+end;
+$$;
 
 alter table public.profiles
   add column if not exists tenant_id uuid references public.tenants(id);

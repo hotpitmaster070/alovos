@@ -169,7 +169,7 @@ create index if not exists idx_preparations_tenant on public.preparations (tenan
 
 -- inputs [{product_id, qty}] and outputs [{product_id, qty, portions?, name?}]: products of the tenant,
 -- positive quantities, no product twice in a list. Stored normalised.
--- 20261018_wastage_in_prep.sql replaces this validator and create_lots_from_preparation(); once it has
+-- 20261018000001_wastage_in_prep.sql replaces this validator and create_lots_from_preparation(); once it has
 -- run (public.preparation_runs exists) this file keeps its versions, so the order of re-runs does not
 -- matter.
 do $guard$
@@ -551,7 +551,7 @@ $$;
 -- p_source_location_id (default: the place holding enough of the first input, earliest expiry first);
 -- outputs go to p_storage_id unless p_outputs says otherwise. p_outputs [{product_id, qty,
 -- storage_location_id?}] lists the actual yields; omitted -> the recipe scaled. One lot per output.
--- Superseded by the version with waste and balance in 20261018_wastage_in_prep.sql (see the validator).
+-- Superseded by the version with waste and balance in 20261018000001_wastage_in_prep.sql (see the validator).
 do $guard$
 begin
   if to_regclass('public.preparation_runs') is not null then

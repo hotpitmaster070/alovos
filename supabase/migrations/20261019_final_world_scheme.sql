@@ -18,7 +18,7 @@
 --   is in preparation_run_costs.
 -- * stock_summary() / stock_items(): stock by kind (raw, semi incl. ready, trim) with quantities, and
 --   for owners and chefs cost and sale value.
--- Run after 20261018_wastage_in_prep.sql. Idempotent; the older files skip what this one replaces.
+-- Run after 20261018000001_wastage_in_prep.sql. Idempotent; the older files skip what this one replaces.
 
 begin;
 
@@ -27,7 +27,7 @@ begin
   if to_regclass('public.preparation_runs') is null
      or to_regprocedure('public.insert_wastage_log(uuid, public.storage_locations, uuid, numeric, text, text, uuid, uuid, uuid)') is null
      or to_regprocedure('public.product_last_purchase_price(uuid)') is null then
-    raise exception 'Run 20261018_wastage_in_prep.sql first';
+    raise exception 'Run 20261018000001_wastage_in_prep.sql first';
   end if;
 end;
 $$;
@@ -297,7 +297,7 @@ alter table public.preparations drop constraint if exists preparations_percent_t
 alter table public.preparations
   add constraint preparations_percent_total_check check (wastage_norm_percent + trim_norm_percent + evaporation_percent <= 100);
 
--- Rules of 20261018_wastage_in_prep.sql; wastage_items [{name, norm_percent, usable?, product_id?}]:
+-- Rules of 20261018000001_wastage_in_prep.sql; wastage_items [{name, norm_percent, usable?, product_id?}]:
 -- usable items are trim returned to stock (product_id: a trim product of the tenant), their sum is
 -- trim_norm_percent; the others are waste, their sum is wastage_norm_percent. Norms and evaporation
 -- together at most 100%.

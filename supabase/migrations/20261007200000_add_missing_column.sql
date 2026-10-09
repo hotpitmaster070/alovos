@@ -8,10 +8,22 @@ on conflict (id) do nothing;
 alter table public.products
   add column if not exists tenant_id uuid;
 
-update public.products
-set tenant_id = organization_id
-where tenant_id is null
-  and organization_id is not null;
+-- Older products tables may have no organization_id: nothing to backfill from then.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'products' and column_name = 'organization_id'
+  ) then
+    update public.products
+    set tenant_id = organization_id
+    where tenant_id is null
+      and organization_id is not null;
+  else
+    raise notice 'products.organization_id missing: tenant_id backfill skipped';
+  end if;
+end;
+$$;
 
 do $$
 begin
