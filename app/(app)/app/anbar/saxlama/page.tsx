@@ -6,11 +6,13 @@ import { canReviewExpiry, isPastExpiry } from "@/lib/labels/expiry";
 import { canSeeCosts, stockFilter } from "@/lib/labels/final";
 import { expiredStock, getNearExpiry, stockView } from "@/lib/labels/repository";
 import { redirectIfNoOrg } from "@/lib/app-gate";
+import { parMarks } from "@/lib/anbar/par";
 import { listBranches, storageOverview } from "@/lib/anbar/repository";
 import { resolveScope } from "@/lib/anbar/scope";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 import { ANBAR_STORAGE_PATH } from "@/lib/auth-redirect";
 import { memberRole } from "@/lib/count/load";
+import { parAlerts } from "@/lib/owner/dashboard";
 import { canManagePurchasing } from "@/lib/purchasing/model";
 import { stockValueByType } from "@/lib/purchasing/repository";
 import { getSettings } from "@/lib/tenant-settings/getSettings";
@@ -32,12 +34,13 @@ export default async function StoragePage({ searchParams }: { searchParams: RawS
   const branch = branches.find((item) => item.id === requested) ?? branches[0] ?? null;
   const filter = stockFilter(first(searchParams.type));
   const seesMoney = canSeeCosts(role);
-  const [locations, value, expired, nearExpiry, stock] = await Promise.all([
+  const [locations, value, expired, nearExpiry, stock, alerts] = await Promise.all([
     branch ? storageOverview(gated.scope, { branchId: branch.id, includeInactive: true }) : [],
     branch && canManagePurchasing(role) ? stockValueByType(gated.scope, branch.id) : null,
     branch ? expiredStock(gated.scope, branch.id) : null,
     branch ? getNearExpiry(gated.scope, branch.id) : null,
     branch ? stockView(gated.scope, branch.id, filter, seesMoney) : null,
+    branch ? parAlerts(gated.scope, branch.id) : [],
   ]);
   if (expired && !expired.ok) throw new Error(`expired_stock: ${expired.error}`);
   if (nearExpiry && !nearExpiry.ok) throw new Error(`get_near_expiry_batches: ${nearExpiry.error}`);
@@ -74,6 +77,7 @@ export default async function StoragePage({ searchParams }: { searchParams: RawS
           currency={currency}
           seesMoney={seesMoney}
           link={{ path: ANBAR_STORAGE_PATH, branchId: branch?.id ?? null }}
+          par={parMarks(alerts, branch?.id ?? null)}
           move={{
             locations: locations.filter((location) => location.active),
             settings: { timezone: settings.timezone, expiryWarnDays: settings.expiryWarnDays, expiryCriticalDays: settings.expiryCriticalDays },

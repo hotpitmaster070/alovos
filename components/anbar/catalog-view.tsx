@@ -11,6 +11,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { lookupCatalogLineAction } from "@/lib/anbar/actions";
 import { expiryStatus, isLowStock } from "@/lib/anbar/catalog-status";
 import type { AnbarErrorCode } from "@/lib/anbar/errors";
+import type { ParMark } from "@/lib/anbar/par";
 import { isUnit, type Branch, type CatalogLine, type CatalogProduct, type StorageLocation } from "@/lib/anbar/types";
 import { ANBAR_APP_PATH, ANBAR_IMPORT_PATH, ANBAR_RECEIPT_PATH, ANBAR_TRANSFER_PATH, ZAQOTOVKA_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
@@ -21,6 +22,7 @@ import { useExpiryLabel } from "./catalog/expiry-label";
 import { ProductImage, StatusDot } from "./catalog/primitives";
 import ProductCreateForm from "./catalog/product-create-form";
 import ProductDetails from "./catalog/product-details";
+import ParAlertBadge from "./par-alert-badge";
 
 type Panel =
   | { kind: "found"; product: CatalogProduct; stock: CatalogLine | null }
@@ -33,11 +35,13 @@ function ProductCard({
   line,
   now,
   settings,
+  par,
   onOpen,
 }: {
   line: CatalogLine;
   now: Date;
   settings: TenantSettings;
+  par: ParMark | undefined;
   onOpen: () => void;
 }) {
   const { t } = useT();
@@ -66,6 +70,7 @@ function ProductCard({
           </span>
           {line.category ? ` · ${line.category}` : ""}
         </p>
+        {par && <ParAlertBadge quantity={par.quantity} min={par.min} unit={unit} compact className="mt-2" />}
       </div>
     </button>
   );
@@ -90,6 +95,7 @@ export default function CatalogView({
   locations,
   branchId,
   settings,
+  par,
   canImport,
 }: {
   lines: CatalogLine[];
@@ -105,6 +111,8 @@ export default function CatalogView({
   locations: StorageLocation[];
   branchId: string | null;
   settings: TenantSettings;
+  /** Products below their minimum, by product id (par_alerts()). */
+  par: Record<string, ParMark>;
   /** Owners and chefs: link to the CSV/Excel import. */
   canImport: boolean;
 }) {
@@ -317,7 +325,7 @@ export default function CatalogView({
         <ul className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:gap-6">
           {lines.map((line) => (
             <li key={line.id}>
-              <ProductCard line={line} now={now} settings={settings} onOpen={() => openLine(line)} />
+              <ProductCard line={line} now={now} settings={settings} par={par[line.id]} onOpen={() => openLine(line)} />
             </li>
           ))}
         </ul>

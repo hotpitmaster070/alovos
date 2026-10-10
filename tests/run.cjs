@@ -1397,6 +1397,19 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("expiry: chef dashboard path", load("lib/auth-redirect.js").CHEF_DASHBOARD_PATH === "/app/chef/dashboard");
   }
 
+  {
+    const { parMarks } = load("lib/anbar/par.js");
+    const { OWNER_AZ, OWNER_RU, OWNER_EN } = load("lib/i18n/owner.js");
+    const B2 = "bbbbbbbb-0000-0000-0000-000000000002";
+    const alert = (branchId, productId, quantity, min) => ({ branchId, branchName: "", productId, productName: "", unit: "kg", quantity, min, max: null, toOrder: min - quantity });
+    const alerts = [alert(B2, "p-meat", 0, 20), alert(B1, "p-meat", 12, 20), alert(B1, "p-milk", 1, 5)];
+    const one = parMarks(alerts, B1);
+    ok("par: branch keeps only its rows", one["p-meat"].quantity === 12 && one["p-meat"].min === 20 && one["p-milk"].min === 5 && Object.keys(one).length === 2, one);
+    ok("par: all branches take the first (emptiest) row", parMarks(alerts, null)["p-meat"].quantity === 0);
+    ok("par: product without an alert gets no badge", parMarks(alerts, B2)["p-milk"] === undefined && Object.keys(parMarks([], B1)).length === 0);
+    ok("par: short badge text in every language", OWNER_RU.par.orderNow === "Закажи сейчас" && OWNER_EN.par.orderNow === "Order now" && OWNER_AZ.par.orderNow.length > 0);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
 })();
