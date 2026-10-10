@@ -7,6 +7,7 @@ import { ruPlural } from "./plural";
 import { INVENTORY_AZ, INVENTORY_EN, INVENTORY_RU, type InventoryDictionary } from "./inventory";
 import { RECEIVING_AZ, RECEIVING_EN, RECEIVING_RU, type ReceivingDictionary } from "./receiving";
 import { RECIPES_AZ, RECIPES_EN, RECIPES_RU, type RecipesDictionary } from "./recipes";
+import { CATALOG_IMPORT_AZ, CATALOG_IMPORT_EN, CATALOG_IMPORT_RU, type CatalogImportDictionary } from "./catalog-import";
 import { OWNER_AZ, OWNER_EN, OWNER_RU, type OwnerDictionary } from "./owner";
 import { PURCHASING_AZ, PURCHASING_EN, PURCHASING_RU, type PurchasingDictionary } from "./purchasing";
 
@@ -439,6 +440,7 @@ export type Dictionary = {
   inventory: InventoryDictionary;
   receiving: ReceivingDictionary;
   recipes: RecipesDictionary;
+  catalogImport: CatalogImportDictionary;
 };
 
 const AZ: Dictionary = {
@@ -824,7 +826,7 @@ const AZ: Dictionary = {
       cancel: "Ləğv et",
     },
     working: "Saxlanılır",
-    units: { kg: "kq", g: "q", l: "l", ml: "ml", pcs: "ədəd" },
+    units: { kg: "kq", g: "q", l: "l", ml: "ml", pcs: "ədəd", box: "qutu" },
     errors: {
       unauthenticated: "Davam etmək üçün daxil olun.",
       invalidInput: "Daxil edilən məlumat düzgün deyil.",
@@ -949,6 +951,7 @@ const AZ: Dictionary = {
   inventory: INVENTORY_AZ,
   receiving: RECEIVING_AZ,
   recipes: RECIPES_AZ,
+  catalogImport: CATALOG_IMPORT_AZ,
 };
 
 const RU: Dictionary = {
@@ -1334,7 +1337,7 @@ const RU: Dictionary = {
       cancel: "Отмена",
     },
     working: "Сохранение",
-    units: { kg: "кг", g: "г", l: "л", ml: "мл", pcs: "шт" },
+    units: { kg: "кг", g: "г", l: "л", ml: "мл", pcs: "шт", box: "кор." },
     errors: {
       unauthenticated: "Войдите, чтобы продолжить.",
       invalidInput: "Некорректные данные.",
@@ -1459,6 +1462,7 @@ const RU: Dictionary = {
   inventory: INVENTORY_RU,
   receiving: RECEIVING_RU,
   recipes: RECIPES_RU,
+  catalogImport: CATALOG_IMPORT_RU,
 };
 
 const EN: Dictionary = {
@@ -1844,7 +1848,7 @@ const EN: Dictionary = {
       cancel: "Cancel",
     },
     working: "Saving",
-    units: { kg: "kg", g: "g", l: "l", ml: "ml", pcs: "pcs" },
+    units: { kg: "kg", g: "g", l: "l", ml: "ml", pcs: "pcs", box: "box" },
     errors: {
       unauthenticated: "Sign in to continue.",
       invalidInput: "The submitted data is not valid.",
@@ -1969,6 +1973,7 @@ const EN: Dictionary = {
   inventory: INVENTORY_EN,
   receiving: RECEIVING_EN,
   recipes: RECIPES_EN,
+  catalogImport: CATALOG_IMPORT_EN,
 };
 
 export const dictionaries = { AZ, RU, EN } satisfies Record<string, Dictionary>;

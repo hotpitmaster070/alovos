@@ -47,6 +47,8 @@
     "../lib/supabase/config.ts",
     "../lib/auth-errors.ts",
     "../lib/org.ts",
-    "../lib/supabase/cookie-codec.ts"
+    "../lib/supabase/cookie-codec.ts",
+    "../lib/import/parse.ts",
+    "../lib/import/catalog.ts"
   ]
 }

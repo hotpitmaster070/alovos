@@ -65,7 +65,8 @@ export type StorageLocation = {
 export const compareStorageLocations = (a: StorageLocation, b: StorageLocation): number =>
   STORAGE_TYPES.indexOf(a.type) - STORAGE_TYPES.indexOf(b.type) || a.number - b.number || a.id.localeCompare(b.id);
 
-export const UNITS = ["kg", "g", "l", "ml", "pcs"] as const;
+/** Same list as public.catalog_units(). */
+export const UNITS = ["kg", "g", "l", "ml", "pcs", "box"] as const;
 export type Unit = (typeof UNITS)[number];
 export const isUnit = (value: string): value is Unit =>
   (UNITS as readonly string[]).includes(value);

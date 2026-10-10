@@ -3,6 +3,7 @@ export const ANBAR_CATALOG_PATH = `${ANBAR_APP_PATH}/kataloq`;
 export const ANBAR_MOVEMENTS_PATH = `${ANBAR_APP_PATH}/movements`;
 export const ANBAR_COUNT_PATH = `${ANBAR_APP_PATH}/sayim`;
 export const ANBAR_RECEIPT_PATH = `${ANBAR_APP_PATH}/qebul`;
+export const ANBAR_IMPORT_PATH = `${ANBAR_APP_PATH}/import`;
 export const ANBAR_STORAGE_PATH = `${ANBAR_APP_PATH}/saxlama`;
 export const SETTINGS_PATH = "/app/sebeke";
 export const SUPPLIERS_PATH = `${SETTINGS_PATH}/tedarikciler`;
