@@ -1151,6 +1151,89 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
       recipes.mapTechCardError("boom") === "save_failed");
   }
 
+  // ---- catalog import: file parsing, row checks, RPC mapping
+  {
+    const fs = require("fs");
+    const ExcelJS = require("exceljs");
+    const { parseCatalogFile, readLines, headerField } = load("lib/import/parse.js");
+    const { validateRows, normalizeUnit, IMPORT_MAX_ROWS } = load("lib/import/validation.js");
+    const { importCatalog } = load("lib/import/catalog.js");
+    const bytes = (text) => new TextEncoder().encode(text);
+
+    const fixture = await parseCatalogFile(new Uint8Array(fs.readFileSync(path.join(__dirname, "fixtures/catalog-100.csv"))), "catalog-100.csv");
+    ok("import: fixture -> 100 valid rows, no errors", fixture.ok && fixture.rows.length === 100 && fixture.valid.length === 100 &&
+      fixture.errors.length === 0 && fixture.columns.length === 10, fixture.ok ? fixture.errors.slice(0, 3) : fixture);
+    const second = fixture.ok && fixture.valid[1];
+    ok("import: fixture row typed", second && second.row === 3 && second.barcode === "4600000000002" && typeof second.initial_stock === "number", second);
+
+    ok("import: header aliases in three languages", headerField("Название") === "name" && headerField("Ölçü vahidi") === "unit" &&
+      headerField(" Barcode ") === "barcode" && headerField("Годен до") === "expiry_date" && headerField("qalıq") === "initial_stock" &&
+      headerField("whatever") === null);
+    ok("import: unit aliases", normalizeUnit("кг") === "kg" && normalizeUnit("Шт.") === "pcs" && normalizeUnit("ədəd") === "pcs" &&
+      normalizeUnit("qutu") === "box" && normalizeUnit("bucket") === null);
+
+    const semi = await parseCatalogFile(bytes("\ufeffНазвание;Ед.;Цена;Остаток;Мусор\nМука;кг;1,5;10;x\n\n;;;;\nСоль;г;;;\n"), "ru.csv");
+    ok("import: semicolon CSV with BOM, decimal comma, blank lines skipped", semi.ok && semi.valid.length === 2 &&
+      semi.valid[0].price === 1.5 && semi.valid[0].unit === "kg" && semi.valid[1].row === 5 && semi.ignored.join() === "Мусор", semi);
+
+    const checked = validateRows([
+      { row: 2, values: { name: "", unit: "kg" } },
+      { row: 3, values: { name: "A", unit: "kg" } },
+      { row: 4, values: { name: "Milk", unit: "bucket", initial_stock: "-1" } },
+      { row: 5, values: { name: "Eggs", unit: "pcs", barcode: "123", shelf_life_days: "1.5" } },
+      { row: 6, values: { name: "eggs ", unit: "pcs", barcode: "123", expiry_date: "31.12.2026" } },
+      { row: 7, values: { name: "Rice", unit: "kg", price: "abc", min_stock: "2000000" } },
+      { row: 8, values: { name: "Oil", unit: "l", initial_stock: "0" } },
+    ]);
+    const codes = checked.errors.map((e) => `${e.row}:${e.field}:${e.code}`).sort();
+    ok("import: row errors with row, field, code and value", JSON.stringify(codes) === JSON.stringify([
+      "2:name:required", "3:name:too_short", "4:initial_stock:negative", "4:unit:invalid_unit",
+      "5:shelf_life_days:not_integer", "6:barcode:duplicate_in_file", "6:expiry_date:invalid_date", "6:name:duplicate_in_file",
+      "7:min_stock:too_large", "7:price:invalid_number",
+    ]) && checked.errors.find((e) => e.row === 4 && e.field === "unit").value === "bucket", codes);
+    ok("import: only clean rows are valid", checked.valid.length === 1 && checked.valid[0].name === "Oil" && checked.valid[0].initial_stock === 0, checked.valid);
+
+    ok("import: file errors", (await parseCatalogFile(new Uint8Array(), "a.csv")).error === "empty" &&
+      (await parseCatalogFile(bytes("x"), "a.pdf")).error === "unsupported" &&
+      (await parseCatalogFile(bytes("price,unit\n1,kg\n"), "a.csv")).error === "no_name_column" &&
+      (await parseCatalogFile(bytes("name\n"), "a.csv")).error === "empty" &&
+      (await parseCatalogFile(bytes("not a zip"), "a.xlsx")).error === "unreadable");
+    const many = readLines([["name"], ...Array.from({ length: IMPORT_MAX_ROWS + 1 }, (_, i) => [`P${i}`])]);
+    ok("import: row limit", many.ok === false && many.error === "too_many_rows");
+
+    const book = new ExcelJS.Workbook();
+    const sheet = book.addWorksheet("Catalog");
+    sheet.addRow([]);
+    sheet.addRow(["Product name", "UOM", "Barcode", "Expiry date", "Qty"]);
+    sheet.addRow(["Tomatoes", "kg", 4600000000099, new Date(Date.UTC(2030, 0, 15)), { formula: "2*3", result: 6 }]);
+    sheet.addRow([{ richText: [{ text: "Che" }, { text: "ese" }] }, "г", "", "", ""]);
+    const xlsx = await parseCatalogFile(new Uint8Array(await book.xlsx.writeBuffer()), "catalog.XLSX");
+    ok("import: xlsx round trip (header after a blank line, dates, formulas, rich text)", xlsx.ok && xlsx.valid.length === 2 &&
+      xlsx.valid[0].row === 3 && xlsx.valid[0].barcode === "4600000000099" && xlsx.valid[0].expiry_date === "2030-01-15" &&
+      xlsx.valid[0].initial_stock === 6 && xlsx.valid[1].name === "Cheese" && xlsx.valid[1].unit === "g", xlsx);
+
+    const rpcClient = (reply) => {
+      const calls = [];
+      return { calls, rpc: async (fn, args) => { calls.push({ fn, args }); return reply; } };
+    };
+    const raw = [{ row: 2, values: { name: "Milk", barcode: "777" } }];
+    const rows = [{ row: 2, name: "Milk", unit: "l", barcode: "777", category: null, price: null, shelf_life_days: null, min_stock: null, initial_stock: 3, location: null, expiry_date: null }];
+    let c = rpcClient({ data: { ok: true, dry_run: false, rows: 1, stocked: 1, errors: [] }, error: null });
+    let res = await importCatalog({ client: c, tenantId: TENANT }, { branchId: B1, locationId: L1, rows, raw, dryRun: false });
+    ok("import rpc: one call, tenant not sent, written", res.ok && res.written && res.rows === 1 && res.stocked === 1 &&
+      c.calls.length === 1 && c.calls[0].fn === "import_catalog" && !("p_tenant_id" in c.calls[0].args) && c.calls[0].args.p_dry_run === false, res);
+    c = rpcClient({ data: { ok: false, dry_run: false, rows: 1, stocked: 1, errors: [{ row: 2, field: "barcode", code: "exists" }, { row: "x" }] }, error: null });
+    res = await importCatalog({ client: c, tenantId: TENANT }, { branchId: B1, locationId: L1, rows, raw, dryRun: false });
+    ok("import rpc: database row errors carry the cell value, nothing written", res.ok && !res.written && res.errors.length === 1 &&
+      res.errors[0].value === "777" && res.errors[0].code === "exists", res);
+    c = rpcClient({ data: null, error: { message: "branch_not_found", code: "P0001" } });
+    res = await importCatalog({ client: c, tenantId: TENANT }, { branchId: B1, locationId: null, rows, raw, dryRun: true });
+    ok("import rpc: database refusals mapped", !res.ok && res.error === "branch_not_found" && res.status === 404, res);
+    c = rpcClient({ data: null, error: { message: "duplicate key", code: "23505" } });
+    res = await importCatalog({ client: c, tenantId: TENANT }, { branchId: B1, locationId: null, rows, raw, dryRun: false });
+    ok("import rpc: unique violation -> conflict", !res.ok && res.error === "conflict" && res.status === 409, res);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
 })();

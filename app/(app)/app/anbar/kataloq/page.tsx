@@ -10,6 +10,7 @@ import { resolveScope } from "@/lib/anbar/scope";
 import { parseLocationFilter } from "@/lib/anbar/stock-view";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 import { ANBAR_CATALOG_PATH } from "@/lib/auth-redirect";
+import { canApproveCounts, memberRole } from "@/lib/count/load";
 import { PAGE_SIZE, parsePage, parseSearch } from "@/lib/pagination";
 import { getSettings } from "@/lib/tenant-settings/getSettings";
 
@@ -33,11 +34,12 @@ export default async function CatalogPage({ searchParams }: { searchParams: RawS
   const lowOnly = first(searchParams.low) === "1";
   const page = parsePage(searchParams.page);
 
-  const [catalog, categories, locations, settings] = await Promise.all([
+  const [catalog, categories, locations, settings, role] = await Promise.all([
     listCatalog(gated.scope, { branchId, search, category, lowOnly }, page),
     listCatalogCategories(gated.scope, branchId),
     listStorageLocations(gated.scope),
     getSettings(gated.scope),
+    memberRole(gated.scope),
   ]);
 
   return (
@@ -54,6 +56,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: RawS
       locations={locations}
       branchId={branchId}
       settings={settings}
+      canImport={canApproveCounts(role)}
     />
   );
 }

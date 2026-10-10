@@ -12,7 +12,7 @@ import { lookupCatalogLineAction } from "@/lib/anbar/actions";
 import { expiryStatus, isLowStock } from "@/lib/anbar/catalog-status";
 import type { AnbarErrorCode } from "@/lib/anbar/errors";
 import { isUnit, type Branch, type CatalogLine, type CatalogProduct, type StorageLocation } from "@/lib/anbar/types";
-import { ANBAR_APP_PATH, ANBAR_RECEIPT_PATH, ZAQOTOVKA_PATH } from "@/lib/auth-redirect";
+import { ANBAR_APP_PATH, ANBAR_IMPORT_PATH, ANBAR_RECEIPT_PATH, ZAQOTOVKA_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
 import type { TenantSettings } from "@/lib/tenant-settings/parse";
 import { cn } from "@/lib/utils";
@@ -90,6 +90,7 @@ export default function CatalogView({
   locations,
   branchId,
   settings,
+  canImport,
 }: {
   lines: CatalogLine[];
   /** Products matching the filters, all pages. */
@@ -104,6 +105,8 @@ export default function CatalogView({
   locations: StorageLocation[];
   branchId: string | null;
   settings: TenantSettings;
+  /** Owners and chefs: link to the CSV/Excel import. */
+  canImport: boolean;
 }) {
   const { t } = useT();
   const copy = t.anbar.barcode;
@@ -196,6 +199,11 @@ export default function CatalogView({
           <Link href={ANBAR_RECEIPT_PATH} className={buttonVariants("outline", "sm")}>
             {t.anbar.qebul.open}
           </Link>
+          {canImport && (
+            <Link href={ANBAR_IMPORT_PATH} className={buttonVariants("outline", "sm")}>
+              {t.catalogImport.open}
+            </Link>
+          )}
           <Link href={ZAQOTOVKA_PATH} className={buttonVariants("outline", "sm")}>
             {t.labels.prep.nav}
           </Link>
