@@ -15,7 +15,10 @@ export async function GET() {
   return settings ? NextResponse.json({ settings }) : apiError("save_failed", 503);
 }
 
-/** Owner: {low_stock_default?, loss_alert_percent?, loss_alert_enabled?, auto_order_enabled?, auto_order_time?, auto_order_notify?}. */
+/**
+ * Owner: {low_stock_default?, loss_alert_percent?, loss_alert_enabled?, auto_order_enabled?, auto_order_draft_time?,
+ * auto_order_time?, auto_send_if_not_confirmed?, auto_order_notify?}; the draft time may not be after the deadline.
+ */
 export async function PUT(request: Request) {
   const current = await apiScope();
   if ("response" in current) return current.response;

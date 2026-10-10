@@ -10,7 +10,7 @@ import {
   type StockLimitRow,
 } from "./model";
 
-/** null until 20261029000200 is applied (the columns are missing). */
+/** null until 20261029000400 is applied (the columns are missing). */
 export async function getSmartSettings(scope: TenantScope): Promise<SmartSettings | null> {
   const { data, error } = await scope.client.from("tenant_settings").select(SMART_SETTINGS_COLUMNS).eq("tenant_id", scope.tenantId).maybeSingle();
   if (error) {

@@ -10,7 +10,7 @@ export type AutoOrderNotify = (typeof AUTO_ORDER_NOTIFY)[number];
 export const LIMITS_BATCH_MAX = 1000;
 
 export const SMART_SETTINGS_COLUMNS =
-  "timezone, low_stock_default, loss_alert_percent, loss_alert_enabled, auto_order_enabled, auto_order_time, auto_order_notify";
+  "timezone, low_stock_default, loss_alert_percent, loss_alert_enabled, auto_order_enabled, auto_order_draft_time, auto_order_time, auto_send_if_not_confirmed, auto_order_notify";
 
 export type SmartSettings = {
   timezone: string;
@@ -18,8 +18,12 @@ export type SmartSettings = {
   lossAlertPercent: number;
   lossAlertEnabled: boolean;
   autoOrderEnabled: boolean;
-  /** HH:MM in the restaurant's timezone. */
+  /** HH:MM in the restaurant's timezone: the system drafts the order. */
+  autoOrderDraftTime: string;
+  /** HH:MM in the restaurant's timezone: deadline, the system sends what the chef has not. */
   autoOrderTime: string;
+  autoSendIfNotConfirmed: boolean;
+  /** How orders reach suppliers: no message ("system"), WhatsApp first or email first. */
   autoOrderNotify: AutoOrderNotify;
 };
 
@@ -29,7 +33,9 @@ export type SmartSettingsPatch = Partial<{
   loss_alert_percent: number;
   loss_alert_enabled: boolean;
   auto_order_enabled: boolean;
+  auto_order_draft_time: string;
   auto_order_time: string;
+  auto_send_if_not_confirmed: boolean;
   auto_order_notify: AutoOrderNotify;
 }>;
 
@@ -56,14 +62,24 @@ export function parseSmartSettings(row: unknown): SmartSettings | null {
   const lowStockDefault = num(row.low_stock_default);
   const lossAlertPercent = num(row.loss_alert_percent);
   const autoOrderTime = parseClockTime(row.auto_order_time);
-  if (lowStockDefault === null || lossAlertPercent === null || autoOrderTime === null || !isAutoOrderNotify(row.auto_order_notify)) return null;
+  const autoOrderDraftTime = parseClockTime(row.auto_order_draft_time);
+  if (
+    lowStockDefault === null ||
+    lossAlertPercent === null ||
+    autoOrderTime === null ||
+    autoOrderDraftTime === null ||
+    !isAutoOrderNotify(row.auto_order_notify)
+  )
+    return null;
   return {
     timezone: typeof row.timezone === "string" && row.timezone !== "" ? row.timezone : "UTC",
     lowStockDefault,
     lossAlertPercent,
     lossAlertEnabled: row.loss_alert_enabled !== false,
     autoOrderEnabled: row.auto_order_enabled === true,
+    autoOrderDraftTime,
     autoOrderTime,
+    autoSendIfNotConfirmed: row.auto_send_if_not_confirmed !== false,
     autoOrderNotify: row.auto_order_notify,
   };
 }
@@ -82,17 +98,20 @@ export function parseSmartSettingsPatch(body: unknown): SmartSettingsPatch | nul
     if (value === null || value < LOSS_ALERT_MIN || value > LOSS_ALERT_MAX) return null;
     patch.loss_alert_percent = value;
   }
-  for (const key of ["loss_alert_enabled", "auto_order_enabled"] as const) {
+  for (const key of ["loss_alert_enabled", "auto_order_enabled", "auto_send_if_not_confirmed"] as const) {
     if (key in body) {
       if (typeof body[key] !== "boolean") return null;
       patch[key] = body[key] as boolean;
     }
   }
-  if ("auto_order_time" in body) {
-    const value = parseClockTime(body.auto_order_time);
-    if (value === null) return null;
-    patch.auto_order_time = value;
+  for (const key of ["auto_order_draft_time", "auto_order_time"] as const) {
+    if (key in body) {
+      const value = parseClockTime(body[key]);
+      if (value === null) return null;
+      patch[key] = value;
+    }
   }
+  if (patch.auto_order_draft_time && patch.auto_order_time && patch.auto_order_draft_time > patch.auto_order_time) return null;
   if ("auto_order_notify" in body) {
     if (!isAutoOrderNotify(body.auto_order_notify)) return null;
     patch.auto_order_notify = body.auto_order_notify;

@@ -1,6 +1,7 @@
 import SmartSettingsView from "@/components/owner/smart-settings";
 import { redirectIfNoOrg } from "@/lib/app-gate";
 import { listBranches } from "@/lib/anbar/repository";
+import { deliveryConfig } from "@/lib/auto-order/delivery";
 import { resolveScope } from "@/lib/anbar/scope";
 import { OWNER_SETTINGS_PATH } from "@/lib/auth-redirect";
 import { memberRole } from "@/lib/count/load";
@@ -20,6 +21,7 @@ export default async function OwnerSettingsPage() {
   const owner = canInvite(role);
   const branchId = branches[0]?.id ?? null;
   const limits = owner && settings ? await stockLimits(scope, branchId) : null;
+  const delivery = deliveryConfig();
 
   return (
     <SmartSettingsView
@@ -28,6 +30,7 @@ export default async function OwnerSettingsPage() {
       branches={branches.map((branch) => ({ id: branch.id, name: branch.name }))}
       branchId={branchId}
       rows={limits?.ok ? limits.value : []}
+      providers={{ whatsapp: delivery.whatsapp !== null, email: delivery.email !== null }}
     />
   );
 }

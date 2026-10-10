@@ -29,6 +29,8 @@ import {
 } from "@/lib/smart-settings/model";
 
 type BranchOption = { id: string; name: string };
+/** Which delivery providers the server has credentials for. */
+type Providers = { whatsapp: boolean; email: boolean };
 type Tab = "stock" | "losses" | "autoOrder";
 type Notice = { kind: "ok" | "error"; text: string } | null;
 /** Rows drawn at once; search narrows the rest. */
@@ -355,13 +357,24 @@ function LossesTab({ settings, onSettings }: { settings: SmartSettings; onSettin
   );
 }
 
-function AutoOrderTab({ settings, onSettings }: { settings: SmartSettings; onSettings: (settings: SmartSettings) => void }) {
+function AutoOrderTab({
+  settings,
+  onSettings,
+  providers,
+}: {
+  settings: SmartSettings;
+  onSettings: (settings: SmartSettings) => void;
+  providers: Providers;
+}) {
   const { t } = useT();
   const copy = t.autoOrder.settings.autoOrder;
   const [enabled, setEnabled] = useState(settings.autoOrderEnabled);
+  const [draftTime, setDraftTime] = useState(settings.autoOrderDraftTime);
   const [time, setTime] = useState(settings.autoOrderTime);
+  const [autoSend, setAutoSend] = useState(settings.autoSendIfNotConfirmed);
   const [notify, setNotify] = useState(settings.autoOrderNotify);
   const { pending, notice, save } = useSaveSettings(onSettings);
+  const timesOff = draftTime !== "" && time !== "" && draftTime > time;
 
   return (
     <Card className="flex flex-col gap-4">
@@ -374,10 +387,37 @@ function AutoOrderTab({ settings, onSettings }: { settings: SmartSettings; onSet
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
+          <Label htmlFor="auto-order-draft-time">{copy.draftTime}</Label>
+          <Input
+            id="auto-order-draft-time"
+            type="time"
+            required
+            value={draftTime}
+            disabled={!enabled}
+            onChange={(event) => setDraftTime(event.target.value)}
+            className="w-36"
+          />
+          <p className="mt-1 text-xs text-white/50">{copy.draftHint}</p>
+        </div>
+        <div>
           <Label htmlFor="auto-order-time">{copy.time}</Label>
           <Input id="auto-order-time" type="time" required value={time} disabled={!enabled} onChange={(event) => setTime(event.target.value)} className="w-36" />
           <p className="mt-1 text-xs text-white/50">{copy.timeHint(settings.timezone)}</p>
         </div>
+      </div>
+      {timesOff && (
+        <p role="alert" className="text-sm text-red-300">
+          {copy.timesOrder}
+        </p>
+      )}
+      <label className="flex items-start gap-3">
+        <Checkbox checked={autoSend} disabled={!enabled} onChange={(event) => setAutoSend(event.target.checked)} className="mt-0.5" />
+        <span>
+          <span className="block text-sm font-medium text-white">{copy.autoSend}</span>
+          <span className="block text-xs text-white/50">{copy.autoSendHint}</span>
+        </span>
+      </label>
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="auto-order-notify">{copy.notify}</Label>
           <Select
@@ -392,11 +432,32 @@ function AutoOrderTab({ settings, onSettings }: { settings: SmartSettings; onSet
               </option>
             ))}
           </Select>
-          <p className="mt-1 text-xs text-white/50">{copy.channelHint}</p>
+        </div>
+        <div className="flex flex-col gap-1 text-sm">
+          {(["whatsapp", "email"] as const).map((channel) => (
+            <span key={channel} className="flex items-center gap-2 text-white/70">
+              {copy.providers[channel]}
+              <Badge className={providers[channel] ? "border-emerald-400/50 text-emerald-200" : "border-amber-300/60 text-amber-200"}>
+                {providers[channel] ? copy.providers.connected : copy.providers.missing}
+              </Badge>
+            </span>
+          ))}
+          {(!providers.whatsapp || !providers.email) && <span className="text-xs text-white/50">{copy.providers.missingHint}</span>}
         </div>
       </div>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={pending} onClick={() => void save({ auto_order_enabled: enabled, auto_order_time: time, auto_order_notify: notify })}>
+        <Button
+          disabled={pending || timesOff}
+          onClick={() =>
+            void save({
+              auto_order_enabled: enabled,
+              auto_order_draft_time: draftTime,
+              auto_order_time: time,
+              auto_send_if_not_confirmed: autoSend,
+              auto_order_notify: notify,
+            })
+          }
+        >
           {pending ? t.autoOrder.settings.saving : t.autoOrder.settings.save}
         </Button>
         <Link href={AUTO_ORDER_PATH} className={buttonVariants("outline", "default")}>
@@ -415,12 +476,14 @@ export default function SmartSettingsView({
   branches,
   branchId,
   rows,
+  providers,
 }: {
   owner: boolean;
   settings: SmartSettings | null;
   branches: BranchOption[];
   branchId: string | null;
   rows: StockLimitRow[];
+  providers: Providers;
 }) {
   const { t } = useT();
   const copy = t.autoOrder.settings;
@@ -458,7 +521,7 @@ export default function SmartSettingsView({
           <div role="tabpanel">
             {tab === "stock" && <StockTab settings={settings} onSettings={setSettings} branches={branches} initialBranchId={branchId} initialRows={rows} />}
             {tab === "losses" && <LossesTab settings={settings} onSettings={setSettings} />}
-            {tab === "autoOrder" && <AutoOrderTab settings={settings} onSettings={setSettings} />}
+            {tab === "autoOrder" && <AutoOrderTab settings={settings} onSettings={setSettings} providers={providers} />}
           </div>
         </>
       )}

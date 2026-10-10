@@ -1,3 +1,4 @@
+import type { SkipReason } from "@/lib/auto-order/delivery";
 import type { AutoOrderNotify, LimitSource } from "@/lib/smart-settings/model";
 import { ruPlural } from "./plural";
 
@@ -47,11 +48,16 @@ export type AutoOrderDictionary = {
     autoOrder: {
       enabled: string;
       enabledHint: string;
+      draftTime: string;
+      draftHint: string;
       time: string;
       timeHint: (timezone: string) => string;
+      autoSend: string;
+      autoSendHint: string;
       notify: string;
       channels: Record<AutoOrderNotify, string>;
-      channelHint: string;
+      providers: { whatsapp: string; email: string; connected: string; missing: string; missingHint: string };
+      timesOrder: string;
       open: string;
     };
   };
@@ -90,6 +96,29 @@ export type AutoOrderDictionary = {
     noContact: string;
     oldBoard: string;
     readOnly: string;
+    /** "Draft at 15:00 · auto-send at 18:00"; without auto-send only the draft time. */
+    schedule: (draftTime: string, deadline: string, autoSend: boolean) => string;
+    delivered: (channel: "whatsapp" | "email") => string;
+    notDelivered: string;
+    reasons: Record<SkipReason, string>;
+    yesterdayFailed: string;
+  };
+  /** Owner dashboard: what went to suppliers yesterday. */
+  owner: {
+    title: string;
+    sent: (orders: number) => string;
+    /** Phase 1, before receiving: "~520 ₼". */
+    estimated: (amount: string) => string;
+    estimatedHint: string;
+    /** Phase 2: "Заказано ~520 ₼ → Принято 780 ₼ (факт)". */
+    actual: (estimated: string, actual: string) => string;
+    /** Signed amount, e.g. "+260 ₼". */
+    delta: (signed: string) => string;
+    partial: (received: number, orders: number) => string;
+    split: (chef: number, auto: number) => string;
+    failed: (count: number) => string;
+    none: string;
+    open: string;
   };
   /** Start of the order message to the supplier: "Salam! Sifariş:". */
   message: { greeting: string; subject: string };
@@ -139,12 +168,23 @@ export const AUTO_ORDER_AZ: AutoOrderDictionary = {
     },
     autoOrder: {
       enabled: "Avto-sifariş",
-      enabledHint: "Hər gün sistem minimumdan aşağı olanları təchizatçılar üzrə qaralamaya yığır",
-      time: "Vaxt",
-      timeHint: (tz) => `Restoranın vaxtı ilə (${tz})`,
-      notify: "Bildiriş",
-      channels: { system: "Sistemdə", whatsapp: "WhatsApp", email: "E-poçt" },
-      channelHint: "WhatsApp və e-poçt hələlik yalnız jurnala yazılır",
+      enabledHint: "Hər gün sistem minimumdan aşağı olanları təchizatçılar üzrə qaralamaya yığır, şef əlavə edir və göndərir",
+      draftTime: "Qaralama vaxtı",
+      draftHint: "Sistem bu vaxt minimumdan aşağı olanları qaralamaya yığır",
+      time: "Göndərmə son vaxtı",
+      timeHint: (tz) => `Şef bu vaxta qədər göndərməsə, sistem özü göndərir. Restoranın vaxtı ilə (${tz})`,
+      autoSend: "Şef göndərməsə, özü göndər",
+      autoSendHint: "Son vaxtda qaralamalar (sistem + əlavələr) təchizatçılara gedir. Sahibkara bildiriş getmir — səhər paneldə görünür",
+      notify: "Təchizatçılara necə göndərilsin",
+      channels: { system: "Mesaj göndərmə (şef özü göndərir)", whatsapp: "WhatsApp, olmasa e-poçt", email: "E-poçt, olmasa WhatsApp" },
+      providers: {
+        whatsapp: "WhatsApp",
+        email: "E-poçt",
+        connected: "qoşulub",
+        missing: "qoşulmayıb",
+        missingHint: "Qoşulmayan kanal üçün sifariş qaralamada qalır, şef onu linklə göndərir",
+      },
+      timesOrder: "Qaralama vaxtı son vaxtdan gec ola bilməz",
       open: "Sifarişlərə keç",
     },
   },
@@ -183,6 +223,24 @@ export const AUTO_ORDER_AZ: AutoOrderDictionary = {
     noContact: "Telefon və e-poçt yoxdur",
     oldBoard: "Bütün sifarişlər",
     readOnly: "Sifarişləri şef və sahibkar göndərir.",
+    schedule: (d, s, auto) => (auto ? `Qaralama ${d}-da · avto-göndərmə ${s}-da` : `Qaralama ${d}-da · şef özü göndərir`),
+    delivered: (c) => (c === "whatsapp" ? "WhatsApp-a getdi" : "E-poçta getdi"),
+    notDelivered: "Getmədi — linklə göndərin",
+    reasons: { disabled: "mesaj göndərmə söndürülüb", no_contact: "telefon və e-poçt yoxdur", not_configured: "WhatsApp / e-poçt qoşulmayıb" },
+    yesterdayFailed: "Dünən avtomatik getməyənlər",
+  },
+  owner: {
+    title: "Dünən təchizatçılara",
+    sent: (n) => `${n} sifariş göndərildi`,
+    estimated: (a) => `~${a}`,
+    estimatedHint: "təxmini · son alış qiymətləri ilə, qəbuldan sonra dəqiqləşəcək",
+    actual: (e, a) => `Sifariş ~${e} → Qəbul ${a} (fakt)`,
+    delta: (s) => `${s} təxminə görə`,
+    partial: (r, n) => `${n} sifarişdən ${r}-i qəbul edilib, qalanları yoldadır`,
+    split: (c, a) => `şef: ${c} · avtomatik: ${a}`,
+    failed: (n) => `${n} getmədi`,
+    none: "Dünən sifariş göndərilməyib",
+    open: "Sifarişlər",
   },
   message: { greeting: "Salam! Sifariş:", subject: "Sifariş" },
 };
@@ -231,12 +289,23 @@ export const AUTO_ORDER_RU: AutoOrderDictionary = {
     },
     autoOrder: {
       enabled: "Авто-заказ",
-      enabledHint: "Каждый день система собирает всё, что ниже минимума, в черновики по поставщикам",
-      time: "Время",
-      timeHint: (tz) => `По времени ресторана (${tz})`,
-      notify: "Уведомление",
-      channels: { system: "В системе", whatsapp: "WhatsApp", email: "Email" },
-      channelHint: "WhatsApp и email пока только записываются в журнал",
+      enabledHint: "Каждый день система собирает всё, что ниже минимума, в черновики по поставщикам, шеф дополняет и отправляет",
+      draftTime: "Время черновика",
+      draftHint: "В это время система собирает всё, что ниже минимума, в черновики",
+      time: "Дедлайн отправки",
+      timeHint: (tz) => `Если шеф не отправит до этого времени, система отправит сама. По времени ресторана (${tz})`,
+      autoSend: "Отправлять автоматически, если шеф не нажал",
+      autoSendHint: "В дедлайн черновики (система + экстра) уходят поставщикам. Владельцу уведомление не приходит — утром видно в дашборде",
+      notify: "Как отправлять поставщикам",
+      channels: { system: "Не отправлять сообщения (шеф отправляет сам)", whatsapp: "WhatsApp, если нет — email", email: "Email, если нет — WhatsApp" },
+      providers: {
+        whatsapp: "WhatsApp",
+        email: "Email",
+        connected: "подключён",
+        missing: "не подключён",
+        missingHint: "Если канал не подключён, заказ остаётся черновиком и шеф отправляет его по ссылке",
+      },
+      timesOrder: "Время черновика не может быть позже дедлайна",
       open: "К заказам",
     },
   },
@@ -275,6 +344,24 @@ export const AUTO_ORDER_RU: AutoOrderDictionary = {
     noContact: "Нет телефона и email",
     oldBoard: "Все заказы",
     readOnly: "Заказы отправляют шеф и владелец.",
+    schedule: (d, s, auto) => (auto ? `Черновик в ${d} · авто-отправка в ${s}` : `Черновик в ${d} · отправляет шеф`),
+    delivered: (c) => (c === "whatsapp" ? "Ушло в WhatsApp" : "Ушло на email"),
+    notDelivered: "Не ушло — отправьте по ссылке",
+    reasons: { disabled: "сообщения выключены", no_contact: "нет телефона и email", not_configured: "WhatsApp / email не подключены" },
+    yesterdayFailed: "Вчера не ушло автоматически",
+  },
+  owner: {
+    title: "Вчера поставщикам",
+    sent: (n) => `Отправлено ${n} ${ruPlural(n, "заказ", "заказа", "заказов")}`,
+    estimated: (a) => `~${a}`,
+    estimatedHint: "примерно · по последним ценам, уточнится после приёмки",
+    actual: (e, a) => `Заказано ~${e} → Принято ${a} (факт)`,
+    delta: (s) => `${s} к оценке`,
+    partial: (r, n) => `принято ${r} из ${n}, остальные ещё в пути`,
+    split: (c, a) => `шеф: ${c} · автоматически: ${a}`,
+    failed: (n) => `не ушло: ${n}`,
+    none: "Вчера заказы не отправлялись",
+    open: "Заказы",
   },
   message: { greeting: "Здравствуйте! Заказ:", subject: "Заказ" },
 };
@@ -323,12 +410,23 @@ export const AUTO_ORDER_EN: AutoOrderDictionary = {
     },
     autoOrder: {
       enabled: "Auto-order",
-      enabledHint: "Every day the system puts everything below its minimum into drafts per supplier",
-      time: "Time",
-      timeHint: (tz) => `In the restaurant's time (${tz})`,
-      notify: "Notification",
-      channels: { system: "In the app", whatsapp: "WhatsApp", email: "Email" },
-      channelHint: "WhatsApp and email are only logged for now",
+      enabledHint: "Every day the system puts everything below its minimum into drafts per supplier; the chef adds and sends",
+      draftTime: "Draft time",
+      draftHint: "At this time the system drafts everything below its minimum",
+      time: "Send deadline",
+      timeHint: (tz) => `If the chef has not sent by then, the system sends. In the restaurant's time (${tz})`,
+      autoSend: "Send automatically if the chef has not",
+      autoSendHint: "At the deadline the drafts (system + extras) go to the suppliers. The owner is not notified — it shows on the dashboard in the morning",
+      notify: "How orders reach suppliers",
+      channels: { system: "No messages (the chef sends)", whatsapp: "WhatsApp, else email", email: "Email, else WhatsApp" },
+      providers: {
+        whatsapp: "WhatsApp",
+        email: "Email",
+        connected: "connected",
+        missing: "not connected",
+        missingHint: "Without a connected channel the order stays a draft and the chef sends it by link",
+      },
+      timesOrder: "The draft time cannot be after the deadline",
       open: "Go to orders",
     },
   },
@@ -367,6 +465,24 @@ export const AUTO_ORDER_EN: AutoOrderDictionary = {
     noContact: "No phone or email",
     oldBoard: "All orders",
     readOnly: "Chefs and owners send orders.",
+    schedule: (d, s, auto) => (auto ? `Draft at ${d} · auto-send at ${s}` : `Draft at ${d} · the chef sends`),
+    delivered: (c) => (c === "whatsapp" ? "Sent on WhatsApp" : "Sent by email"),
+    notDelivered: "Not delivered — send by link",
+    reasons: { disabled: "messages are off", no_contact: "no phone or email", not_configured: "WhatsApp / email not connected" },
+    yesterdayFailed: "Not sent automatically yesterday",
+  },
+  owner: {
+    title: "Yesterday to suppliers",
+    sent: (n) => `${n} order${n === 1 ? "" : "s"} sent`,
+    estimated: (a) => `~${a}`,
+    estimatedHint: "approximate · at the latest purchase prices, confirmed after receiving",
+    actual: (e, a) => `Ordered ~${e} → Received ${a} (actual)`,
+    delta: (s) => `${s} vs estimate`,
+    partial: (r, n) => `${r} of ${n} received, the rest on the way`,
+    split: (c, a) => `chef: ${c} · automatic: ${a}`,
+    failed: (n) => `${n} not delivered`,
+    none: "No orders were sent yesterday",
+    open: "Orders",
   },
   message: { greeting: "Hello! Order:", subject: "Order" },
 };

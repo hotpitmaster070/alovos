@@ -5,6 +5,8 @@ import { resolveScope } from "@/lib/anbar/scope";
 import { parseLocationFilter } from "@/lib/anbar/stock-view";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 import { OWNER_DASHBOARD_PATH } from "@/lib/auth-redirect";
+import { summarizeSendLog } from "@/lib/auto-order/model";
+import { autoOrderSendLog } from "@/lib/auto-order/repository";
 import { canApproveCounts, memberRole } from "@/lib/count/load";
 import { currencyOf } from "@/lib/money";
 import { dashboardCards, discrepancySince, parAlerts } from "@/lib/owner/dashboard";
@@ -30,7 +32,7 @@ export default async function OwnerPage({ searchParams }: { searchParams: RawSea
   }
 
   const weekStart = addDays(todayIn(settings.timezone, new Date()), -6);
-  const [cards, alerts, week] = await Promise.all([
+  const [cards, alerts, week, sendLog] = await Promise.all([
     dashboardCards(scope, branchId),
     parAlerts(scope, branchId),
     // Counts from inventory tasks are optional for the dashboard: without them the card shows "—".
@@ -38,6 +40,7 @@ export default async function OwnerPage({ searchParams }: { searchParams: RawSea
       console.error("owner dashboard: discrepancies", error);
       return null;
     }),
+    autoOrderSendLog(scope),
   ]);
 
   return (
@@ -49,6 +52,7 @@ export default async function OwnerPage({ searchParams }: { searchParams: RawSea
       cards={cards}
       alerts={alerts}
       week={week}
+      orders={sendLog ? summarizeSendLog(sendLog) : null}
     />
   );
 }
