@@ -426,7 +426,7 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
           validateTenantSettingsInput(fd({ ...settingsForm, count_merge_mode: "last", invite_ttl_days: bad })) === null,
       ),
     );
-    const row = { currency: "AZN", timezone: "Asia/Baku", expiry_warn_days: 3, expiry_critical_days: 7, low_stock_default: 5, usage_window_days: 7, invite_ttl_days: 7, default_shelf_life_days: 3, prep_balance_tolerance: "0.3", prep_balance_tolerance_percent: 5, default_portion_weight_kg: null, default_density_kg_per_l: null, default_trim_value_percent: "100" };
+    const row = { currency: "AZN", timezone: "Asia/Baku", expiry_warn_days: 3, expiry_critical_days: 7, expiry_review_days: 1, low_stock_default: 5, usage_window_days: 7, invite_ttl_days: 7, default_shelf_life_days: 3, prep_balance_tolerance: "0.3", prep_balance_tolerance_percent: 5, default_portion_weight_kg: null, default_density_kg_per_l: null, default_trim_value_percent: "100" };
     ok("settings: count_merge_mode parsed", parseTenantSettings({ ...row, count_merge_mode: "last" }).countMergeMode === "last");
     let threw = false;
     try {
@@ -1339,6 +1339,57 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
       JSON.stringify(shape(TRANSFERS_RU)) === JSON.stringify(shape(TRANSFERS_EN)) &&
       [TRANSFERS_AZ, TRANSFERS_RU, TRANSFERS_EN].every((d) => d.submit(2).includes("2") && d.success.number("TRF-20261010-0001").includes("TRF-20261010-0001")));
     ok("transfer ui: invoice path", load("lib/auth-redirect.js").transferInvoicePath(P1) === `/app/anbar/transfers/${P1}`);
+  }
+
+  // ---- freshness control: actions, tones, decisions, rows, texts
+  {
+    const expiry = load("lib/labels/expiry.js");
+    const { EXPIRY_AZ, EXPIRY_RU, EXPIRY_EN } = load("lib/i18n/expiry.js");
+    const { ExpiryAction } = expiry;
+    ok("expiry: actions are the database enum", JSON.stringify(expiry.EXPIRY_ACTIONS) === JSON.stringify(["use_in_production", "discount", "staff", "extend", "write_off"]) &&
+      expiry.isExpiryAction("extend") && !expiry.isExpiryAction("freeze"));
+    ok("expiry: an expired lot can only be written off", JSON.stringify(expiry.actionsFor(-1)) === JSON.stringify([ExpiryAction.WriteOff]) &&
+      expiry.actionsFor(0).length === 5 && expiry.actionsFor(1).includes(ExpiryAction.Extend));
+    ok("expiry: warning window is one day", expiry.EXPIRY_WARNING_DAYS === 1);
+    ok("expiry: badge red at 0 or less, yellow at 1, plain later",
+      expiry.expiryTone(-2) === "expired" && expiry.expiryTone(0) === "expired" && expiry.expiryTone(1) === "warning" && expiry.expiryTone(2) === "ok");
+    ok("expiry: only owners and chefs review", expiry.canReviewExpiry("owner") && expiry.canReviewExpiry("chef") &&
+      !expiry.canReviewExpiry("cook") && !expiry.canReviewExpiry("staff") && !expiry.canReviewExpiry(null));
+
+    const extend = (newExpiry, note) => expiry.reviewInputError({ lotId: P1, action: ExpiryAction.Extend, note, newExpiry }, "2026-10-10");
+    ok("expiry: extend needs a date after today", extend("2026-10-10", "ok") === "date" && extend("2026-10-09", "ok") === "date" &&
+      extend("2026-13-01", "ok") === "date" && extend(null, "ok") === "date");
+    ok("expiry: extend needs a note", extend("2026-10-11", "  ") === "note" && extend("2026-10-11", null) === "note" && extend("2026-10-11", "sealed") === null);
+    ok("expiry: other actions need neither", expiry.reviewInputError({ lotId: P1, action: ExpiryAction.Discount, note: null, newExpiry: null }, "2026-10-10") === null &&
+      expiry.reviewInputError({ lotId: P1, action: ExpiryAction.WriteOff, note: "x".repeat(501), newExpiry: null }, "2026-10-10") === "note");
+
+    ok("expiry: review body parsed", JSON.stringify(expiry.parseReviewBody({ lot_id: P1, action: "extend", note: " sealed ", new_expiry: "2026-10-12" })) ===
+      JSON.stringify({ lotId: P1, action: "extend", note: "sealed", newExpiry: "2026-10-12" }));
+    ok("expiry: bad review bodies rejected", [{ lot_id: P1, action: "freeze" }, { action: "discount" }, { lot_id: P1, action: "extend", note: 5 }, { lot_id: P1, action: "extend", new_expiry: 20261012 }]
+      .every((body) => expiry.parseReviewBody(body) === null));
+
+    const lot = expiry.parseNearExpiryLot({ lot_id: P1, product_id: P1, product_name: "Süd", internal_code: "MLK-1", unit: "l", lot_number: "LOT-20261010-0001",
+      expiry_date: "2026-10-11", days_left: 1, quantity: "3", location_id: L1, location_name: "Soyuducu", location_type: "soyuducu", cost: "9.5", currency: "AZN",
+      last_action: "discount", last_action_at: "2026-10-10T08:00:00Z" });
+    ok("expiry: near-expiry row parsed", lot && lot.quantity === 3 && lot.cost === 9.5 && lot.locationType === "soyuducu" && lot.lastAction === "discount", lot);
+    ok("expiry: hidden cost stays null, broken rows dropped", expiry.parseNearExpiryLot({ ...lot, lot_id: P1, product_id: P1, expiry_date: "2026-10-11", days_left: 1,
+      quantity: 1, location_id: L1, currency: "AZN", cost: null }).cost === null && expiry.parseNearExpiryLot({ lot_id: P1 }) === null);
+    ok("expiry: totals count lots and sum visible costs", JSON.stringify(expiry.nearExpiryTotals([lot, { ...lot, cost: 0.5 }])) === JSON.stringify({ count: 2, value: 10 }) &&
+      expiry.nearExpiryTotals([{ ...lot, cost: null }]).value === null);
+
+    const note = expiry.parseExpiringNotification({ id: P1, branch_id: B1, type: "expiring_soon", notify_date: "2026-10-10",
+      payload: { count: 2, total_value: 12.5, currency: "AZN", days: 1, lots: [] } });
+    ok("expiry: notification parsed", note && note.count === 2 && note.totalValue === 12.5 && note.currency === "AZN" && note.branchId === B1, note);
+    ok("expiry: other notification types ignored", expiry.parseExpiringNotification({ id: P1, type: "other", notify_date: "2026-10-10", payload: { count: 1 } }) === null);
+
+    const shape = (value) => (typeof value === "function" ? "fn" : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shape(v)])) : typeof value);
+    ok("expiry: AZ/RU/EN have the same texts", JSON.stringify(shape(EXPIRY_AZ)) === JSON.stringify(shape(EXPIRY_RU)) &&
+      JSON.stringify(shape(EXPIRY_RU)) === JSON.stringify(shape(EXPIRY_EN)));
+    ok("expiry: every action has a label and a done text in every language", [EXPIRY_AZ, EXPIRY_RU, EXPIRY_EN].every((d) =>
+      expiry.EXPIRY_ACTIONS.every((action) => d.actions[action] && d.done[action]("Süd").includes("Süd"))));
+    ok("expiry: day texts", EXPIRY_RU.days(0) === "сегодня" && EXPIRY_RU.days(1) === "завтра" && EXPIRY_RU.days(-2) === "просрочено 2 дня" &&
+      EXPIRY_EN.days(3) === "3 days" && EXPIRY_AZ.days(1) === "sabah");
+    ok("expiry: chef dashboard path", load("lib/auth-redirect.js").CHEF_DASHBOARD_PATH === "/app/chef/dashboard");
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

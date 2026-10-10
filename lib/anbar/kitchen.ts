@@ -77,17 +77,18 @@ export async function listStockLines(
   return { lines: rows.map((row) => row.line), total: rows[0].total };
 }
 
-/** Value of every lot in the filter; null when the caller may not see costs. */
+/** Value of the good lots in the filter and of the expired ones apart; nulls when the caller may not see costs. */
 export async function stockValueTotal(
   scope: TenantScope,
   filters: Pick<StockFilters, "branchId" | "locationId">,
-): Promise<number | null> {
+): Promise<{ total: number | null; expired: number | null }> {
   const { data, error } = await scope.client.rpc("stock_value", {
     p_branch_id: allToNull(filters.branchId),
     p_location_id: allToNull(filters.locationId),
   });
   if (error) throw queryError("stock_value", error);
-  return asNumber(data);
+  const row: unknown = Array.isArray(data) ? data[0] : data;
+  return isRecord(row) ? { total: asNumber(row.total_value), expired: asNumber(row.expired_value) } : { total: null, expired: null };
 }
 
 export type MovementRow = {

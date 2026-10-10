@@ -53,7 +53,8 @@ export default async function AnbarPage({ searchParams }: { searchParams: RawSea
       branches={branches}
       locationId={locationId}
       branchId={branchId}
-      money={formatMoney(value, currencyOf(settings))}
+      money={formatMoney(value.total, currencyOf(settings))}
+      expiredMoney={value.expired ? formatMoney(value.expired, currencyOf(settings)) : null}
       updated={notice === "1"}
       forecast={[...attention, ...pageForecast]}
       attention={attention}

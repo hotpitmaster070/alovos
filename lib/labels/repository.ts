@@ -34,6 +34,15 @@ import {
   type WastageInput,
 } from "./model";
 import {
+  NOTIFICATION_EXPIRING,
+  NOTIFICATIONS_SHOWN,
+  parseExpiringNotification,
+  parseNearExpiryLot,
+  type ExpiringNotification,
+  type NearExpiryLot,
+  type ReviewInput,
+} from "./expiry";
+import {
   parseExpiredStockRow,
   parseWasteEntry,
   parseWasteSummary,
@@ -321,6 +330,45 @@ export const listWastage = (scope: TenantScope, days: number): Promise<Result<Wa
 /** Stock rows of the branch past (or within the warning days of) their expiry. */
 export const expiredStock = (scope: TenantScope, branchId: string | null): Promise<Result<ExpiredStockRow[]>> =>
   rpcRows(scope, "expired_stock", { p_branch_id: branchId }, parseExpiredStockRow);
+
+/** Lots of the branch expiring from today to today + days (null: tenant_settings.expiry_review_days). */
+export const getNearExpiry = (scope: TenantScope, branchId: string, daysAhead: number | null = null): Promise<Result<NearExpiryLot[]>> =>
+  rpcRows(scope, "get_near_expiry_batches", { p_branch_id: branchId, p_days_ahead: daysAhead }, parseNearExpiryLot);
+
+/** The chef's or owner's decision on one lot (public.review_batch_action); returns the review id. */
+export async function reviewBatchAction(scope: TenantScope, input: ReviewInput): Promise<Result<string>> {
+  const { data, error } = await scope.client.rpc("review_batch_action", {
+    p_lot_id: input.lotId,
+    p_action: input.action,
+    p_note: input.note,
+    p_new_expiry: input.newExpiry,
+  });
+  if (error) return failed(error);
+  return typeof data === "string" ? { ok: true, value: data } : failed({});
+}
+
+/** Unread "expiring soon" notifications, newest first (RLS: owners and chefs of the tenant). */
+export async function unreadExpiringNotifications(scope: TenantScope): Promise<Result<ExpiringNotification[]>> {
+  const { data, error } = await scope.client
+    .from("notifications")
+    .select("id, branch_id, type, notify_date, payload")
+    .eq("tenant_id", scope.tenantId)
+    .eq("type", NOTIFICATION_EXPIRING)
+    .is("read_at", null)
+    .order("notify_date", { ascending: false })
+    .order("id")
+    .limit(NOTIFICATIONS_SHOWN);
+  if (error) return failed(error);
+  return { ok: true, value: rows(data, parseExpiringNotification) };
+}
+
+/** Marks the given (or all) unread "expiring soon" notifications read; returns how many. */
+export async function markExpiringRead(scope: TenantScope, ids: string[] | null): Promise<Result<number>> {
+  const { data, error } = await scope.client.rpc("mark_notifications_read", { p_type: NOTIFICATION_EXPIRING, p_ids: ids });
+  if (error) return failed(error);
+  const count = Number(data);
+  return Number.isInteger(count) ? { ok: true, value: count } : failed({});
+}
 
 /** Today's waste of the tenant and its preparations against their norm (owners and chefs). */
 export async function wastageSummary(scope: TenantScope): Promise<Result<WasteSummary>> {

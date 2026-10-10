@@ -1,4 +1,7 @@
 import { NextResponse } from "next/server";
+import type { TenantScope } from "@/lib/anbar/scope";
+import { memberRole } from "@/lib/count/load";
+import { canReviewExpiry } from "./expiry";
 import type { LabelsErrorCode, Lot, Preparation } from "./model";
 import type { Result } from "./repository";
 import { serializeWasteItem, type WasteEntry } from "./waste";
@@ -6,6 +9,12 @@ import { serializeWasteItem, type WasteEntry } from "./waste";
 export const labelsError = (error: LabelsErrorCode, status: number) => NextResponse.json({ error }, { status });
 
 export const invalidLabelsInput = () => labelsError("invalid_input", 400);
+
+/** 403 unless the caller is an owner or chef (the database checks again). */
+export async function forbidUnlessExpiryReviewer(scope: TenantScope): Promise<NextResponse | null> {
+  const role = await memberRole(scope).catch(() => null);
+  return canReviewExpiry(role) ? null : labelsError("forbidden", 403);
+}
 
 export function labelsResponse<T>(result: Result<T>, body: (value: T) => unknown, status = 200) {
   if (!result.ok) {

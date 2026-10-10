@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { ClipboardList, LayoutDashboard, ListChecks, LogOut, Menu, X } from "lucide-react";
+import { ChefHat, ClipboardList, LayoutDashboard, ListChecks, LogOut, Menu, X } from "lucide-react";
 import Logo from "@/components/logo";
 import { signOut } from "@/lib/auth";
-import { CHEF_INVENTORY_PATH, COOK_TASKS_PATH } from "@/lib/auth-redirect";
+import { CHEF_DASHBOARD_PATH, CHEF_INVENTORY_PATH, COOK_TASKS_PATH } from "@/lib/auth-redirect";
 import { BLOCKS, blockHref, getBlockLabel } from "@/lib/blocks";
 import { useT } from "@/lib/i18n/useT";
 
@@ -37,7 +37,8 @@ function NavItem({ href, active, onNavigate, children }: NavItemProps) {
   );
 }
 
-export default function Sidebar() {
+/** `bell`: the notifications bell (owners and chefs only), rendered by the server layout. */
+export default function Sidebar({ bell = null }: { bell?: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { t, lang } = useT();
@@ -60,6 +61,7 @@ export default function Sidebar() {
         <Link href="/">
           <Logo size="sm" />
         </Link>
+        <div className="ml-auto mr-2">{bell}</div>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
@@ -82,9 +84,12 @@ export default function Sidebar() {
           open ? "block" : "hidden"
         } border-b border-line bg-bg p-4 lg:fixed lg:inset-y-0 lg:left-0 lg:block lg:w-64 lg:overflow-y-auto lg:border-b-0 lg:border-r`}
       >
-        <Link href="/" className="mb-6 hidden px-3 lg:block">
-          <Logo size="sm" />
-        </Link>
+        <div className="mb-6 hidden items-center justify-between px-3 lg:flex">
+          <Link href="/">
+            <Logo size="sm" />
+          </Link>
+          {bell}
+        </div>
         <nav aria-label={t.modulesLabel} className="flex flex-col gap-1">
           <NavItem
             href={DASHBOARD_HREF}
@@ -101,6 +106,10 @@ export default function Sidebar() {
           <NavItem href={CHEF_INVENTORY_PATH} active={pathname.startsWith(CHEF_INVENTORY_PATH)} onNavigate={close}>
             <ClipboardList className={ICON_CLASSES} strokeWidth={1.5} aria-hidden="true" />
             {t.inventory.chef.title}
+          </NavItem>
+          <NavItem href={CHEF_DASHBOARD_PATH} active={pathname.startsWith(CHEF_DASHBOARD_PATH)} onNavigate={close}>
+            <ChefHat className={ICON_CLASSES} strokeWidth={1.5} aria-hidden="true" />
+            {t.expiry.dashboard.nav}
           </NavItem>
           {BLOCKS.map((block) => {
             const Icon = block.icon;

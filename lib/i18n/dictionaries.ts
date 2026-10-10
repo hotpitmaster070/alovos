@@ -9,6 +9,7 @@ import { RECEIVING_AZ, RECEIVING_EN, RECEIVING_RU, type ReceivingDictionary } fr
 import { RECIPES_AZ, RECIPES_EN, RECIPES_RU, type RecipesDictionary } from "./recipes";
 import { CATALOG_IMPORT_AZ, CATALOG_IMPORT_EN, CATALOG_IMPORT_RU, type CatalogImportDictionary } from "./catalog-import";
 import { TRANSFERS_AZ, TRANSFERS_EN, TRANSFERS_RU, type TransfersDictionary } from "./transfers";
+import { EXPIRY_AZ, EXPIRY_EN, EXPIRY_RU, type ExpiryDictionary } from "./expiry";
 import { OWNER_AZ, OWNER_EN, OWNER_RU, type OwnerDictionary } from "./owner";
 import { PURCHASING_AZ, PURCHASING_EN, PURCHASING_RU, type PurchasingDictionary } from "./purchasing";
 
@@ -443,6 +444,7 @@ export type Dictionary = {
   recipes: RecipesDictionary;
   catalogImport: CatalogImportDictionary;
   transfers: TransfersDictionary;
+  expiry: ExpiryDictionary;
 };
 
 const AZ: Dictionary = {
@@ -955,6 +957,7 @@ const AZ: Dictionary = {
   recipes: RECIPES_AZ,
   catalogImport: CATALOG_IMPORT_AZ,
   transfers: TRANSFERS_AZ,
+  expiry: EXPIRY_AZ,
 };
 
 const RU: Dictionary = {
@@ -1467,6 +1470,7 @@ const RU: Dictionary = {
   recipes: RECIPES_RU,
   catalogImport: CATALOG_IMPORT_RU,
   transfers: TRANSFERS_RU,
+  expiry: EXPIRY_RU,
 };
 
 const EN: Dictionary = {
@@ -1979,6 +1983,7 @@ const EN: Dictionary = {
   recipes: RECIPES_EN,
   catalogImport: CATALOG_IMPORT_EN,
   transfers: TRANSFERS_EN,
+  expiry: EXPIRY_EN,
 };
 
 export const dictionaries = { AZ, RU, EN } satisfies Record<string, Dictionary>;
