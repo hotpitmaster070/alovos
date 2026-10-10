@@ -49,6 +49,7 @@
     "../lib/org.ts",
     "../lib/supabase/cookie-codec.ts",
     "../lib/import/parse.ts",
-    "../lib/import/catalog.ts"
+    "../lib/import/catalog.ts",
+    "../lib/transfer/model.ts"
   ]
 }

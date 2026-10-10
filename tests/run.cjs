@@ -1234,6 +1234,47 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("import rpc: unique violation -> conflict", !res.ok && res.error === "conflict" && res.status === 409, res);
   }
 
+  // ---- branch transfer: request shape, errors, texts
+  {
+    const transfer = load("lib/transfer/model.js");
+    const P = "cccccccc-0000-0000-0000-000000000001";
+    const B2 = "bbbbbbbb-0000-0000-0000-000000000002";
+    const input = transfer.parseTransferInput({
+      from_branch_id: B1, to_branch_id: B2, tenant_id: "evil", note: "  weekly  ",
+      items: [{ product_id: P.toUpperCase(), quantity: 2.5 }, { product_id: P, quantity: 1, from_location_id: L1 }],
+    });
+    ok("transfer input: items normalised, tenant ignored", input && input.items.length === 2 && input.items[0].productId === P &&
+      input.items[0].fromLocationId === null && input.items[1].fromLocationId === L1 && input.note === "weekly" && !("tenantId" in input), input);
+    ok("transfer input: rpc items without tenant", JSON.stringify(transfer.rpcItems(input.items)[1]) ===
+      JSON.stringify({ product_id: P, quantity: 1, from_location_id: L1, to_location_id: null }));
+    const legacy = transfer.parseTransferInput({ from_branch_id: B1, to_branch_id: B2, product_id: P, quantity: 3, from_location_id: L1, to_location_id: L1 });
+    ok("transfer input: single-product body still accepted", legacy && legacy.items.length === 1 && legacy.items[0].quantity === 3, legacy);
+    const base = { from_branch_id: B1, to_branch_id: B2 };
+    ok("transfer input: rejected", [
+      null, {}, { ...base }, { ...base, items: [] },
+      { ...base, from_branch_id: "x", items: [{ product_id: P, quantity: 1 }] },
+      { ...base, items: [{ product_id: P, quantity: 0 }] },
+      { ...base, items: [{ product_id: P, quantity: "1" }] },
+      { ...base, items: [{ product_id: P, quantity: 2e6 }] },
+      { ...base, items: [{ product_id: P, quantity: 1, to_location_id: "nope" }] },
+      { ...base, items: [{ product_id: P, quantity: 1 }, { product_id: P, quantity: 2 }] },
+      { ...base, items: Array.from({ length: transfer.TRANSFER_MAX_ITEMS + 1 }, () => ({ product_id: P, quantity: 1 })) },
+      { ...base, items: [{ product_id: P, quantity: 1 }], note: 5 },
+    ].every((body) => transfer.parseTransferInput(body) === null));
+    ok("transfer errors: database codes mapped", transfer.mapTransferError("insufficient_stock") === "insufficient_stock" &&
+      transfer.mapTransferError("to_branch_not_found") === "to_branch_not_found" && transfer.mapTransferError("boom") === "save_failed" &&
+      transfer.TRANSFER_STATUS.insufficient_stock === 400 && transfer.TRANSFER_STATUS.forbidden === 403);
+    const shortages = transfer.parseShortages(JSON.stringify([{ product_id: P, requested: 100, available: 3 }, { nope: 1 }]));
+    ok("transfer errors: shortage detail parsed", shortages.length === 1 && shortages[0].available === 3 &&
+      transfer.parseShortages("not json").length === 0 && transfer.parseShortages(null).length === 0, shortages);
+    ok("transfer texts: language from ?lang, then Accept-Language, default az",
+      transfer.pickTransferLang("RU", "en-US") === "ru" && transfer.pickTransferLang(null, "de-DE,en;q=0.8") === "en" &&
+      transfer.pickTransferLang(null, null) === "az");
+    ok("transfer texts: every error in three languages", transfer.TRANSFER_LANGS.every((lang) =>
+      transfer.TRANSFER_ERRORS.every((code) => typeof transfer.TRANSFER_MESSAGES[lang][code] === "string" && transfer.TRANSFER_MESSAGES[lang][code].length > 0)) &&
+      transfer.TRANSFER_MESSAGES.ru.shortageLine("Молоко (l)", "100", "3") === "Молоко (l): нужно 100, есть 3");
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
 })();

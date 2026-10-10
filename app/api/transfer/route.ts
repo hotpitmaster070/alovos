@@ -1,73 +1,94 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { requireTenant } from "@/lib/api/tenant";
+import { ANBAR_APP_PATH } from "@/lib/auth-redirect";
+import { canApproveCounts, memberRole } from "@/lib/count/load";
+import { apiScope, jsonBody } from "@/lib/purchasing/api";
+import {
+  mapTransferError,
+  parseShortages,
+  parseTransferInput,
+  pickTransferLang,
+  rpcItems,
+  TRANSFER_MESSAGES,
+  TRANSFER_STATUS,
+  type TransferError,
+  type TransferLang,
+} from "@/lib/transfer/model";
 
 export const dynamic = "force-dynamic";
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const failure = (error: TransferError, lang: TransferLang, extra: Record<string, unknown> = {}) =>
+  NextResponse.json({ error, message: TRANSFER_MESSAGES[lang][error], ...extra }, { status: TRANSFER_STATUS[error] });
 
+/**
+ * POST {from_branch_id, to_branch_id, items: [{product_id, quantity, from_location_id?, to_location_id?}], note?}.
+ * One call to public.transfer_stock_between_branches(): the whole transfer commits or nothing does.
+ * Owners and chefs only (checked here and again in the database); the tenant is never taken from the body.
+ */
 export async function POST(request: Request) {
-  const current = await requireTenant();
-  if ("error" in current) return current.error;
+  const lang = pickTransferLang(
+    new URL(request.url).searchParams.get("lang") ?? request.headers.get("x-alovos-lang"),
+    request.headers.get("accept-language"),
+  );
+  const current = await apiScope();
+  if ("response" in current) return current.response;
+  const { scope } = current;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
-  }
-  if (typeof body !== "object" || body === null) {
-    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
-  }
-  const record = body as Record<string, unknown>;
-  const fromBranch = typeof record.from_branch_id === "string" ? record.from_branch_id : "";
-  const toBranch = typeof record.to_branch_id === "string" ? record.to_branch_id : "";
-  const productId = typeof record.product_id === "string" ? record.product_id : "";
-  const fromLocation = typeof record.from_location_id === "string" ? record.from_location_id : "";
-  const toLocation = typeof record.to_location_id === "string" ? record.to_location_id : "";
-  const quantity = Number(record.quantity);
-  if (![fromBranch, toBranch, productId, fromLocation, toLocation].every((id) => UUID.test(id))) {
-    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
-  }
-  if (!Number.isFinite(quantity) || quantity <= 0 || fromBranch === toBranch) {
-    return NextResponse.json({ error: "invalid_input" }, { status: 400 });
-  }
+  if (!canApproveCounts(await memberRole(scope))) return failure("forbidden", lang);
 
-  const doc = await current.supabase
-    .from("branch_transfers")
-    .insert({
-      tenant_id: current.tenantId,
-      from_branch_id: fromBranch,
-      to_branch_id: toBranch,
-      status: "sent",
-    })
-    .select("id")
-    .single();
-  if (doc.error || !doc.data) return NextResponse.json({ error: "save_failed" }, { status: 500 });
+  const input = parseTransferInput(await jsonBody(request));
+  if (!input) return failure("invalid_input", lang);
+  if (input.fromBranchId === input.toBranchId) return failure("same_branch", lang);
 
-  const item = await current.supabase.from("branch_transfer_items").insert({
-    tenant_id: current.tenantId,
-    branch_transfer_id: doc.data.id,
-    product_id: productId,
-    quantity,
+  const { data, error } = await scope.client.rpc("transfer_stock_between_branches", {
+    p_from_branch: input.fromBranchId,
+    p_to_branch: input.toBranchId,
+    p_items: rpcItems(input.items),
+    p_note: input.note,
   });
-  if (item.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
 
-  const movement = await current.supabase.from("stock_movements").insert({
-    tenant_id: current.tenantId,
-    product_id: productId,
-    from_location_id: fromLocation,
-    to_location_id: toLocation,
-    quantity,
-    movement_type: "transfer",
-    user_id: current.userId,
-  });
-  if (movement.error) {
-    const message = movement.error.message ?? "";
-    if (message.includes("insufficient_stock")) {
-      return NextResponse.json({ error: "insufficient_stock" }, { status: 409 });
+  if (error) {
+    const code = mapTransferError(error.message);
+    if (code !== "insufficient_stock") {
+      if (code === "save_failed") console.error("transfer_stock_between_branches failed", error.message);
+      return failure(code, lang);
     }
-    return NextResponse.json({ error: "save_failed" }, { status: 500 });
+    const shortages = parseShortages(error.details);
+    const names = new Map<string, string>();
+    if (shortages.length > 0) {
+      const found = await scope.client
+        .from("products")
+        .select("id, name, unit")
+        .eq("tenant_id", scope.tenantId)
+        .in("id", shortages.map((item) => item.productId));
+      for (const row of (found.data ?? []) as { id: string; name: string; unit: string | null }[]) {
+        names.set(row.id, row.unit ? `${row.name} (${row.unit})` : row.name);
+      }
+    }
+    const messages = TRANSFER_MESSAGES[lang];
+    const lines = shortages.map((item) =>
+      messages.shortageLine(names.get(item.productId) ?? item.productId, String(item.requested), String(item.available)),
+    );
+    return failure("insufficient_stock", lang, {
+      message: [messages.insufficient_stock, ...lines].join("\n"),
+      shortages: shortages.map((item) => ({
+        product_id: item.productId,
+        name: names.get(item.productId) ?? null,
+        requested: item.requested,
+        available: item.available,
+      })),
+    });
   }
 
-  return NextResponse.json({ id: doc.data.id });
+  revalidatePath(ANBAR_APP_PATH, "layout");
+  const result = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  return NextResponse.json(
+    {
+      ok: true,
+      transfer_id: result.transfer_id ?? null,
+      items: result.items ?? input.items.length,
+      movements: result.movements ?? null,
+    },
+    { status: 201 },
+  );
 }
