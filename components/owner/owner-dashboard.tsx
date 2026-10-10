@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Branch } from "@/lib/anbar/types";
-import { CHEF_WASTE_PATH, OWNER_DISCREPANCIES_PATH } from "@/lib/auth-redirect";
+import { CHEF_WASTE_PATH, OWNER_DISCREPANCIES_PATH, OWNER_LOSSES_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
 import { formatMoney, type CurrencyInfo } from "@/lib/money";
 import type { DashboardCards, ParAlert } from "@/lib/owner/dashboard";
@@ -64,6 +64,9 @@ export default function OwnerDashboard({
         </div>
         {allowed && (
           <div className="flex flex-wrap gap-2">
+            <Link href={branchId ? `${OWNER_LOSSES_PATH}?branch=${encodeURIComponent(branchId)}` : OWNER_LOSSES_PATH} className={buttonVariants("outline", "sm")}>
+              {t.owner.losses.open}
+            </Link>
             <Link href={branchId ? `${OWNER_DISCREPANCIES_PATH}?branch=${encodeURIComponent(branchId)}` : OWNER_DISCREPANCIES_PATH} className={buttonVariants("outline", "sm")}>
               {t.inventory.report.title}
             </Link>

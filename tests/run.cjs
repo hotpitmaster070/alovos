@@ -1410,6 +1410,31 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("par: short badge text in every language", OWNER_RU.par.orderNow === "Закажи сейчас" && OWNER_EN.par.orderNow === "Order now" && OWNER_AZ.par.orderNow.length > 0);
   }
 
+  {
+    const losses = load("lib/losses/model.js");
+    const { OWNER_AZ, OWNER_RU, OWNER_EN } = load("lib/i18n/owner.js");
+    ok("losses: period from the query, week by default", losses.parseLossPeriod("month") === "month" && losses.parseLossPeriod(["week"]) === "week" &&
+      losses.parseLossPeriod("year") === "week" && losses.parseLossPeriod(undefined) === "week");
+    ok("losses: week is 7 days and month 30, ending on the restaurant's today",
+      JSON.stringify(losses.lossRange("week", "2026-10-10")) === JSON.stringify({ start: "2026-10-04", end: "2026-10-10" }) &&
+      JSON.stringify(losses.lossRange("month", "2026-03-01")) === JSON.stringify({ start: "2026-01-31", end: "2026-03-01" }));
+
+    const rice = losses.parseLossRow({ product_id: P1, product_name: "Düyü", unit: "kg", theoretical_qty: "2", actual_qty: "3", loss_qty: "1",
+      loss_pct: "50", written_off_qty: "0", count_loss_qty: "1", unit_cost: "2", loss_value: "2", currency: "AZN", over_limit: true });
+    ok("losses: row parsed (10 plov x 200 g: expected 2, actual 3, lost 1)", rice && rice.theoretical === 2 && rice.actual === 3 && rice.loss === 1 &&
+      rice.lossPercent === 50 && rice.countLoss === 1 && rice.lossValue === 2 && rice.overLimit === true, rice);
+    const unsold = losses.parseLossRow({ product_id: P1, theoretical_qty: 0, actual_qty: 0.4, loss_qty: 0.4, loss_pct: null, loss_value: null, over_limit: false });
+    ok("losses: no sales -> no percent; hidden money stays null", unsold && unsold.lossPercent === null && unsold.lossValue === null && unsold.writtenOff === 0, unsold);
+    ok("losses: broken rows dropped", losses.parseLossRow({ product_id: P1, theoretical_qty: "x" }) === null && losses.parseLossRow(null) === null);
+    ok("losses: totals net out surpluses and count red rows",
+      JSON.stringify(losses.lossTotals([rice, { ...rice, lossValue: -0.5, overLimit: false }, unsold])) === JSON.stringify({ value: 1.5, overLimit: 1 }));
+    const shape = (value) => (typeof value === "function" ? "fn" : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shape(v)])) : typeof value);
+    ok("losses: AZ/RU/EN have the same texts", JSON.stringify(shape(OWNER_AZ)) === JSON.stringify(shape(OWNER_RU)) && JSON.stringify(shape(OWNER_RU)) === JSON.stringify(shape(OWNER_EN)));
+    ok("losses: column titles", OWNER_RU.losses.expected === "Ожидалось" && OWNER_RU.losses.actual === "Факт" && OWNER_RU.losses.lossPercent === "% потерь" &&
+      OWNER_RU.losses.breakdown("1 кг", "2 кг").includes("2 кг"));
+    ok("losses: owner path", load("lib/auth-redirect.js").OWNER_LOSSES_PATH === "/app/owner/losses");
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
 })();

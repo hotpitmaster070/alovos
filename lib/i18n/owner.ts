@@ -50,6 +50,26 @@ export type OwnerDictionary = {
     logWaste: string;
     dashboard: string;
   };
+  losses: {
+    open: string;
+    title: string;
+    subtitle: string;
+    periods: { week: string; month: string };
+    range: (start: string, end: string) => string;
+    total: string;
+    totalHint: (overLimit: number) => string;
+    product: string;
+    expected: string;
+    actual: string;
+    lossQty: string;
+    lossValue: string;
+    lossPercent: string;
+    breakdown: (writtenOff: string, countLoss: string) => string;
+    noSales: string;
+    empty: string;
+    forbidden: string;
+    how: string;
+  };
 };
 
 export const OWNER_AZ: OwnerDictionary = {
@@ -102,6 +122,26 @@ export const OWNER_AZ: OwnerDictionary = {
     forbidden: "Lent yalnız sahibkar və aşpaz üçündür.",
     logWaste: "Sil",
     dashboard: "Panel",
+  },
+  losses: {
+    open: "Haradan gedir",
+    title: "Gözlənilən və faktiki",
+    subtitle: "Satış × texnoloji kart ilə anbardan həqiqətən çıxanın fərqi",
+    periods: { week: "Həftə", month: "Ay" },
+    range: (start, end) => `${start} — ${end}`,
+    total: "Dövr üzrə itki",
+    totalHint: (n) => (n > 0 ? `${n} məhsul həddən yuxarıdır` : "Həddən yuxarı məhsul yoxdur"),
+    product: "Məhsul",
+    expected: "Gözlənilən",
+    actual: "Faktiki",
+    lossQty: "İtki",
+    lossValue: "İtki, pul",
+    lossPercent: "İtki %",
+    breakdown: (w, c) => `silinib ${w} · sayımda çatışmır ${c}`,
+    noSales: "satış yoxdur",
+    empty: "Bu dövrdə satış və itki yoxdur.",
+    forbidden: "Hesabat yalnız sahibkar və aşpaz üçündür.",
+    how: "Gözlənilən: satılan porsiyalar × texnoloji kart. Faktiki: satış, silinmələr və sayımda çatışmayan. Filiallar arası köçürmə və hazırlıq itki sayılmır.",
   },
 };
 
@@ -156,6 +196,26 @@ export const OWNER_RU: OwnerDictionary = {
     logWaste: "Списать",
     dashboard: "Дашборд",
   },
+  losses: {
+    open: "Где теряем",
+    title: "Ожидалось и факт",
+    subtitle: "Продажи × техкарты против того, что реально ушло со склада",
+    periods: { week: "Неделя", month: "Месяц" },
+    range: (start, end) => `${start} — ${end}`,
+    total: "Потери за период",
+    totalHint: (n) => (n > 0 ? `${n} товаров выше порога` : "Выше порога ничего нет"),
+    product: "Товар",
+    expected: "Ожидалось",
+    actual: "Факт",
+    lossQty: "Потери",
+    lossValue: "Потери, деньги",
+    lossPercent: "% потерь",
+    breakdown: (w, c) => `списано ${w} · недостача при подсчёте ${c}`,
+    noSales: "продаж нет",
+    empty: "За период нет ни продаж, ни потерь.",
+    forbidden: "Отчёт доступен только владельцу и шефу.",
+    how: "Ожидалось: проданные порции × техкарта. Факт: продажи, списания и недостача при подсчёте. Перемещения между филиалами и заготовки потерями не считаются.",
+  },
 };
 
 export const OWNER_EN: OwnerDictionary = {
@@ -208,5 +268,25 @@ export const OWNER_EN: OwnerDictionary = {
     forbidden: "The feed is for owners and chefs.",
     logWaste: "Write off",
     dashboard: "Dashboard",
+  },
+  losses: {
+    open: "Where it goes",
+    title: "Expected vs actual",
+    subtitle: "Sales × tech cards against what really left the stock",
+    periods: { week: "Week", month: "Month" },
+    range: (start, end) => `${start} — ${end}`,
+    total: "Loss in the period",
+    totalHint: (n) => (n > 0 ? `${n} products over the line` : "Nothing over the line"),
+    product: "Product",
+    expected: "Expected",
+    actual: "Actual",
+    lossQty: "Loss",
+    lossValue: "Loss, money",
+    lossPercent: "Loss %",
+    breakdown: (w, c) => `written off ${w} · missing at count ${c}`,
+    noSales: "no sales",
+    empty: "No sales and no losses in this period.",
+    forbidden: "The report is for owners and chefs.",
+    how: "Expected: portions sold × tech card. Actual: sales, write-offs and count shortages. Transfers between branches and prep are not losses.",
   },
 };

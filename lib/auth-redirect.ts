@@ -25,6 +25,7 @@ export const CHEF_DASHBOARD_PATH = "/app/chef/dashboard";
 export const COOK_TASKS_PATH = "/app/povar/tasks";
 export const DISCREPANCIES_PATH = `${ANBAR_APP_PATH}/discrepancies`;
 export const OWNER_DISCREPANCIES_PATH = "/app/owner/discrepancies";
+export const OWNER_LOSSES_PATH = "/app/owner/losses";
 export const CHEF_RECEIVING_PATH = "/app/chef/receiving";
 export const ANBAR_RECEIVING_PATH = `${ANBAR_APP_PATH}/receiving`;
 export const CHEF_RECIPES_PATH = "/app/chef/recipes";
