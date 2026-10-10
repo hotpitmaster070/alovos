@@ -31,7 +31,10 @@ for (const name of wanted.length ? wanted : all) {
   if (!good) failed++;
   console.log(`${good ? "ok  " : "FAIL"} ${name}: ${summary} (${Math.round((Date.now() - started) / 1000)}s)`);
   if (!good) {
-    for (const line of out.split("\n").filter((l) => /^(FAIL|ERROR)/.test(l))) console.log(`     ${line.slice(0, 400)}`);
+    const lines = out.split("\n");
+    const failures = lines.filter((l) => /^(FAIL|ERROR)/.test(l));
+    // A crash before the summary: its own output says why.
+    for (const line of failures.length ? failures : lines.filter(Boolean).slice(-15)) console.log(`     ${line.slice(0, 400)}`);
   }
 }
 console.log(failed ? `\n${failed} test file(s) failed` : "\nall PGlite tests passed");

@@ -37,6 +37,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: package.json
+          cache: npm
+      # hardcode.test.mjs compiles lib/ helpers with the project's TypeScript.
+      - run: npm ci
       # Outside the project, so package.json and the lock file stay as they are.
       - run: npm install --prefix "$RUNNER_TEMP/pglite" --no-save --no-package-lock @electric-sql/pglite@0.5.8
       - run: node scripts/test-pglite.mjs
