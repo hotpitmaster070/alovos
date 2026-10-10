@@ -2,7 +2,7 @@ import StorageManager from "@/components/anbar/storage-manager";
 import ExpiredStockCard from "@/components/labels/expired-stock-card";
 import NearExpiryCard from "@/components/labels/near-expiry-card";
 import StockByKind from "@/components/labels/stock-by-kind";
-import { canReviewExpiry } from "@/lib/labels/expiry";
+import { canReviewExpiry, isPastExpiry } from "@/lib/labels/expiry";
 import { canSeeCosts, stockFilter } from "@/lib/labels/final";
 import { expiredStock, getNearExpiry, stockView } from "@/lib/labels/repository";
 import { redirectIfNoOrg } from "@/lib/app-gate";
@@ -57,6 +57,7 @@ export default async function StoragePage({ searchParams }: { searchParams: RawS
           canReview={canReview}
         />
       )}
+      {expired && <ExpiredStockCard rows={expired.value.filter((row) => isPastExpiry(row.daysLeft))} canWriteOff={canReview} />}
       <StorageManager
         key={branch?.id ?? ""}
         branches={branches}
@@ -80,7 +81,6 @@ export default async function StoragePage({ searchParams }: { searchParams: RawS
           }}
         />
       )}
-      {expired && <ExpiredStockCard rows={expired.value} canWriteOff={canReview} />}
     </div>
   );
 }

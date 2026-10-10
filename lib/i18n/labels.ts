@@ -345,8 +345,8 @@ export const LABELS_AZ: LabelsDictionary = {
     today: (qty, cost) => `Bu gün tullantı: ${qty}${cost ? ` (${cost})` : ""}`,
     vsNorm: (norm, over) => (over > 0 ? ` - ${norm}% norma, ${over}% artıq` : ` - ${norm}% norma, normadadır`),
     noRuns: "Bu gün zaqotovka olmayıb",
-    expiredTitle: "Vaxtı keçir",
-    expiredHint: "Xarab olanı silin — tullantı kimi yazılır",
+    expiredTitle: "Artıq vaxtı keçib",
+    expiredHint: "Satışa getmir. Şef və ya sahib silir — tullantı kimi yazılır",
     expiredEmpty: "Vaxtı keçən qalıq yoxdur",
     expiredDays: (days) => (days < 0 ? `${-days} gün keçib` : days === 0 ? "bu gün bitir" : `${days} gün qalıb`),
     writeOff: "Sil - xarab oldu",
@@ -602,8 +602,8 @@ export const LABELS_RU: LabelsDictionary = {
     today: (qty, cost) => `Отходы сегодня: ${qty}${cost ? ` (${cost})` : ""}`,
     vsNorm: (norm, over) => (over > 0 ? ` — норма ${norm}%, превышение ${over}%` : ` — норма ${norm}%, в норме`),
     noRuns: "Сегодня заготовок не было",
-    expiredTitle: "Истекает срок",
-    expiredHint: "Испорченное спишите — запишется в отходы",
+    expiredTitle: "Уже просрочено",
+    expiredHint: "В продажи не уходит. Списывает шеф или владелец — запишется в отходы",
     expiredEmpty: "Просроченных остатков нет",
     expiredDays: (days) =>
       days < 0
@@ -864,8 +864,8 @@ export const LABELS_EN: LabelsDictionary = {
     today: (qty, cost) => `Waste today: ${qty}${cost ? ` (${cost})` : ""}`,
     vsNorm: (norm, over) => (over > 0 ? ` - ${norm}% norm, ${over}% over` : ` - ${norm}% norm, within it`),
     noRuns: "No preps today",
-    expiredTitle: "Expiring",
-    expiredHint: "Write spoiled stock off — it is logged as waste",
+    expiredTitle: "Already expired",
+    expiredHint: "Kept out of sales. A chef or owner writes it off — it is logged as waste",
     expiredEmpty: "No expired stock",
     expiredDays: (days) =>
       days < 0 ? `${-days} ${-days === 1 ? "day" : "days"} past` : days === 0 ? "expires today" : `${days} ${days === 1 ? "day" : "days"} left`,

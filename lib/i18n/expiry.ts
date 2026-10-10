@@ -3,7 +3,7 @@ import { ruPlural } from "./plural";
 
 export type ExpiryDictionary = {
   card: {
-    title: string;
+    title: (days: number) => string;
     hint: (days: number) => string;
     empty: string;
     count: (count: number) => string;
@@ -59,7 +59,7 @@ export type ExpiryDictionary = {
 
 export const EXPIRY_AZ: ExpiryDictionary = {
   card: {
-    title: "Müddəti bitir",
+    title: (days) => (days <= 1 ? "Sabah vaxtı bitir" : `${days} gün ərzində vaxtı bitir`),
     hint: (days) => `Bu gündən ${days} gün ərzində bitən partiyalar. Sistem özü heç nə silmir — qərarı şef verir.`,
     empty: "Yaxın günlərdə müddəti bitən partiya yoxdur.",
     count: (count) => `${count} partiya`,
@@ -127,7 +127,7 @@ export const EXPIRY_AZ: ExpiryDictionary = {
 
 export const EXPIRY_RU: ExpiryDictionary = {
   card: {
-    title: "Истекает срок",
+    title: (days) => (days <= 1 ? "Завтра истекает" : `Истекает в ближайшие ${days} ${ruPlural(days, "день", "дня", "дней")}`),
     hint: (days) =>
       `Партии, у которых срок истекает в ближайшие ${days} ${ruPlural(days, "день", "дня", "дней")}. Система сама ничего не списывает — решает шеф.`,
     empty: "В ближайшие дни ни у одной партии срок не истекает.",
@@ -197,7 +197,7 @@ export const EXPIRY_RU: ExpiryDictionary = {
 
 export const EXPIRY_EN: ExpiryDictionary = {
   card: {
-    title: "Expiring soon",
+    title: (days) => (days <= 1 ? "Expires tomorrow" : `Expires within ${days} days`),
     hint: (days) => `Lots expiring within ${days} ${days === 1 ? "day" : "days"} from today. The system writes nothing off — the chef decides.`,
     empty: "No lot expires in the next days.",
     count: (count) => `${count} ${count === 1 ? "lot" : "lots"}`,

@@ -1351,6 +1351,8 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("expiry: an expired lot can only be written off", JSON.stringify(expiry.actionsFor(-1)) === JSON.stringify([ExpiryAction.WriteOff]) &&
       expiry.actionsFor(0).length === 5 && expiry.actionsFor(1).includes(ExpiryAction.Extend));
     ok("expiry: warning window is one day", expiry.EXPIRY_WARNING_DAYS === 1);
+    ok("expiry: past expiry only below today (the expiry day itself still sells)",
+      expiry.isPastExpiry(-1) && !expiry.isPastExpiry(0) && !expiry.isPastExpiry(1));
     ok("expiry: badge red at 0 or less, yellow at 1, plain later",
       expiry.expiryTone(-2) === "expired" && expiry.expiryTone(0) === "expired" && expiry.expiryTone(1) === "warning" && expiry.expiryTone(2) === "ok");
     ok("expiry: only owners and chefs review", expiry.canReviewExpiry("owner") && expiry.canReviewExpiry("chef") &&
@@ -1389,6 +1391,9 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
       expiry.EXPIRY_ACTIONS.every((action) => d.actions[action] && d.done[action]("Süd").includes("Süd"))));
     ok("expiry: day texts", EXPIRY_RU.days(0) === "сегодня" && EXPIRY_RU.days(1) === "завтра" && EXPIRY_RU.days(-2) === "просрочено 2 дня" &&
       EXPIRY_EN.days(3) === "3 days" && EXPIRY_AZ.days(1) === "sabah");
+    ok("expiry: yellow block title follows the review window", EXPIRY_RU.card.title(1) === "Завтра истекает" &&
+      EXPIRY_RU.card.title(3) === "Истекает в ближайшие 3 дня" && EXPIRY_EN.card.title(1) === "Expires tomorrow" && EXPIRY_AZ.card.title(1) === "Sabah vaxtı bitir");
+    ok("expiry: red block is the already expired stock", load("lib/i18n/labels.js").LABELS_RU.waste.expiredTitle === "Уже просрочено");
     ok("expiry: chef dashboard path", load("lib/auth-redirect.js").CHEF_DASHBOARD_PATH === "/app/chef/dashboard");
   }
 
