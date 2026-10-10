@@ -18,6 +18,8 @@ export type TenantSettings = {
   expiryWarnDays: number;
   /** Yellow expiry status below this many days left. */
   expiryCriticalDays: number;
+  /** The near-expiry list and the daily notification cover today .. today + this many days. */
+  expiryReviewDays: number;
   /** Low stock threshold for products without their own min_stock. */
   lowStockDefault: number;
   /** How parallel stock count entries of one product combine: latest entry or sum. */
@@ -45,7 +47,7 @@ export type ExpirySettings = Pick<TenantSettings, "timezone" | "expiryWarnDays" 
 export type StockSettings = Pick<TenantSettings, "lowStockDefault">;
 
 export const TENANT_SETTINGS_COLUMNS =
-  "currency, currency_symbol, locale, language, timezone, expiry_warn_days, expiry_critical_days, low_stock_default, count_merge_mode, usage_window_days, invite_ttl_days, default_shelf_life_days, prep_balance_tolerance, prep_balance_tolerance_percent, default_portion_weight_kg, default_density_kg_per_l, default_trim_value_percent";
+  "currency, currency_symbol, locale, language, timezone, expiry_warn_days, expiry_critical_days, expiry_review_days, low_stock_default, count_merge_mode, usage_window_days, invite_ttl_days, default_shelf_life_days, prep_balance_tolerance, prep_balance_tolerance_percent, default_portion_weight_kg, default_density_kg_per_l, default_trim_value_percent";
 
 export class TenantSettingsError extends Error {
   constructor(message: string) {
@@ -97,6 +99,7 @@ export function parseTenantSettings(row: unknown): TenantSettings {
     timezone,
     expiryWarnDays: count(row, "expiry_warn_days"),
     expiryCriticalDays: count(row, "expiry_critical_days"),
+    expiryReviewDays: count(row, "expiry_review_days"),
     lowStockDefault: count(row, "low_stock_default"),
     countMergeMode: mergeMode(row.count_merge_mode),
     usageWindowDays: count(row, "usage_window_days"),

@@ -5,18 +5,16 @@
 import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const { ok, done } = reporter();
-const { q, as, sys, apply } = await freshDb();
+const { q, as, sys, apply, applyTwice } = await freshDb();
 
-let failure = await apply(migrationFiles);
+// 20261012 and 20261013 each re-run on their own result; 20261024 later replaces wastage_total(4 args)
+// by a 6-argument one and 20261028001200 changes stock_value's result.
+const firstTwice = migrationFiles.indexOf("20261012_wastage_atomic.sql");
+let failure = await apply(migrationFiles.slice(0, firstTwice));
+if (!failure) failure = await applyTwice(migrationFiles.slice(firstTwice));
 if (failure) console.log(failure);
-ok(`all ${migrationFiles.length} migrations apply`, !failure);
-// 20261024 replaced wastage_total(4 args) by a 6-argument one; re-running 20261013 brings the old
-// overload back, so 20261024 follows it, as in a deploy.
-for (const file of ["20261012_wastage_atomic.sql", "20261013_paged_reads.sql", "20261024000000_par_wastage.sql"]) {
-  failure = await apply([file]);
-  ok(`${file} applies again`, !failure, failure);
-}
-ok("one wastage_total after the re-run", Number((await q("select count(*) n from pg_proc where proname = 'wastage_total'"))[0].n) === 1);
+ok(`all ${migrationFiles.length} migrations apply, each twice from 20261012 on`, !failure, failure);
+ok("one wastage_total", Number((await q("select count(*) n from pg_proc where proname = 'wastage_total'"))[0].n) === 1);
 
 // ---- tenant A: owner, cook, staff; tenant B: owner
 const [A, C, S, B] = [U("0a"), U("0c"), U("05"), U("0b")];
@@ -148,10 +146,10 @@ r = await as(C, "select product_name, quantity::float q, total_count::int total 
 ok("stock lines: lots summed per product and place, empty balances hidden", !r.err && r.rows.length === 1 && r.rows[0].product_name === "Rice" && r.rows[0].q === 4 && r.rows[0].total === 1, r);
 r = await as(C, "select count(*)::int c from public.stock_lines_page(p_search => 'milk')");
 ok("stock lines search", !r.err && r.rows[0].c === 0, r);
-r = await as(A, "select public.stock_value()::float v");
-ok("owner sees the stock value", !r.err && r.rows[0].v === 6, r);
-r = await as(C, "select public.stock_value() v");
-ok("cook sees no stock value", !r.err && r.rows[0].v === null, r);
+r = await as(A, "select total_value::float v, expired_value::float x from public.stock_value()");
+ok("owner sees the stock value", !r.err && r.rows[0].v === 6 && r.rows[0].x === 0, r);
+r = await as(C, "select total_value v, expired_value x from public.stock_value()");
+ok("cook sees no stock value", !r.err && r.rows[0].v === null && r.rows[0].x === null, r);
 r = await as(A, "select public.wastage_total(now() - interval '1 day', now() + interval '1 day')::float v");
 ok("owner: today's waste total over all logs", !r.err && r.rows[0].v === 16, r);
 r = await as(C, "select public.wastage_total(now() - interval '1 day', now() + interval '1 day') v");

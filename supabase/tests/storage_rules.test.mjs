@@ -94,9 +94,10 @@ r = await as(C, `select * from public.move_stock_lot('${remaining.id}', '${don}'
 ok("no moves into a place being counted", /open_count/.test(r.err ?? ""), r);
 await as(A, `select public.cancel_stock_count(id) from stock_counts where location_id='${don}' and status='counting'`);
 
-// ---- plain transfers are unchanged: FEFO, the lot's own date
+// ---- plain transfers: FEFO among good lots (20261028001200), the lot's own date
 r = await as(A, `select public.move_stock_rpc('${toyuq}','${soy}','${quru}',1)`);
 rows = await stockAt(quru);
-ok("a transfer without a lot still takes FEFO and keeps that lot's date", !r.err && rows.length === 1 && iso(rows[0].expiry_date) === plus(-7), { r, rows });
+ok("a transfer without a lot takes the earliest good lot and keeps its date", !r.err && rows.length === 1 && iso(rows[0].expiry_date) === plus(3), { r, rows });
+ok("the expired lot stays where it is", (await stockAt(soy)).some((row) => iso(row.expiry_date) === plus(-7) && row.qty === 2));
 
 done();

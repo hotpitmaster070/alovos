@@ -36,6 +36,7 @@ import {
 } from "@/lib/anbar/stock-view";
 import { ForecastPanel, ForecastStatusCell, LimitsButton } from "@/components/purchasing/forecast";
 import { useT } from "@/lib/i18n/useT";
+import { NEAR_EXPIRY_ANCHOR } from "@/lib/labels/expiry";
 import type { ForecastRow, Supplier } from "@/lib/purchasing/model";
 import AddStorageLocation from "./add-storage-location";
 
@@ -84,6 +85,7 @@ export default function StockBoard({
   locationId,
   branchId,
   money,
+  expiredMoney,
   updated,
   forecast,
   attention,
@@ -100,7 +102,10 @@ export default function StockBoard({
   branches: KitchenBranch[];
   locationId: string | "all";
   branchId: string | "all";
+  /** Value of the good stock. */
   money: string;
+  /** Value of the expired stock, kept out of `money`; null when there is none or it is hidden. */
+  expiredMoney: string | null;
   updated: boolean;
   /** Forecast of the products on this page and of those needing attention. */
   forecast: ForecastRow[];
@@ -297,6 +302,11 @@ export default function StockBoard({
       <div>
         <p className="text-[10px] font-medium uppercase tracking-widest text-white/50">{copy.total}</p>
         <p className="mt-1 font-serif text-3xl font-bold text-white">{money}</p>
+        {expiredMoney && (
+          <Link href={`${ANBAR_STORAGE_PATH}#${NEAR_EXPIRY_ANCHOR}`} className="mt-1 inline-block text-xs text-red-300 hover:underline">
+            {t.expiry.expiredValue(expiredMoney)}
+          </Link>
+        )}
       </div>
 
       <StockMoveDialog
