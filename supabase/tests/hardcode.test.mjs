@@ -12,7 +12,7 @@ const CLEANUP = "20261010_cleanup_and_hardcode.sql";
 const before = migrationFiles.filter((f) => f < CLEANUP);
 
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, sys, apply } = await freshDb();
 
 let failure = await apply(before);
 if (failure) console.log(failure);

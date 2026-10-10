@@ -288,11 +288,13 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
   };
   const receiptTables = { storage_locations: [{ id: L1, branch_id: B1 }], products: [{ id: P1, unit: "kg" }] };
   let r = await receive("ok", receiptTables, { ...receipt, tenant_id: "evil", organization_id: "evil" });
-  const movement = r.cl.calls.find((x) => x.table === "stock_movements");
-  ok("action.receive: one prihod movement stamped with the scope tenant", r.result.ok && movement && movement.op === "insert" && movement.payload.tenant_id === TENANT && movement.payload.movement_type === "prihod" && movement.payload.branch_id === B1 && movement.payload.cost_per_unit === 1.5);
+  const movement = r.cl.calls.find((x) => x.rpc === "receive_stock_rpc");
+  ok("action.receive: one receive_stock_rpc call, no direct movement insert", r.result.ok && movement && movement.args.p_product_id === P1 &&
+    movement.args.p_location_id === L1 && movement.args.p_cost_per_unit === 1.5 && movement.args.p_unit === "kg" &&
+    !r.cl.calls.some((x) => x.table === "stock_movements"), r.cl.calls);
   ok("action.receive: client tenant fields ignored, revalidates /app/anbar", !JSON.stringify(r.cl.calls).includes("evil") && revalidated.includes("/app/anbar"));
   r = await receive("ok", { ...receiptTables, storage_locations: [] }, receipt);
-  ok("action.receive: inactive or foreign location -> locationNotFound, nothing written", r.result.error === "locationNotFound" && !r.cl.calls.some((x) => x.op === "insert"));
+  ok("action.receive: inactive or foreign location -> locationNotFound, nothing written", r.result.error === "locationNotFound" && !r.cl.calls.some((x) => x.op === "insert" || x.rpc));
   r = await receive("ok", receiptTables, { ...receipt, qty: "0" });
   ok("action.receive: invalid qty rejected before any query", r.result.error === "invalidQty" && r.cl.calls.length === 0);
   r = await receive("unauthenticated", receiptTables, receipt);
@@ -1273,6 +1275,70 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("transfer texts: every error in three languages", transfer.TRANSFER_LANGS.every((lang) =>
       transfer.TRANSFER_ERRORS.every((code) => typeof transfer.TRANSFER_MESSAGES[lang][code] === "string" && transfer.TRANSFER_MESSAGES[lang][code].length > 0)) &&
       transfer.TRANSFER_MESSAGES.ru.shortageLine("Молоко (l)", "100", "3") === "Молоко (l): нужно 100, есть 3");
+    const P2 = "cccccccc-0000-0000-0000-000000000002";
+    const L2 = "aaaaaaaa-0000-0000-0000-000000000002";
+    const placed = transfer.parseTransferInput({ ...base, from_location_id: L1, to_location_id: L2, items: [{ product_id: P, quantity: 1 }, { product_id: P2, quantity: 2, to_location_id: L1 }] });
+    ok("transfer input: top-level places are item defaults, item places win", placed && placed.items[0].fromLocationId === L1 &&
+      placed.items[0].toLocationId === L2 && placed.items[1].toLocationId === L1, placed);
+    ok("transfer input: bad top-level place rejected", transfer.parseTransferInput({ ...base, to_location_id: "nope", items: [{ product_id: P, quantity: 1 }] }) === null);
+  }
+
+  // ---- transfer screen: cart, quantities, request body, texts
+  {
+    const transfer = load("lib/transfer/model.js");
+    const cart = load("lib/transfer/cart.js");
+    const { TRANSFERS_AZ, TRANSFERS_RU, TRANSFERS_EN } = load("lib/i18n/transfers.js");
+    const B2 = "bbbbbbbb-0000-0000-0000-000000000002";
+    const P2 = "cccccccc-0000-0000-0000-000000000002";
+    const milk = { productId: P1, name: "Süd", internalCode: "ALO-0001", barcode: "4760000000017", unit: "l", available: 3, nearestExpiry: "2026-10-12" };
+    const salt = { productId: P2, name: "Duz", internalCode: "ALO-0002", barcode: null, unit: "kg", available: 10, nearestExpiry: null };
+
+    ok("transfer ui: number format TRF-YYYYMMDD-NNNN", cart.isTransferNumber("TRF-20261010-0001") && cart.isTransferNumber("TRF-20261010-12345") &&
+      !cart.isTransferNumber("TRF-2026101-0001") && !cart.isTransferNumber("trf-20261010-0001") && !cart.isTransferNumber(null));
+    ok("transfer ui: quantity accepts comma and spaces", cart.parseQuantity("1,5") === 1.5 && cart.parseQuantity(" 1 500.25 ") === 1500.25 &&
+      cart.parseQuantity("2") === 2 && cart.parseQuantity(".5") === 0.5);
+    ok("transfer ui: quantity rejects empty, zero, negative, text", ["", "0", "-1", "abc", "1.2.3", "1e3"].every((text) => cart.parseQuantity(text) === null));
+
+    const one = cart.addLine([], milk);
+    const twice = cart.addLine(cart.setQuantity(one.lines, P1, "2"), milk);
+    ok("transfer ui: product added once, quantity kept", one.added && !twice.added && twice.lines.length === 1 && twice.lines[0].quantity === "2");
+    const full = Array.from({ length: transfer.TRANSFER_MAX_ITEMS }, (_, i) => ({ ...salt, productId: `p${i}`, quantity: "1" }));
+    ok("transfer ui: no more than 200 lines", !cart.addLine(full, milk).added && cart.addLine(full, milk).lines.length === transfer.TRANSFER_MAX_ITEMS);
+
+    let lines = cart.addLine(one.lines, salt).lines;
+    ok("transfer ui: empty quantity is a problem", cart.lineProblem(lines[0]) === "quantity");
+    lines = cart.setQuantity(lines, P1, "4");
+    ok("transfer ui: more than available is a problem ('есть 3')", cart.lineProblem(lines[0]) === "exceeds" && TRANSFERS_RU.available("3", "л") === "есть 3 л");
+    lines = cart.setQuantity(cart.setQuantity(lines, P1, "2,5"), P2, "1");
+    ok("transfer ui: valid lines can be sent", lines.every((line) => cart.lineProblem(line) === null) &&
+      cart.canSubmit({ fromBranchId: B1, toBranchId: B2, fromLocationId: null, toLocationId: null, lines, note: "" }));
+    ok("transfer ui: same branch, no branch or empty cart cannot be sent", [
+      { fromBranchId: B1, toBranchId: B1, lines },
+      { fromBranchId: "", toBranchId: B2, lines },
+      { fromBranchId: B1, toBranchId: B2, lines: [] },
+    ].every((draft) => !cart.canSubmit({ fromLocationId: null, toLocationId: null, note: "", ...draft })));
+
+    const body = cart.buildTransferRequest({ fromBranchId: B1, toBranchId: B2, fromLocationId: L1, toLocationId: null, lines, note: "  weekly  " });
+    ok("transfer ui: request body for /api/transfer", body && body.from_branch_id === B1 && body.to_branch_id === B2 && body.note === "weekly" &&
+      body.items.length === 2 && body.items[0].product_id === P1 && body.items[0].quantity === 2.5 &&
+      body.items[0].from_location_id === L1 && body.items[0].to_location_id === null, body);
+    const parsedBody = transfer.parseTransferInput(body);
+    ok("transfer ui: the API accepts what the screen sends", parsedBody && parsedBody.items.length === 2 && parsedBody.items[1].quantity === 1, parsedBody);
+    ok("transfer ui: nothing to send while a line is wrong", cart.buildTransferRequest({ fromBranchId: B1, toBranchId: B2, fromLocationId: null, toLocationId: null,
+      lines: cart.setQuantity(lines, P2, "0"), note: "" }) === null);
+
+    const moved = cart.refreshAvailability(lines, [{ ...milk, available: 1, nearestExpiry: "2026-10-20" }]);
+    ok("transfer ui: new source refreshes stock, missing product has none", moved[0].available === 1 && moved[0].nearestExpiry === "2026-10-20" &&
+      moved[1].available === 0 && moved[1].nearestExpiry === null && moved[0].quantity === "2,5");
+    const short = cart.applyShortages(lines, [{ product_id: P1, available: 1 }]);
+    ok("transfer ui: refused transfer marks the short line", cart.lineProblem(short[0]) === "exceeds" && cart.lineProblem(short[1]) === null &&
+      cart.removeLine(short, P1).length === 1);
+
+    const shape = (value) => (typeof value === "function" ? "fn" : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shape(v)])) : typeof value);
+    ok("transfer ui: AZ/RU/EN have the same texts", JSON.stringify(shape(TRANSFERS_AZ)) === JSON.stringify(shape(TRANSFERS_RU)) &&
+      JSON.stringify(shape(TRANSFERS_RU)) === JSON.stringify(shape(TRANSFERS_EN)) &&
+      [TRANSFERS_AZ, TRANSFERS_RU, TRANSFERS_EN].every((d) => d.submit(2).includes("2") && d.success.number("TRF-20261010-0001").includes("TRF-20261010-0001")));
+    ok("transfer ui: invoice path", load("lib/auth-redirect.js").transferInvoicePath(P1) === `/app/anbar/transfers/${P1}`);
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

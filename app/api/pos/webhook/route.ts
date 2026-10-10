@@ -35,14 +35,12 @@ export async function POST(request: Request) {
   if (!integration.data) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
   if (UUID.test(productId) && UUID.test(locationId) && Number.isFinite(quantity) && quantity > 0) {
-    const movement = await current.supabase.from("stock_movements").insert({
-      tenant_id: current.tenantId,
-      product_id: productId,
-      from_location_id: locationId,
-      quantity,
-      movement_type: "spisanie",
-      reason: integration.data.type,
-      user_id: current.userId,
+    const movement = await current.supabase.rpc("wastage_stock_rpc", {
+      p_product_id: productId,
+      p_location_id: locationId,
+      p_quantity: quantity,
+      p_movement_type: "spisanie",
+      p_reason: integration.data.type,
     });
     if (movement.error) {
       const message = movement.error.message ?? "";

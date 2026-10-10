@@ -5,7 +5,7 @@
 import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, sys, apply } = await freshDb();
 
 let failure = await apply(migrationFiles);
 if (failure) console.log(failure);
@@ -32,7 +32,7 @@ const storeB = (await q(`select id from storage_locations where tenant_id='${tB}
 let r = await as(A, `insert into products(tenant_id, name, cost, unit) values ('${tA}','Milk',2,'l'),('${tA}','Rice',1,'kg') returning id, name`);
 const milk = r.rows.find((row) => row.name === "Milk").id;
 const rice = r.rows.find((row) => row.name === "Rice").id;
-r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date) values
+r = await sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date) values
   ('${tA}','${milk}','${branchA}','${storeA}',2,'prihod',3,'l','2026-12-01'),
   ('${tA}','${milk}','${branchA}','${storeA}',5,'prihod',2,'l','2026-11-01')`);
 ok("seed two milk lots", !r.err, r);
@@ -137,7 +137,7 @@ ok("other tenant sees only its own products", !r.err && r.rows.length === 0, r);
 r = await as(C, "select count(*)::int c from public.catalog_categories()");
 ok("categories", !r.err && r.rows[0].c === 2, r);
 
-r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date) values
+r = await sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date) values
   ('${tA}','${rice}','${branchA}','${storeA}',3,'prihod',1.5,'kg','2027-01-01'),
   ('${tA}','${rice}','${branchA}','${storeA}',1,'prihod',1.5,'kg','2027-02-01')`);
 ok("seed two rice lots", !r.err, r);

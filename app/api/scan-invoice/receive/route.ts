@@ -116,18 +116,13 @@ export async function POST(request: Request) {
       productId = created.data.id;
     }
 
-    const movement = await supabase.from("stock_movements").insert({
-      tenant_id: tenantId,
-      product_id: productId,
-      branch_id: branchId,
-      from_location_id: null,
-      to_location_id: locationId,
-      quantity: line.qty,
-      movement_type: "prihod",
-      reason: "invoice",
-      user_id: userId,
-      cost_per_unit: line.price,
-      unit: line.unit || "unit",
+    const movement = await supabase.rpc("receive_stock_rpc", {
+      p_product_id: productId,
+      p_location_id: locationId,
+      p_quantity: line.qty,
+      p_cost_per_unit: line.price,
+      p_unit: line.unit || null,
+      p_reason: "invoice",
     });
     if (movement.error) return fail("save_failed", 500);
 

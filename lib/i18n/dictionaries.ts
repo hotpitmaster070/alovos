@@ -8,6 +8,7 @@ import { INVENTORY_AZ, INVENTORY_EN, INVENTORY_RU, type InventoryDictionary } fr
 import { RECEIVING_AZ, RECEIVING_EN, RECEIVING_RU, type ReceivingDictionary } from "./receiving";
 import { RECIPES_AZ, RECIPES_EN, RECIPES_RU, type RecipesDictionary } from "./recipes";
 import { CATALOG_IMPORT_AZ, CATALOG_IMPORT_EN, CATALOG_IMPORT_RU, type CatalogImportDictionary } from "./catalog-import";
+import { TRANSFERS_AZ, TRANSFERS_EN, TRANSFERS_RU, type TransfersDictionary } from "./transfers";
 import { OWNER_AZ, OWNER_EN, OWNER_RU, type OwnerDictionary } from "./owner";
 import { PURCHASING_AZ, PURCHASING_EN, PURCHASING_RU, type PurchasingDictionary } from "./purchasing";
 
@@ -441,6 +442,7 @@ export type Dictionary = {
   receiving: ReceivingDictionary;
   recipes: RecipesDictionary;
   catalogImport: CatalogImportDictionary;
+  transfers: TransfersDictionary;
 };
 
 const AZ: Dictionary = {
@@ -952,6 +954,7 @@ const AZ: Dictionary = {
   receiving: RECEIVING_AZ,
   recipes: RECIPES_AZ,
   catalogImport: CATALOG_IMPORT_AZ,
+  transfers: TRANSFERS_AZ,
 };
 
 const RU: Dictionary = {
@@ -1463,6 +1466,7 @@ const RU: Dictionary = {
   receiving: RECEIVING_RU,
   recipes: RECIPES_RU,
   catalogImport: CATALOG_IMPORT_RU,
+  transfers: TRANSFERS_RU,
 };
 
 const EN: Dictionary = {
@@ -1974,6 +1978,7 @@ const EN: Dictionary = {
   receiving: RECEIVING_EN,
   recipes: RECIPES_EN,
   catalogImport: CATALOG_IMPORT_EN,
+  transfers: TRANSFERS_EN,
 };
 
 export const dictionaries = { AZ, RU, EN } satisfies Record<string, Dictionary>;

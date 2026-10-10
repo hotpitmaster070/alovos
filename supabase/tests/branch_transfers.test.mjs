@@ -7,7 +7,7 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const FILE = "20261028000800_branch_transfers_transaction.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, sys, apply } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < FILE));
 ok(`migrations before ${FILE} apply`, !failure, failure);
@@ -45,7 +45,7 @@ const products = (await as(A, `insert into products(tenant_id, name, unit) value
 const milk = products.find((p) => p.name === "Milk").id;
 const rice = products.find((p) => p.name === "Rice").id;
 const mProduct = (await as(M, `insert into products(tenant_id, name, unit) values ('${tM}','Foreign','kg') returning id`)).rows[0].id;
-const seed = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date) values
+const seed = await sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date) values
   ('${tA}','${milk}','${b1}','${fridge1}',3,'prihod',1,'l','${past}'),
   ('${tA}','${milk}','${b1}','${fridge1}',2,'prihod',3,'l','${soon}'),
   ('${tA}','${milk}','${b1}','${fridge1}',5,'prihod',2,'l','${later}'),

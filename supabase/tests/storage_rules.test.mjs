@@ -82,7 +82,7 @@ r = await as(B, `select * from public.move_stock_lot('${remaining.id}', '${don}'
 ok("another tenant cannot move our lot", /lot_not_found|forbidden/.test(r.err ?? ""), r);
 r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, from_location_id, to_location_id, quantity, movement_type, expiry_date, stock_id)
   values ('${tA}','${toyuq}','${branch}','${soy}','${quru}',1,'peremeshchenie','${plus(900)}','${remaining.id}')`);
-ok("a client cannot extend a date with a direct movement", /invalid_input/.test(r.err ?? ""), r);
+ok("a client cannot extend a date with a direct movement", /invalid_input|permission denied/.test(r.err ?? ""), r);
 
 r = await as(C, `select * from public.receive_stock_with_lot('${toyuq}', 2, '${soy}', null, '${plus(-10)}')`);
 ok("an old delivery, already expired", !r.err && iso(r.rows[0].expiry_date) === plus(-7), r);
@@ -97,8 +97,7 @@ ok("no moves into a place being counted", /open_count/.test(r.err ?? ""), r);
 await as(A, `select public.cancel_stock_count(id) from stock_counts where location_id='${don}' and status='counting'`);
 
 // ---- plain transfers are unchanged: FEFO, the lot's own date
-r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, from_location_id, to_location_id, quantity, movement_type)
-  values ('${tA}','${toyuq}','${branch}','${soy}','${quru}',1,'peremeshchenie')`);
+r = await as(A, `select public.move_stock_rpc('${toyuq}','${soy}','${quru}',1)`);
 rows = await stockAt(quru);
 ok("a transfer without a lot still takes FEFO and keeps that lot's date", !r.err && rows.length === 1 && iso(rows[0].expiry_date) === plus(-7), { r, rows });
 

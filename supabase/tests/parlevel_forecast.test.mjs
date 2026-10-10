@@ -6,7 +6,7 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const FORECAST = "20261016_parlevel_forecast.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, sys, apply } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < FORECAST));
 ok(`migrations before ${FORECAST} apply`, !failure, failure);
@@ -84,11 +84,11 @@ r = await as(C, `select par_level::float p, supplier_id from products where id='
 ok("everyone reads the limits", !r.err && r.rows[0].p === 10 && r.rows[0].supplier_id === meat, r);
 
 // ---- usage: 20 in; out 5 (2 days ago) + 2 (today) + 1 waste (once, not twice); 4 out 10 days ago is outside the window
-r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit)
+r = await sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit)
   values ('${tA}','${id["Mal əti"]}','${branchA}','${storeA}',20,'prihod',12,'kg')`);
 ok("seed 20 kg", !r.err, r);
 for (const [qty, daysAgo] of [[5, 2], [2, 0], [4, 10]]) {
-  r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, from_location_id, quantity, movement_type, unit)
+  r = await sys(`insert into stock_movements(tenant_id, product_id, branch_id, from_location_id, quantity, movement_type, unit)
     values ('${tA}','${id["Mal əti"]}','${branchA}','${storeA}',${qty},'spisanie','kg') returning id`);
   ok(`write off ${qty}`, !r.err, r);
   await q(`update stock_movements set created_at = now() - interval '${daysAgo} days' where id='${r.rows[0].id}'`);
@@ -98,7 +98,7 @@ ok("cook writes off 1 kg as waste", !r.err, r);
 const usage = async (product) => Number((await as(CH, `select public.calculate_avg_daily_usage('${product}') u`)).rows[0].u);
 ok("avg daily usage = (5 + 2 + 1) / 4-day window = 2", (await usage(id["Mal əti"])) === 2, await usage(id["Mal əti"]));
 ok("no movements -> 0", (await usage(id.Duz)) === 0);
-r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, unit)
+r = await sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, unit)
   values ('${tA}','${id.Toyuq}','${branchA}','${storeA}',4,'prihod','kg'),('${tA}','${id.Toyuq}','${branchA}','${storeA}',1,'count','kg')`);
 await q(`insert into stock_movements(tenant_id, product_id, branch_id, from_location_id, quantity, movement_type, unit) values ('${tA}','${id.Toyuq}','${branchA}','${storeA}',3,'count','kg')`);
 ok("count shortage counts as usage, surplus is subtracted: (3 - 1) / 4", (await usage(id.Toyuq)) === 0.5, await usage(id.Toyuq));
@@ -116,7 +116,7 @@ ok("projected = 8 - 2 x 3 = 2", beef?.proj === 2, beef);
 ok("projected below min 3: will run out, status order, need 10 - 2 = 8", beef?.will_run_out === true && beef?.status === "order" && beef?.need === 8, beef);
 ok("product without limits (tenant default 0) -> no_limits", f.Duz?.status === "no_limits" && f.Duz?.proj === null, f.Duz);
 r = await limits(CH, id.Toyuq, 5, 2, meat);
-await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, from_location_id, quantity, movement_type, unit) values ('${tA}','${id.Toyuq}','${branchA}','${storeA}',2,'spisanie','kg')`);
+await sys(`insert into stock_movements(tenant_id, product_id, branch_id, from_location_id, quantity, movement_type, unit) values ('${tA}','${id.Toyuq}','${branchA}','${storeA}',2,'spisanie','kg')`);
 f = await forecast(CH);
 ok("below min -> critical", f.Toyuq?.cur === 0 && f.Toyuq?.status === "critical", f.Toyuq);
 await q(`update tenant_settings set low_stock_default = 5 where tenant_id='${tA}'`);

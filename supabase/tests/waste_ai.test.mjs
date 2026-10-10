@@ -5,7 +5,7 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const FILE = "20261020_waste_photo_ai.sql";
 const { ok, done } = reporter();
-const { db, q, as, apply } = await freshDb();
+const { db, q, as, sys, apply } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < FILE));
 ok(`migrations before ${FILE} apply`, !failure, failure);
@@ -61,7 +61,7 @@ ok("tolerance 0 rejected", /invalid_input/.test(r.err ?? ""), r);
 
 // ---- a waste log with a photo
 const milk = (await as(A, `insert into products(tenant_id, name, cost, unit) values ('${tA}','Milk',2,'l') returning id`)).rows[0].id;
-await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date)
+await sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date)
   values ('${tA}','${milk}','${branch}','${store}',100,'prihod',2,'l','2026-12-01')`);
 let photoN = 0;
 const wasteWithPhoto = async (qty = 1) => {

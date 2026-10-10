@@ -82,10 +82,15 @@ export async function POST(request: Request) {
 
   revalidatePath(ANBAR_APP_PATH, "layout");
   const result = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+  const transferId = typeof result.transfer_id === "string" ? result.transfer_id : null;
+  const doc = transferId
+    ? await scope.client.from("branch_transfers").select("number").eq("tenant_id", scope.tenantId).eq("id", transferId).maybeSingle()
+    : null;
   return NextResponse.json(
     {
       ok: true,
-      transfer_id: result.transfer_id ?? null,
+      transfer_id: transferId,
+      number: typeof doc?.data?.number === "string" ? doc.data.number : null,
       items: result.items ?? input.items.length,
       movements: result.movements ?? null,
     },

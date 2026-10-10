@@ -1,6 +1,15 @@
 export const MOVEMENT_TYPES = ["prihod", "spisanie", "peremeshchenie", "transfer", "waste", "task", "count"] as const;
 export type MovementType = (typeof MOVEMENT_TYPES)[number];
 
+/**
+ * What the stock board writes, each through its RPC. Transfers between branches go through
+ * /api/transfer; tasks and counts through their own flows.
+ */
+export const BOARD_MOVEMENT_TYPES = ["prihod", "spisanie", "waste", "peremeshchenie"] as const satisfies readonly MovementType[];
+export type BoardMovementType = (typeof BOARD_MOVEMENT_TYPES)[number];
+export const isBoardMovementType = (value: string): value is BoardMovementType =>
+  (BOARD_MOVEMENT_TYPES as readonly string[]).includes(value);
+
 import type { StorageLocation } from "./types";
 
 export type KitchenLocation = StorageLocation;
@@ -21,7 +30,7 @@ export type StockMoveInput = {
   fromLocationId: string | null;
   toLocationId: string | null;
   quantity: number;
-  movementType: MovementType;
+  movementType: BoardMovementType;
   reason: string | null;
 };
 
@@ -70,12 +79,12 @@ export function parseStockMove(body: unknown): { ok: true; value: StockMoveInput
   const quantity = typeof body.quantity === "number" ? body.quantity : Number(asText(body.quantity));
   const reasonText = asText(body.reason);
 
-  if (!UUID.test(productId) || !isMovementType(movementType)) return { ok: false, error: "invalid_input" };
+  if (!UUID.test(productId) || !isBoardMovementType(movementType)) return { ok: false, error: "invalid_input" };
   if (fromLocationId === undefined || toLocationId === undefined) return { ok: false, error: "invalid_input" };
   if (!Number.isFinite(quantity) || quantity <= 0) return { ok: false, error: "invalid_input" };
   if (reasonText.length > 500) return { ok: false, error: "invalid_input" };
 
-  const movesStock = movementType === "peremeshchenie" || movementType === "transfer";
+  const movesStock = movementType === "peremeshchenie";
   if (movementType === "prihod" && !toLocationId) return { ok: false, error: "invalid_input" };
   if (movementType !== "prihod" && !movesStock && !fromLocationId) {
     return { ok: false, error: "invalid_input" };

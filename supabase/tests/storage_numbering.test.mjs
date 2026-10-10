@@ -5,7 +5,7 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const NUMBERING = "20261015_storage_numbering.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, sys, apply } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < NUMBERING));
 ok(`migrations before ${NUMBERING} apply`, !failure, failure);
@@ -120,7 +120,7 @@ const fridge1 = (await q(`select id from storage_locations where branch_id='${br
 const fridge2 = (await q(`select id from storage_locations where branch_id='${branch.Nizami}' and type='soyuducu' and number=2`))[0].id;
 r = await as(A, `insert into products(tenant_id, name, unit, storage_location_id) values ('${tA}','Milk','l','${fridge1}'),('${tA}','Cream','l',null) returning id, name`);
 const prod = Object.fromEntries(r.rows.map((row) => [row.name, row.id]));
-r = await as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit)
+r = await sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit)
   values ('${tA}','${prod.Cream}','${branch.Nizami}','${fridge1}',2,'prihod',1,'l'),('${tA}','${prod.Milk}','${branch.Nizami}','${fridge2}',1,'prihod',1,'l')`);
 ok("seed stock", !r.err, r);
 const overview = async () =>
