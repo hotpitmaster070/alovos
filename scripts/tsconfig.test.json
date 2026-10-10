@@ -54,6 +54,9 @@
     "../lib/transfer/cart.ts",
     "../lib/i18n/transfers.ts",
     "../lib/labels/expiry.ts",
-    "../lib/i18n/expiry.ts"
+    "../lib/i18n/expiry.ts",
+    "../lib/i18n/labels.ts",
+    "../lib/anbar/par.ts",
+    "../lib/i18n/owner.ts"
   ]
 }

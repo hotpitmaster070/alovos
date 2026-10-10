@@ -6,6 +6,8 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
+import ParAlertBadge from "@/components/anbar/par-alert-badge";
+import type { ParMark } from "@/lib/anbar/par";
 import { isUnit, type StorageLocation } from "@/lib/anbar/types";
 import { useT } from "@/lib/i18n/useT";
 import { canSetShelfLife } from "@/lib/labels/model";
@@ -110,11 +112,13 @@ function ItemsTable({
   currency,
   seesMoney,
   move,
+  par,
 }: {
   items: StockItem[];
   currency: CurrencyInfo;
   seesMoney: boolean;
   move: StockMove | null;
+  par: Record<string, ParMark>;
 }) {
   const { t } = useT();
   const copy = t.labels.stock;
@@ -154,6 +158,7 @@ function ItemsTable({
         <tbody className="divide-y divide-line">
           {items.map((item) => {
             const urgent = item.daysLeft !== null && item.daysLeft <= 0;
+            const low = par[item.productId];
             return (
               <tr key={item.stockId}>
                 <td className="py-2 pr-3">
@@ -162,6 +167,7 @@ function ItemsTable({
                 </td>
                 <td className="py-2 pr-3 whitespace-nowrap">
                   {formatQty(item.quantity)} {unit(item.unit)}
+                  {low && <ParAlertBadge quantity={low.quantity} min={low.min} unit={unit(low.unit)} compact className="ml-2" />}
                 </td>
                 <td className="py-2 pr-3 font-mono text-xs text-white/70">{item.lotNumber ?? "—"}</td>
                 <td className={cn("py-2 pr-3 whitespace-nowrap", urgent ? "text-red-300" : "text-white/80")}>
@@ -210,6 +216,7 @@ export default function StockByKind({
   seesMoney,
   link,
   move,
+  par = {},
 }: {
   value: StockValue;
   blocks: StockBlock[];
@@ -218,6 +225,8 @@ export default function StockByKind({
   seesMoney: boolean;
   link: StockLink;
   move?: StockMove;
+  /** Products below their minimum in this branch, by product id; their rows get the red badge. */
+  par?: Record<string, ParMark>;
 }) {
   const { t } = useT();
   const copy = t.labels.stock;
@@ -249,7 +258,7 @@ export default function StockByKind({
           <CardTitle className={block.kind ? KIND_STYLE[block.kind].text : "text-red-300"}>
             {block.kind ? copy.kinds[block.kind] : copy.filters.expiring}
           </CardTitle>
-          <ItemsTable items={block.items} currency={currency} seesMoney={seesMoney} move={move ?? null} />
+          <ItemsTable items={block.items} currency={currency} seesMoney={seesMoney} move={move ?? null} par={par} />
           {block.total > block.items.length && <p className="text-xs text-white/50">{copy.more(block.items.length, block.total)}</p>}
         </Card>
       ))}

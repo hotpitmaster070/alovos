@@ -6,11 +6,13 @@ import {
   listCatalogCategories,
   listStorageLocations,
 } from "@/lib/anbar/repository";
+import { parMarks } from "@/lib/anbar/par";
 import { resolveScope } from "@/lib/anbar/scope";
 import { parseLocationFilter } from "@/lib/anbar/stock-view";
 import type { RawSearchParams } from "@/lib/anbar/validation";
 import { ANBAR_CATALOG_PATH } from "@/lib/auth-redirect";
 import { canApproveCounts, memberRole } from "@/lib/count/load";
+import { parAlerts } from "@/lib/owner/dashboard";
 import { PAGE_SIZE, parsePage, parseSearch } from "@/lib/pagination";
 import { getSettings } from "@/lib/tenant-settings/getSettings";
 
@@ -34,12 +36,13 @@ export default async function CatalogPage({ searchParams }: { searchParams: RawS
   const lowOnly = first(searchParams.low) === "1";
   const page = parsePage(searchParams.page);
 
-  const [catalog, categories, locations, settings, role] = await Promise.all([
+  const [catalog, categories, locations, settings, role, alerts] = await Promise.all([
     listCatalog(gated.scope, { branchId, search, category, lowOnly }, page),
     listCatalogCategories(gated.scope, branchId),
     listStorageLocations(gated.scope),
     getSettings(gated.scope),
     memberRole(gated.scope),
+    parAlerts(gated.scope, branchId),
   ]);
 
   return (
@@ -56,6 +59,7 @@ export default async function CatalogPage({ searchParams }: { searchParams: RawS
       locations={locations}
       branchId={branchId}
       settings={settings}
+      par={parMarks(alerts, branchId)}
       canImport={canApproveCounts(role)}
     />
   );

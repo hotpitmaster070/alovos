@@ -17,9 +17,12 @@ export type ExpiryAction = (typeof ExpiryAction)[keyof typeof ExpiryAction];
 export const EXPIRY_ACTIONS: readonly ExpiryAction[] = Object.values(ExpiryAction);
 export const isExpiryAction = (value: unknown): value is ExpiryAction => (EXPIRY_ACTIONS as readonly unknown[]).includes(value);
 
+/** Past its expiry day (public.stock_is_fresh is false): out of sales, only a write-off is left. */
+export const isPastExpiry = (daysLeft: number): boolean => daysLeft < 0;
+
 /** Only writing off is allowed once a lot has expired (public.review_batch_action raises lot_expired). */
 export const actionsFor = (daysLeft: number): readonly ExpiryAction[] =>
-  daysLeft < 0 ? [ExpiryAction.WriteOff] : EXPIRY_ACTIONS;
+  isPastExpiry(daysLeft) ? [ExpiryAction.WriteOff] : EXPIRY_ACTIONS;
 
 /** Days left at which a lot is shown as "use first" (yellow); past expiry is red. */
 export const EXPIRY_WARNING_DAYS = 1;

@@ -26,6 +26,8 @@ export type OwnerDictionary = {
   };
   par: {
     order: (left: string, min: string) => string;
+    /** Short form for product cards and stock rows. */
+    orderNow: string;
     out: string;
   };
   wasteFeed: {
@@ -78,6 +80,7 @@ export const OWNER_AZ: OwnerDictionary = {
   },
   par: {
     order: (left, min) => `SİFARİŞ ET! Qalıb ${left}, minimum ${min}`,
+    orderNow: "İndi sifariş et",
     out: "BİTİB!",
   },
   wasteFeed: {
@@ -130,6 +133,7 @@ export const OWNER_RU: OwnerDictionary = {
   },
   par: {
     order: (left, min) => `ЗАКАЖИ! Осталось ${left}, минимум ${min}`,
+    orderNow: "Закажи сейчас",
     out: "ЗАКОНЧИЛОСЬ!",
   },
   wasteFeed: {
@@ -182,6 +186,7 @@ export const OWNER_EN: OwnerDictionary = {
   },
   par: {
     order: (left, min) => `ORDER! ${left} left, minimum ${min}`,
+    orderNow: "Order now",
     out: "OUT OF STOCK!",
   },
   wasteFeed: {
