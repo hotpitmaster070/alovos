@@ -5,14 +5,12 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const FILE = "20261020_waste_photo_ai.sql";
 const { ok, done } = reporter();
-const { db, q, as, sys, apply } = await freshDb();
+const { db, q, as, sys, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < FILE));
 ok(`migrations before ${FILE} apply`, !failure, failure);
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= FILE));
-  ok(`${FILE} applies (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= FILE));
+ok(`${FILE} and later apply, each twice`, !failure, failure);
 
 // The server's service_role client (Supabase grants it schema usage).
 await db.exec("grant usage on schema public to service_role");

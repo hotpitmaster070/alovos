@@ -94,6 +94,21 @@ export async function freshDb() {
     return null;
   };
 
+  /**
+   * Each file twice in a row, in deploy order: every migration must re-run on its own result.
+   * Re-running a whole older chain over a newer schema is not what a deploy does
+   * (e.g. 20261023 redefines a function whose return type 20261025 changed).
+   */
+  const applyTwice = async (files) => {
+    for (const file of files) {
+      for (const run of [1, 2]) {
+        const failure = await apply([file]);
+        if (failure) return `run ${run}: ${failure}`;
+      }
+    }
+    return null;
+  };
+
   /** Runs sql as the database owner, with as()'s result shape; for seed data clients may not write. */
   const sys = async (sql, params) => {
     try {
@@ -104,5 +119,5 @@ export async function freshDb() {
     }
   };
 
-  return { db, q, as, sys, apply };
+  return { db, q, as, sys, apply, applyTwice };
 }

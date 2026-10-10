@@ -6,7 +6,7 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const COUNT = "20261011_parallel_count.sql";
 const { ok, done } = reporter();
-const { q, as, sys, apply } = await freshDb();
+const { q, as, sys, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < COUNT));
 ok(`migrations before ${COUNT} apply`, !failure, failure);
@@ -39,10 +39,8 @@ await q(`insert into stock_counts(tenant_id, location_id, user_id) values ('${tA
 const legacy = (await q("select id from stock_counts"))[0].id;
 await q(`insert into stock_count_items(tenant_id, stock_count_id, product_id, counted_quantity) values ('${tA}','${legacy}','${id.Rice}',5)`);
 
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= COUNT));
-  ok(`${COUNT} and later apply (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= COUNT));
+ok(`${COUNT} and later apply, each twice`, !failure, failure);
 const old = (await q(`select status, approved_by, branch_id, counted_by, finished_by, merge_mode from stock_counts where id='${legacy}'`))[0];
 ok("legacy count is approved, attributed and has its branch", old.status === "approved" && old.approved_by === C1 && old.branch_id === branchA, old);
 ok("legacy count: its author is its counter, mode 'last'", JSON.stringify(old.counted_by) === JSON.stringify([C1]) && old.finished_by.length === 0 && old.merge_mode === "last", old);

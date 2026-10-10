@@ -123,6 +123,6 @@
 
 - Node 22 закреплён в `package.json` (`engines`), прод отвечает на `/api/health`.
 - Renovate: `.github/renovate.json`, обновления раз в неделю, `next` / `typescript` без автомержа.
-- CI: `.github/workflows/ci.yml` — `npm test` + `npx tsc --noEmit` на каждый PR.
+- CI: `.github/workflows/ci.yml` — `npm test` + `npx tsc --noEmit` и тесты базы PGlite (`node scripts/test-pglite.mjs`, все `supabase/tests/*.test.mjs`) на каждый PR.
 - TODO: включить branch protection для `main` с обязательной проверкой `test and typecheck`.
 - Деплой только через GitHub (мерж в `main`); `vercel --prod` из локальной папки не использовать.

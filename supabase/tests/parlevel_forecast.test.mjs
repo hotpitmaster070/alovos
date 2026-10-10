@@ -6,7 +6,7 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const FORECAST = "20261016_parlevel_forecast.sql";
 const { ok, done } = reporter();
-const { q, as, sys, apply } = await freshDb();
+const { q, as, sys, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < FORECAST));
 ok(`migrations before ${FORECAST} apply`, !failure, failure);
@@ -25,10 +25,8 @@ const branchA = (await q(`select id from branches where tenant_id='${tA}'`))[0].
 const storeA = (await q(`select id from storage_locations where tenant_id='${tA}' order by number, id limit 1`))[0].id;
 await q(`insert into suppliers(tenant_id, name, contact, delivery_days) values ('${tA}','Köhnə Təchizat','+994501112233',2)`);
 
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= FORECAST));
-  ok(`${FORECAST} applies (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= FORECAST));
+ok(`${FORECAST} and later apply, each twice`, !failure, failure);
 
 // ---- legacy supplier kept
 const legacy = (await q(`select lead_time_days, delivery_days, code, is_active from suppliers where tenant_id='${tA}'`))[0];
@@ -228,7 +226,7 @@ const snapshot = async () =>
       (select json_agg(json_build_object('id', id, 'used', used_at) order by id) from invitations) i`),
   );
 const before = await snapshot();
-failure = await apply(migrationFiles.filter((f) => f >= FORECAST));
+failure = await apply([FORECAST]);
 ok(`${FORECAST} re-applies on live data`, !failure, failure);
 ok("suppliers, limits, requests and invitations survive the re-run", (await snapshot()) === before);
 

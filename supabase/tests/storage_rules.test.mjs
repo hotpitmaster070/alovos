@@ -6,14 +6,12 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const RULES = "20261022000000_product_storage_rules.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < RULES));
 ok(`migrations before ${RULES} apply`, !failure, failure);
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= RULES));
-  ok(`${RULES} applies (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= RULES));
+ok(`${RULES} and later apply, each twice`, !failure, failure);
 
 const [A, C, B] = [U("0a"), U("0c"), U("0b")];
 await q(`insert into auth.users(id,email) values ('${A}','owner@acme.az'),('${C}','cook@acme.az'),('${B}','bob@beta.az')`);

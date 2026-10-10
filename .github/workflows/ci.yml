@@ -27,3 +27,21 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npx tsc --noEmit
+
+  pglite:
+    name: database tests (PGlite)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: package.json
+          cache: npm
+      # hardcode.test.mjs compiles lib/ helpers with the project's TypeScript.
+      - run: npm ci
+      # Outside the project, so package.json and the lock file stay as they are.
+      - run: npm install --prefix "$RUNNER_TEMP/pglite" --no-save --no-package-lock @electric-sql/pglite@0.5.8
+      - run: node scripts/test-pglite.mjs
+        env:
+          PGLITE_DIR: ${{ runner.temp }}/pglite/node_modules
