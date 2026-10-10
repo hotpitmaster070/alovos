@@ -1435,6 +1435,79 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("losses: owner path", load("lib/auth-redirect.js").OWNER_LOSSES_PATH === "/app/owner/losses");
   }
 
+  // ---- smart settings and auto-order by supplier
+  {
+    const smart = load("lib/smart-settings/model.js");
+    const auto = load("lib/auto-order/model.js");
+    const { AUTO_ORDER_AZ, AUTO_ORDER_RU, AUTO_ORDER_EN } = load("lib/i18n/auto-order.js");
+    const P1 = "cccccccc-0000-4000-8000-000000000001";
+    const P2 = "cccccccc-0000-4000-8000-000000000002";
+    const B1 = "bbbbbbbb-0000-4000-8000-000000000001";
+    const SUP = "eeeeeeee-0000-4000-8000-000000000001";
+
+    const patch = smart.parseSmartSettingsPatch({ low_stock_default: "5", loss_alert_percent: 15, loss_alert_enabled: false, auto_order_time: "6:00", auto_order_notify: "whatsapp" });
+    ok("smart: settings patch parsed, time normalised", JSON.stringify(patch) ===
+      JSON.stringify({ low_stock_default: 5, loss_alert_percent: 15, loss_alert_enabled: false, auto_order_time: "06:00", auto_order_notify: "whatsapp" }), patch);
+    ok("smart: out-of-range settings refused (loss 1..30, whole default, known channel, real time)",
+      [{ loss_alert_percent: 0 }, { loss_alert_percent: 31 }, { low_stock_default: -1 }, { low_stock_default: 1.5 }, { auto_order_notify: "sms" },
+        { auto_order_time: "25:00" }, { auto_order_enabled: "yes" }, {}, null].every((body) => smart.parseSmartSettingsPatch(body) === null));
+    const row = smart.parseSmartSettings({ timezone: "Asia/Baku", low_stock_default: 5, loss_alert_percent: "10", loss_alert_enabled: true,
+      auto_order_enabled: false, auto_order_time: "06:00:00", auto_order_notify: "system" });
+    ok("smart: settings row parsed; without the new columns null", row && row.autoOrderTime === "06:00" && row.lossAlertPercent === 10 && row.timezone === "Asia/Baku" &&
+      smart.parseSmartSettings({ timezone: "UTC", low_stock_default: 5 }) === null, row);
+
+    const eff = (b, p, d) => JSON.stringify(smart.effectiveMin(b, p, d));
+    ok("smart: inheritance 20 -> 15 -> 5 -> 0", eff(20, 15, 5) === JSON.stringify({ min: 20, source: "branch" }) &&
+      eff(null, 15, 5) === JSON.stringify({ min: 15, source: "product" }) && eff(null, null, 5) === JSON.stringify({ min: 5, source: "tenant" }) &&
+      eff(null, null, 0) === JSON.stringify({ min: 0, source: "off" }));
+    ok("smart: 0 on the product = not tracked, even with a restaurant default", eff(null, 0, 5) === JSON.stringify({ min: 0, source: "product" }));
+
+    const changes = smart.parseLimitChanges({ branch_id: B1, items: [{ product_id: P1, min_stock: "2,5", branch_min: "" }, { product_id: P2, branch_min: 0 }] });
+    ok("smart: limit changes parsed, empty clears", changes && changes.branchId === B1 && changes.items[0].min_stock === 2.5 && changes.items[0].branch_min === null &&
+      changes.items[1].branch_min === 0 && !("min_stock" in changes.items[1]), changes);
+    ok("smart: bad limit changes refused", [{ items: [] }, { items: [{ product_id: P1, min_stock: -1 }] }, { items: [{ product_id: P1, branch_min: 3 }] },
+      { items: [{ product_id: P1 }] }, { items: [{ product_id: P1, min_stock: 1 }, { product_id: P1, min_stock: 2 }] }, { branch_id: "x", items: [{ product_id: P1, min_stock: 1 }] }]
+      .every((body) => smart.parseLimitChanges(body) === null));
+    ok("smart: loss 5% under a 10% line not red, 15% red, switched off never",
+      smart.lossTone(5, 10, true) === "ok" && smart.lossTone(15, 10, true) === "over" && smart.lossTone(7, 10, true) === "watch" && smart.lossTone(15, 10, false) === "ok");
+
+    const item = (id, name, need, extra = {}) => ({ product_id: id, name, unit: "kg", quantity: 1, min_qty: 5, target_qty: 20, on_order: 0, need, source: "product", ...extra });
+    const groups = auto.parseAutoOrderGroups([
+      { supplier_id: null, name: null, items: [item(P2, "Sogan", 4)] },
+      { supplier_id: SUP, name: "Alfa", phone: "+994501112233", items: [item(P1, "Toyuq", 15), item(P2, "x", 0)] },
+      { supplier_id: B1, name: "Empty", items: [] },
+    ]);
+    ok("auto-order: groups parsed, no-supplier last, empty groups and nothing-needed lines dropped",
+      groups.length === 2 && groups[0].supplierId === SUP && groups[0].items.length === 1 && groups[0].items[0].need === 15 && groups[1].supplierId === null, groups);
+    ok("auto-order: only suppliers count as drafts", auto.supplierCount(groups) === 1 && auto.supplierCount([]) === 0);
+
+    const text = auto.orderMessage(AUTO_ORDER_AZ.message.greeting, [{ name: "Toyuq", qty: 15, unit: "kg" }, { name: "Et", qty: 10, unit: "kg" }]);
+    ok("auto-order: WhatsApp message format", text === "Salam! Sifariş: Toyuq 15kg, Et 10kg", text);
+    ok("auto-order: WhatsApp link with digits only, none without a phone",
+      auto.whatsappLink("+994 50 111-22-33", "Salam!") === "https://wa.me/994501112233?text=Salam!" && auto.whatsappLink(null, "x") === null && auto.whatsappLink("12", "x") === null);
+    ok("auto-order: email link", auto.mailtoLink("a@b.az", "Sifariş", "Toyuq 1kg") === "mailto:a%40b.az?subject=Sifari%C5%9F&body=Toyuq%201kg" && auto.mailtoLink(null, "s", "m") === null);
+    ok("auto-order: extra body needs a product and a positive amount",
+      JSON.stringify(auto.parseExtraBody({ product_id: P1, qty: "2,5" })) === JSON.stringify({ productId: P1, qty: 2.5 }) &&
+      [{ product_id: P1, qty: 0 }, { product_id: "x", qty: 1 }, { product_id: P1, qty: "a" }, null].every((body) => auto.parseExtraBody(body) === null));
+    ok("auto-order: send-all takes every draft or the listed ones",
+      auto.parseSendAllBody(null).ids === null && auto.parseSendAllBody({}).ids === null && auto.parseSendAllBody({ ids: [P1, P1] }).ids.length === 1 &&
+      auto.parseSendAllBody({ ids: [] }) === null && auto.parseSendAllBody({ ids: ["x"] }) === null);
+
+    const shape = (value) => (typeof value === "function" ? "fn" : value && typeof value === "object" ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, shape(v)])) : typeof value);
+    ok("auto-order: AZ/RU/EN have the same texts", JSON.stringify(shape(AUTO_ORDER_AZ)) === JSON.stringify(shape(AUTO_ORDER_RU)) &&
+      JSON.stringify(shape(AUTO_ORDER_RU)) === JSON.stringify(shape(AUTO_ORDER_EN)));
+    ok("auto-order: banner and tabs", AUTO_ORDER_RU.board.ready(3) === "Авто-заказ готов! 3 поставщика" && AUTO_ORDER_RU.board.addExtra === "+ Добавить экстра товар" &&
+      AUTO_ORDER_RU.settings.tabs.stock === "Склад и лимиты" && AUTO_ORDER_RU.settings.tabs.losses === "Потери" && AUTO_ORDER_RU.settings.tabs.autoOrder === "Авто-заказ");
+    const paths = load("lib/auth-redirect.js");
+    ok("auto-order: paths", paths.OWNER_SETTINGS_PATH === "/app/owner/settings" && paths.AUTO_ORDER_PATH === "/app/anbar/sifarisler");
+
+    const withPhone = purchasing.validateSupplierInput({ name: "Alfa", phone: "+994 (50) 111-22-33", email: " Sales@Alfa.AZ " });
+    ok("purchasing: supplier phone and email normalised", withPhone.ok && withPhone.value.phone === "+994501112233" && withPhone.value.email === "sales@alfa.az", withPhone);
+    ok("purchasing: no phone field, no phone column written", !("phone" in purchasing.validateSupplierInput({ name: "Alfa" }).value) &&
+      !purchasing.validateSupplierInput({ name: "Alfa", phone: "call me" }).ok && !purchasing.validateSupplierInput({ name: "Alfa", email: "nope" }).ok);
+    ok("purchasing: minimum above par error", purchasing.mapPurchasingError({ message: "min_above_par", code: "22023" }).code === "min_above_par");
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
 })();

@@ -52,6 +52,10 @@ export type PurchasingDictionary = {
     code: string;
     codeHint: string;
     contact: string;
+    phone: string;
+    phonePlaceholder: string;
+    phoneHint: string;
+    email: string;
     days: string;
     noDays: string;
     branch: string;
@@ -185,6 +189,10 @@ export const PURCHASING_AZ: PurchasingDictionary = {
     code: "Kod",
     codeHint: "Boş qalsa addan yaranır",
     contact: "Əlaqə",
+    phone: "Telefon (WhatsApp)",
+    phonePlaceholder: "+994 50 123 45 67",
+    phoneHint: "Sifariş bu nömrəyə WhatsApp ilə gedir",
+    email: "E-poçt",
     days: "Çatdırılma günləri",
     noDays: "Gün seçilməyib",
     branch: "Filial",
@@ -281,6 +289,7 @@ export const PURCHASING_AZ: PurchasingDictionary = {
     request_not_found: "Sifariş tapılmadı",
     invalid_status: "Sifariş artıq dəyişib, səhifəni yeniləyin",
     duplicate_code: "Bu kod artıq var",
+    min_above_par: "Minimum sifariş səviyyəsindən böyük ola bilməz",
     invitation_not_found: "Dəvət tapılmadı",
     invitation_used: "Bu link artıq istifadə olunub",
     invitation_expired: "Linkin vaxtı keçib",
@@ -339,6 +348,10 @@ export const PURCHASING_RU: PurchasingDictionary = {
     code: "Код",
     codeHint: "Пусто — из названия",
     contact: "Контакт",
+    phone: "Телефон (WhatsApp)",
+    phonePlaceholder: "+994 50 123 45 67",
+    phoneHint: "На этот номер заказ уходит в WhatsApp",
+    email: "Email",
     days: "Дни поставки",
     noDays: "Дни не выбраны",
     branch: "Филиал",
@@ -436,6 +449,7 @@ export const PURCHASING_RU: PurchasingDictionary = {
     request_not_found: "Заказ не найден",
     invalid_status: "Заказ уже изменён, обновите страницу",
     duplicate_code: "Такой код уже есть",
+    min_above_par: "Минимум не может быть больше уровня дозаказа",
     invitation_not_found: "Приглашение не найдено",
     invitation_used: "Ссылка уже использована",
     invitation_expired: "Срок ссылки истёк",
@@ -493,6 +507,10 @@ export const PURCHASING_EN: PurchasingDictionary = {
     code: "Code",
     codeHint: "Empty: made from the name",
     contact: "Contact",
+    phone: "Phone (WhatsApp)",
+    phonePlaceholder: "+994 50 123 45 67",
+    phoneHint: "Orders go to this number on WhatsApp",
+    email: "Email",
     days: "Delivery days",
     noDays: "No days selected",
     branch: "Branch",
@@ -589,6 +607,7 @@ export const PURCHASING_EN: PurchasingDictionary = {
     request_not_found: "Order not found",
     invalid_status: "The order has changed, reload the page",
     duplicate_code: "This code is taken",
+    min_above_par: "The minimum cannot be above the order-up-to level",
     invitation_not_found: "Invitation not found",
     invitation_used: "This link has already been used",
     invitation_expired: "This link has expired",

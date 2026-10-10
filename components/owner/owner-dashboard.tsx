@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Branch } from "@/lib/anbar/types";
-import { CHEF_WASTE_PATH, OWNER_DISCREPANCIES_PATH, OWNER_LOSSES_PATH } from "@/lib/auth-redirect";
+import { AUTO_ORDER_PATH, CHEF_WASTE_PATH, OWNER_DISCREPANCIES_PATH, OWNER_LOSSES_PATH, OWNER_SETTINGS_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
 import { formatMoney, type CurrencyInfo } from "@/lib/money";
 import type { DashboardCards, ParAlert } from "@/lib/owner/dashboard";
@@ -72,6 +72,12 @@ export default function OwnerDashboard({
             </Link>
             <Link href={wasteHref} className={buttonVariants("outline", "sm")}>
               {copy.wasteFeed}
+            </Link>
+            <Link href={branchId ? `${AUTO_ORDER_PATH}?branch=${encodeURIComponent(branchId)}` : AUTO_ORDER_PATH} className={buttonVariants("outline", "sm")}>
+              {t.autoOrder.board.title}
+            </Link>
+            <Link href={OWNER_SETTINGS_PATH} className={buttonVariants("outline", "sm")}>
+              {t.autoOrder.settings.open}
             </Link>
           </div>
         )}

@@ -44,10 +44,14 @@ function SupplierForm({
   const onSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
+    const phone = String(data.get("phone") ?? "");
+    const email = String(data.get("email") ?? "");
     const body = {
       name: String(data.get("name") ?? ""),
       code: String(data.get("code") ?? ""),
       contact: String(data.get("contact") ?? ""),
+      ...((phone.trim() !== "" || supplier?.phone) && { phone }),
+      ...((email.trim() !== "" || supplier?.email) && { email }),
       delivery_days: data.getAll("delivery_days").map(String),
       branch_id: String(data.get("branch_id") ?? ""),
       lead_time_days: String(data.get("lead_time_days") ?? ""),
@@ -87,6 +91,17 @@ function SupplierForm({
       <div>
         <Label htmlFor="supplier-contact">{copy.contact}</Label>
         <Input id="supplier-contact" name="contact" maxLength={SUPPLIER_CONTACT_MAX} defaultValue={supplier?.contact ?? ""} />
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="supplier-phone">{copy.phone}</Label>
+          <Input id="supplier-phone" name="phone" type="tel" inputMode="tel" placeholder={copy.phonePlaceholder} defaultValue={supplier?.phone ?? ""} />
+          <p className="mt-1 text-xs text-white/50">{copy.phoneHint}</p>
+        </div>
+        <div>
+          <Label htmlFor="supplier-email">{copy.email}</Label>
+          <Input id="supplier-email" name="email" type="email" defaultValue={supplier?.email ?? ""} />
+        </div>
       </div>
       <fieldset>
         <legend className="mb-2 text-sm font-medium text-white/80">{copy.days}</legend>
@@ -239,7 +254,7 @@ export default function SupplierManager({
                   </TableCell>
                   <TableCell>{days(supplier)}</TableCell>
                   <TableCell className="text-white/70">
-                    {supplier.contact ?? ""}
+                    {[supplier.contact, supplier.phone, supplier.email].filter(Boolean).join(" · ")}
                     {supplier.currency ? <span className="ml-2 font-mono text-xs text-amber-200">{supplier.currency}</span> : null}
                   </TableCell>
                   {branches.length > 1 && <TableCell>{branchName(supplier.branchId)}</TableCell>}

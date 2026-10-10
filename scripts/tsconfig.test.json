@@ -58,6 +58,9 @@
     "../lib/i18n/labels.ts",
     "../lib/anbar/par.ts",
     "../lib/i18n/owner.ts",
-    "../lib/losses/model.ts"
+    "../lib/losses/model.ts",
+    "../lib/smart-settings/model.ts",
+    "../lib/auto-order/model.ts",
+    "../lib/i18n/auto-order.ts"
   ]
 }

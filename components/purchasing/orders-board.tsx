@@ -9,7 +9,7 @@ import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isUnit } from "@/lib/anbar/types";
-import { ANBAR_APP_PATH, SUPPLIERS_PATH } from "@/lib/auth-redirect";
+import { ANBAR_APP_PATH, AUTO_ORDER_PATH, SUPPLIERS_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
 import { callPurchasingApi } from "@/lib/purchasing/client";
 import { dateLabel, formatQty } from "@/lib/purchasing/format";
@@ -235,6 +235,9 @@ export default function OrdersBoard({
           </Link>
           <Link href={SUPPLIERS_PATH} className={buttonVariants("outline", "sm")}>
             {t.purchasing.suppliers.open}
+          </Link>
+          <Link href={AUTO_ORDER_PATH} className={buttonVariants("outline", "sm")}>
+            {t.autoOrder.board.title}
           </Link>
           {canEdit && (
             <Button size="sm" disabled={checking} onClick={check}>

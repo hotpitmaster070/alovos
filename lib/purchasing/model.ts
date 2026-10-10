@@ -24,6 +24,7 @@ export const SUPPLIER_NAME_MAX = 120;
 export const SUPPLIER_CONTACT_MAX = 200;
 export const CODE_PATTERN = /^[A-Z0-9]{1,10}$/;
 export const PHONE_PATTERN = /^\+?[0-9]{7,15}$/;
+export const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 /** invitations.token: two uuids without dashes. */
 export const INVITE_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
 
@@ -32,6 +33,9 @@ export type Supplier = {
   name: string;
   code: string;
   contact: string | null;
+  /** Digits with an optional +, for WhatsApp. */
+  phone: string | null;
+  email: string | null;
   deliveryDays: Weekday[];
   branchId: string | null;
   leadTimeDays: number | null;
@@ -61,7 +65,8 @@ export type ForecastRow = {
   status: ForecastStatus;
 };
 
-export type RequestItem = { productId: string; qty: number; unit: string };
+/** extra: added by hand to an auto-created draft. */
+export type RequestItem = { productId: string; qty: number; unit: string; extra: boolean };
 
 export type PurchaseRequest = {
   id: string;
@@ -129,6 +134,8 @@ export function parseSupplier(row: unknown): Supplier | null {
     name,
     code,
     contact: text(row.contact),
+    phone: text(row.phone),
+    email: text(row.email),
     deliveryDays: weekdays(row.delivery_days),
     branchId: text(row.branch_id),
     leadTimeDays: num(row.lead_time_days),
@@ -169,7 +176,7 @@ function parseItem(value: unknown): RequestItem | null {
   if (!isRecord(value)) return null;
   const productId = text(value.product_id);
   const qty = num(value.qty);
-  return productId && qty !== null ? { productId, qty, unit: text(value.unit) ?? "" } : null;
+  return productId && qty !== null ? { productId, qty, unit: text(value.unit) ?? "", extra: value.extra === true } : null;
 }
 
 export function parsePurchaseRequest(row: unknown): PurchaseRequest | null {
@@ -264,6 +271,9 @@ export type SupplierInput = {
   name: string;
   code: string | null;
   contact: string | null;
+  /** Only set when the body has the field. */
+  phone?: string | null;
+  email?: string | null;
   deliveryDays: Weekday[];
   branchId: string | null;
   leadTimeDays: number | null;
@@ -275,12 +285,16 @@ export function validateSupplierInput(body: Body): { ok: true; value: SupplierIn
   const name = trimmed(body.name);
   const code = trimmed(body.code).toUpperCase() || null;
   const contact = trimmed(body.contact) || null;
+  const phone = normalizePhone(body.phone) || null;
+  const email = trimmed(body.email).toLowerCase() || null;
   const deliveryDays = parseWeekdays(body.delivery_days ?? []);
   const branchId = optionalUuid(body.branch_id);
   const lead = optionalAmount(body.lead_time_days);
   const currency = trimmed(body.default_currency).toUpperCase() || null;
   if (
     (currency !== null && !/^[A-Z]{3}$/.test(currency)) ||
+    (phone !== null && !PHONE_PATTERN.test(phone)) ||
+    (email !== null && !EMAIL_PATTERN.test(email)) ||
     name === "" ||
     name.length > SUPPLIER_NAME_MAX ||
     (code !== null && !CODE_PATTERN.test(code)) ||
@@ -292,20 +306,36 @@ export function validateSupplierInput(body: Body): { ok: true; value: SupplierIn
   ) {
     return invalid;
   }
-  return { ok: true, value: { name, code, contact, deliveryDays, branchId, leadTimeDays: lead, currency } };
+  return {
+    ok: true,
+    value: {
+      name,
+      code,
+      contact,
+      ...("phone" in body && { phone }),
+      ...("email" in body && { email }),
+      deliveryDays,
+      branchId,
+      leadTimeDays: lead,
+      currency,
+    },
+  };
 }
 
 export type SupplierPatch = Partial<SupplierInput> & { active?: boolean };
 
 export function validateSupplierPatch(body: Body): { ok: true; value: SupplierPatch } | Invalid {
   const patch: SupplierPatch = {};
-  if ("name" in body || "delivery_days" in body || "code" in body || "contact" in body || "branch_id" in body || "lead_time_days" in body || "default_currency" in body) {
+  const fields = ["name", "delivery_days", "code", "contact", "phone", "email", "branch_id", "lead_time_days", "default_currency"];
+  if (fields.some((key) => key in body)) {
     const full = validateSupplierInput({ name: "-", ...body });
     if (!full.ok || ("name" in body && trimmed(body.name) === "")) return invalid;
     for (const [key, field] of [
       ["name", "name"],
       ["code", "code"],
       ["contact", "contact"],
+      ["phone", "phone"],
+      ["email", "email"],
       ["delivery_days", "deliveryDays"],
       ["branch_id", "branchId"],
       ["lead_time_days", "leadTimeDays"],
@@ -369,6 +399,7 @@ export const PURCHASING_ERROR_CODES = [
   "request_not_found",
   "invalid_status",
   "duplicate_code",
+  "min_above_par",
   "invitation_not_found",
   "invitation_used",
   "invitation_expired",
@@ -390,6 +421,7 @@ const STATUS: Record<PurchasingErrorCode, number> = {
   request_not_found: 404,
   invalid_status: 409,
   duplicate_code: 409,
+  min_above_par: 409,
   invitation_not_found: 404,
   invitation_used: 409,
   invitation_expired: 410,
