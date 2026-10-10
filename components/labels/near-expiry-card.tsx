@@ -116,7 +116,7 @@ export default function NearExpiryCard({
     <Card id={NEAR_EXPIRY_ANCHOR} className="flex scroll-mt-6 flex-col gap-3 border-amber-300/40 bg-amber-300/5">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <CardTitle>{copy.card.title}</CardTitle>
+          <CardTitle className="text-amber-100">{copy.card.title(days)}</CardTitle>
           <p className="mt-1 text-xs text-white/60">{copy.card.hint(days)}</p>
         </div>
         {lots.length > 0 && (

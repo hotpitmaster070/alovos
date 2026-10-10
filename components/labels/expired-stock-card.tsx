@@ -41,9 +41,9 @@ export default function ExpiredStockCard({ rows, canWriteOff }: { rows: ExpiredS
   };
 
   return (
-    <Card className="flex flex-col gap-3">
+    <Card className={rows.length > 0 ? "flex flex-col gap-3 border-red-400/50 bg-red-500/5" : "flex flex-col gap-3"}>
       <div>
-        <CardTitle>{copy.expiredTitle}</CardTitle>
+        <CardTitle className={rows.length > 0 ? "text-red-200" : undefined}>{copy.expiredTitle}</CardTitle>
         <p className="mt-1 text-xs text-white/50">{copy.expiredHint}</p>
       </div>
       {done && (
