@@ -11,8 +11,9 @@
 --   "on order" keep reading one list.
 -- * run_due_auto_orders(): once per restaurant and local day, at or after auto_order_time, drafts for
 --   every branch and an 'auto_order_ready' notification. Called by /api/cron/auto-order (service role)
---   and by its own pg_cron job where pg_cron is installed. Existing cron jobs and their functions are
---   not changed.
+--   and by its own pg_cron job where pg_cron is installed. That job replaces alovos-auto-purchase-requests
+--   (unscheduled here; check_and_create_auto_requests*() stay for the manual "check now" button). The other
+--   cron jobs (cleanup-empty-tenants, notify-expiring) are not touched.
 -- Run after 20261029000100_theoretical_vs_actual.sql. Idempotent.
 
 do $$
@@ -477,9 +478,12 @@ $$;
 revoke execute on function public.run_due_auto_orders() from public, anon, authenticated;
 grant execute on function public.run_due_auto_orders() to service_role;
 
+-- alovos-auto-order replaces the hourly alovos-auto-purchase-requests job of 20261016 (same drafts, but at
+-- the restaurant's own time and only when it switched auto-order on). Other jobs stay.
 do $$
 begin
   if exists (select 1 from pg_extension where extname = 'pg_cron') then
+    execute $cron$select cron.unschedule(jobid) from cron.job where jobname = 'alovos-auto-purchase-requests'$cron$;
     execute $cron$select cron.schedule('alovos-auto-order', '*/15 * * * *', 'select public.run_due_auto_orders()')$cron$;
   end if;
 end;
