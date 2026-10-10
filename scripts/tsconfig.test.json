@@ -57,6 +57,7 @@
     "../lib/i18n/expiry.ts",
     "../lib/i18n/labels.ts",
     "../lib/anbar/par.ts",
-    "../lib/i18n/owner.ts"
+    "../lib/i18n/owner.ts",
+    "../lib/losses/model.ts"
   ]
 }
