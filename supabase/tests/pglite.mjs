@@ -94,5 +94,15 @@ export async function freshDb() {
     return null;
   };
 
-  return { db, q, as, apply };
+  /** Runs sql as the database owner, with as()'s result shape; for seed data clients may not write. */
+  const sys = async (sql, params) => {
+    try {
+      const r = await db.query(sql, params);
+      return { rows: r.rows, affected: r.affectedRows };
+    } catch (e) {
+      return { err: e.message };
+    }
+  };
+
+  return { db, q, as, sys, apply };
 }

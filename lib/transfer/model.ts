@@ -55,12 +55,14 @@ const requiredId = (value: unknown): string | undefined => {
   return id ?? undefined;
 };
 
-function parseItem(raw: unknown): TransferItem | null {
+type Places = { fromLocationId: string | null; toLocationId: string | null };
+
+function parseItem(raw: unknown, defaults: Places): TransferItem | null {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
   const record = raw as Record<string, unknown>;
   const productId = requiredId(record.product_id);
-  const fromLocationId = optionalId(record.from_location_id);
-  const toLocationId = optionalId(record.to_location_id);
+  const fromLocationId = record.from_location_id == null ? defaults.fromLocationId : optionalId(record.from_location_id);
+  const toLocationId = record.to_location_id == null ? defaults.toLocationId : optionalId(record.to_location_id);
   const quantity = record.quantity;
   if (!productId || fromLocationId === undefined || toLocationId === undefined) return null;
   if (typeof quantity !== "number" || !Number.isFinite(quantity) || quantity <= 0 || quantity > TRANSFER_MAX_QUANTITY) return null;
@@ -68,7 +70,8 @@ function parseItem(raw: unknown): TransferItem | null {
 }
 
 /**
- * {from_branch_id, to_branch_id, items: [{product_id, quantity, from_location_id?, to_location_id?}], note?}.
+ * {from_branch_id, to_branch_id, from_location_id?, to_location_id?, items: [{product_id, quantity,
+ * from_location_id?, to_location_id?}], note?}. Top-level places apply to items that name none.
  * The single-product shape of the earlier endpoint ({product_id, quantity, from_location_id, to_location_id}
  * at the top level) is read as one item. No tenant field: the database takes it from the session.
  */
@@ -76,14 +79,17 @@ export function parseTransferInput(body: Record<string, unknown> | null): Transf
   if (!body) return null;
   const fromBranchId = requiredId(body.from_branch_id);
   const toBranchId = requiredId(body.to_branch_id);
-  if (!fromBranchId || !toBranchId) return null;
+  const fromLocationId = optionalId(body.from_location_id);
+  const toLocationId = optionalId(body.to_location_id);
+  if (!fromBranchId || !toBranchId || fromLocationId === undefined || toLocationId === undefined) return null;
+  const defaults: Places = { fromLocationId, toLocationId };
 
   const rawItems = Array.isArray(body.items) ? body.items : body.items === undefined && "product_id" in body ? [body] : null;
   if (!rawItems || rawItems.length === 0 || rawItems.length > TRANSFER_MAX_ITEMS) return null;
   const items: TransferItem[] = [];
   const keys = new Set<string>();
   for (const raw of rawItems) {
-    const item = parseItem(raw);
+    const item = parseItem(raw, defaults);
     if (!item) return null;
     const key = `${item.productId}:${item.fromLocationId ?? ""}`;
     if (keys.has(key)) return null;

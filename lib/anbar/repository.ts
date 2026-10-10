@@ -348,7 +348,10 @@ export async function updateStorageLocation(
   return error ? storageError(error) : null;
 }
 
-/** Goods receipt: one 'prihod' movement; the stock_movements trigger adds the lot to product_stocks. */
+/**
+ * Goods receipt: public.receive_stock_rpc() writes one 'prihod' movement (clients cannot insert
+ * movements); the stock_movements trigger adds the lot to product_stocks.
+ */
 export async function receiveStock(scope: TenantScope, input: ReceiptInput): Promise<AnbarErrorCode | null> {
   const [location, product] = await Promise.all([
     scope.client
@@ -369,16 +372,13 @@ export async function receiveStock(scope: TenantScope, input: ReceiptInput): Pro
   if (!location.data) return "locationNotFound";
   if (!product.data) return "productNotFound";
 
-  const { error } = await scope.client.from("stock_movements").insert({
-    tenant_id: scope.tenantId,
-    product_id: input.productId,
-    branch_id: location.data.branch_id ?? null,
-    to_location_id: input.locationId,
-    quantity: input.qty,
-    movement_type: "prihod",
-    expiry_date: input.expiryDate,
-    cost_per_unit: input.pricePerUnit,
-    unit: typeof product.data.unit === "string" ? product.data.unit : null,
+  const { error } = await scope.client.rpc("receive_stock_rpc", {
+    p_product_id: input.productId,
+    p_location_id: input.locationId,
+    p_quantity: input.qty,
+    p_cost_per_unit: input.pricePerUnit,
+    p_expiry_date: input.expiryDate,
+    p_unit: typeof product.data.unit === "string" ? product.data.unit : null,
   });
   return error ? mapRpcError(error) : null;
 }

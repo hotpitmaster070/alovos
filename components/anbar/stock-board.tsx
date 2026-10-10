@@ -28,7 +28,7 @@ import {
   OWNER_DASHBOARD_PATH,
 } from "@/lib/auth-redirect";
 import {
-  MOVEMENT_TYPES,
+  BOARD_MOVEMENT_TYPES,
   type KitchenBranch,
   type KitchenLocation,
   type MovementType,
@@ -396,7 +396,7 @@ function MoveForm({
           value={movementType}
           onChange={(event) => setMovementType(event.target.value as MovementType)}
         >
-          {MOVEMENT_TYPES.map((type) => (
+          {BOARD_MOVEMENT_TYPES.map((type) => (
             <option key={type} value={type}>
                 {movementLabel(type, copy.types)}
             </option>

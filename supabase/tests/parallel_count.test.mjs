@@ -6,7 +6,7 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const COUNT = "20261011_parallel_count.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, sys, apply } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < COUNT));
 ok(`migrations before ${COUNT} apply`, !failure, failure);
@@ -28,7 +28,7 @@ let r = await as(A, `insert into products(tenant_id, name, cost, unit, storage_l
   returning id, name`);
 const id = Object.fromEntries(r.rows.map((row) => [row.name, row.id]));
 const receive = (product, location, quantity, cost, unit, expiry) =>
-  as(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date)
+  sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit, expiry_date)
     values ('${tA}','${product}','${branchA}','${location}',${quantity},'prihod',${cost},'${unit}',${expiry ? `'${expiry}'` : "null"})`);
 // Separate deliveries (one transaction each), so the last purchase price is the 2.5 one.
 r = [await receive(id.Milk, storeA, 6, 2, "l", "2026-11-01"), await receive(id.Milk, storeA, 4, 2.5, "l", "2026-12-01"), await receive(id.Rice, storeA, 5, 1, "kg", null)];
@@ -137,7 +137,7 @@ ok("cook still counts blind after the merge", r.rows?.every((row) => row.expecte
 ok("merging did not touch stock either", (await balance(id.Milk)) === 10 && (await countMoves()) === 0);
 
 // stock moves between merge and approval: approval still lands on the counted quantity
-r = await call(A, `insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit) values ('${tA}','${id.Rice}','${branchA}','${storeA}',1,'prihod',1,'kg')`);
+r = await call(A, `select public.receive_stock_rpc('${id.Rice}','${storeA}',1,1,null,'kg')`);
 ok("a delivery of 1 kg rice arrives meanwhile", !r.err && (await balance(id.Rice)) === 6, r);
 
 // ---- approve once

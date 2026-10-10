@@ -10,7 +10,7 @@ const STORAGE = "20261008020000_dynamic_storage_locations.sql";
 const before = migrationFiles.filter((f) => f < STORAGE);
 
 const { ok, done } = reporter();
-const { db, q, as, apply } = await freshDb();
+const { db, q, as, sys, apply } = await freshDb();
 
 let failure = await apply(before);
 if (failure) console.log(failure);

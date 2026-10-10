@@ -50,6 +50,8 @@
     "../lib/supabase/cookie-codec.ts",
     "../lib/import/parse.ts",
     "../lib/import/catalog.ts",
-    "../lib/transfer/model.ts"
+    "../lib/transfer/model.ts",
+    "../lib/transfer/cart.ts",
+    "../lib/i18n/transfers.ts"
   ]
 }

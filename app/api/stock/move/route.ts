@@ -1,13 +1,42 @@
 import { NextResponse } from "next/server";
 import { requireTenant } from "@/lib/api/tenant";
-import { parseStockMove } from "@/lib/anbar/stock-view";
+import type { TenantScope } from "@/lib/anbar/scope";
+import { parseStockMove, type StockMoveInput } from "@/lib/anbar/stock-view";
 
 export const dynamic = "force-dynamic";
+
+/** Each board movement through its SECURITY DEFINER RPC; clients do not insert stock_movements. */
+function call(supabase: TenantScope["client"], move: StockMoveInput) {
+  switch (move.movementType) {
+    case "prihod":
+      return supabase.rpc("receive_stock_rpc", {
+        p_product_id: move.productId,
+        p_location_id: move.toLocationId,
+        p_quantity: move.quantity,
+        p_reason: move.reason,
+      });
+    case "peremeshchenie":
+      return supabase.rpc("move_stock_rpc", {
+        p_product_id: move.productId,
+        p_from_location_id: move.fromLocationId,
+        p_to_location_id: move.toLocationId,
+        p_quantity: move.quantity,
+        p_reason: move.reason,
+      });
+    default:
+      return supabase.rpc("wastage_stock_rpc", {
+        p_product_id: move.productId,
+        p_location_id: move.fromLocationId,
+        p_quantity: move.quantity,
+        p_movement_type: move.movementType,
+        p_reason: move.reason,
+      });
+  }
+}
 
 export async function POST(request: Request) {
   const current = await requireTenant();
   if ("error" in current) return current.error;
-  const { supabase, userId, tenantId } = current;
 
   let body: unknown;
   try {
@@ -18,47 +47,14 @@ export async function POST(request: Request) {
 
   const parsed = parseStockMove(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-  const move = parsed.value;
 
-  const product = await supabase
-    .from("products")
-    .select("id")
-    .eq("id", move.productId)
-    .eq("tenant_id", tenantId)
-    .maybeSingle();
-  if (product.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
-  if (!product.data) return NextResponse.json({ error: "product_not_found" }, { status: 404 });
-
-  const locationIds = [move.fromLocationId, move.toLocationId].filter((id): id is string => id !== null);
-  if (locationIds.length > 0) {
-    const locations = await supabase
-      .from("storage_locations")
-      .select("id, is_active")
-      .eq("tenant_id", tenantId)
-      .in("id", locationIds);
-    if (locations.error) return NextResponse.json({ error: "save_failed" }, { status: 500 });
-    const found = new Map((locations.data ?? []).map((row) => [row.id, row.is_active !== false]));
-    const targetInactive = move.toLocationId !== null && found.get(move.toLocationId) === false;
-    if (locationIds.some((id) => !found.has(id)) || targetInactive) {
-      return NextResponse.json({ error: "location_not_found" }, { status: 404 });
-    }
-  }
-
-  const inserted = await supabase.from("stock_movements").insert({
-    tenant_id: tenantId,
-    product_id: move.productId,
-    from_location_id: move.fromLocationId,
-    to_location_id: move.toLocationId,
-    quantity: move.quantity,
-    movement_type: move.movementType,
-    reason: move.reason,
-    user_id: userId,
-  });
-  if (inserted.error) {
-    const message = inserted.error.message ?? "";
-    if (message.includes("insufficient_stock")) {
-      return NextResponse.json({ error: "insufficient_stock" }, { status: 409 });
-    }
+  const { error } = await call(current.supabase, parsed.value);
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("insufficient_stock")) return NextResponse.json({ error: "insufficient_stock" }, { status: 409 });
+    if (message.includes("product_not_found")) return NextResponse.json({ error: "product_not_found" }, { status: 404 });
+    if (message.includes("location_not_found")) return NextResponse.json({ error: "location_not_found" }, { status: 404 });
+    if (message.includes("invalid_input")) return NextResponse.json({ error: "invalid_input" }, { status: 400 });
     return NextResponse.json({ error: "save_failed" }, { status: 500 });
   }
 
