@@ -24,6 +24,7 @@ import {
   type LabelsErrorCode,
   type Lot,
   type LotInput,
+  type MoveLotInput,
   type Preparation,
   type PreparationDraft,
   type PreparationRunInput,
@@ -93,6 +94,24 @@ export async function receiveWithLot(scope: TenantScope, input: ReceiveLotInput)
     p_remember: input.remember,
   });
   return oneLot(data, error);
+}
+
+/**
+ * Moves (part of) one stock lot to another place of its branch in one transaction. The expiry restarts
+ * from today with the target norm when the kind of place changes; the new label is null for stock
+ * without an expiry.
+ */
+export async function moveStockLot(scope: TenantScope, input: MoveLotInput): Promise<Result<Lot | null>> {
+  const { data, error } = await scope.client.rpc("move_stock_lot", {
+    p_stock_id: input.stockId,
+    p_to_location_id: input.toLocationId,
+    p_qty: input.qty,
+    p_shelf_life_days: input.shelfLifeDays,
+    p_remember: input.remember,
+    p_reason: input.reason,
+  });
+  if (error) return failed(error);
+  return { ok: true, value: rows(data, parseLot)[0] ?? null };
 }
 
 /**

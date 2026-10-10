@@ -123,6 +123,10 @@ export default function LoginForm({
       setFeedback({ kind: "error", message: INVALID_EMAIL_MESSAGE });
       return;
     }
+    if (mode === "signUp" && asksCurrency && !currency) {
+      setFeedback({ kind: "error", message: t.labels.currency.signupRequired });
+      return;
+    }
 
     setPending(true);
     setFeedback(null);
@@ -132,7 +136,7 @@ export default function LoginForm({
         finish(next);
         return;
       }
-      applySignUp(await signUp(credentials, inviteToken, { currency: currency || null, timezone: browserTimeZone() }));
+      applySignUp(await signUp(credentials, inviteToken, { currency: asksCurrency ? currency : null, timezone: browserTimeZone() }));
     } catch (err: unknown) {
       const fallback = mode === "signUp" ? "Qeydiyyat alınmadı" : copy.errors.unknown;
       setFeedback({ kind: "error", message: authMessage(err) || fallback });
@@ -204,10 +208,13 @@ export default function LoginForm({
                 </p>
               )}
             </div>
-            {asksCurrency && currencies.length > 0 && (
+            {asksCurrency && (
               <div>
                 <Label htmlFor="login-currency">{t.labels.currency.signup}</Label>
-                <Select id="login-currency" value={currency} onChange={(event) => setCurrency(event.target.value)}>
+                <Select id="login-currency" value={currency} required onChange={(event) => setCurrency(event.target.value)}>
+                  <option value="" disabled>
+                    {t.labels.currency.signupPick}
+                  </option>
                   {currencies.map((item) => (
                     <option key={item.code} value={item.code}>
                       {currencyName(item, lang)}

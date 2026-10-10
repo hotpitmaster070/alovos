@@ -180,14 +180,14 @@ ok("other tenant sees none of it", r.rows[0].n === 0, r);
 // ---- migration order: any re-run keeps the final function
 const prepFunctions = async () =>
   (await q("select pg_get_function_identity_arguments(p.oid) args from pg_proc p where p.proname in ('create_lots_from_preparation', 'save_preparation') order by 1")).map((x) => x.args);
-failure = await apply(["20261018_labels_and_lots.sql", "20261018_wastage_in_prep.sql"]);
+failure = await apply(["20261018000000_labels_and_lots.sql", "20261018000001_wastage_in_prep.sql"]);
 let fns = await prepFunctions();
 ok("labels and wastage re-applied after the final scheme: still one function each, with trim and evaporation",
   !failure && fns.length === 2 && fns.some((a) => /p_trims jsonb/.test(a)) && fns.some((a) => /p_evaporation_percent numeric/.test(a)), { failure, fns });
 await receive(lamb, 10, 10);
 r = await cook(prep.id, yields(5, 2), { qty: 1 }, boneBack(2));
 ok("…and trim still works", !r.err && r.rows.length === 3, r);
-failure = await apply([FINAL, "20261018_wastage_in_prep.sql", FINAL]);
+failure = await apply([FINAL, "20261018000001_wastage_in_prep.sql", FINAL]);
 fns = await prepFunctions();
 ok("final -> wastage -> final: same result", !failure && fns.length === 2, { failure, fns });
 

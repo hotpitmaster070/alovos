@@ -19,7 +19,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ANBAR_CATALOG_PATH, ANBAR_COUNT_PATH, ANBAR_MOVEMENTS_PATH, ANBAR_STORAGE_PATH } from "@/lib/auth-redirect";
+import {
+  ANBAR_CATALOG_PATH,
+  ANBAR_COUNT_PATH,
+  ANBAR_MOVEMENTS_PATH,
+  ANBAR_STORAGE_PATH,
+  CHEF_INVENTORY_PATH,
+  OWNER_DASHBOARD_PATH,
+} from "@/lib/auth-redirect";
 import {
   MOVEMENT_TYPES,
   type KitchenBranch,
@@ -157,6 +164,12 @@ export default function StockBoard({
           </Link>
           <Link href={ANBAR_MOVEMENTS_PATH} className={buttonVariants("outline", "sm")}>
             {copy.movements}
+          </Link>
+          <Link href={CHEF_INVENTORY_PATH} className={buttonVariants("outline", "sm")}>
+            {t.inventory.chef.title}
+          </Link>
+          <Link href={OWNER_DASHBOARD_PATH} className={buttonVariants("outline", "sm")}>
+            {t.owner.wasteFeed.dashboard}
           </Link>
         </div>
       </div>

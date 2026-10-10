@@ -4,6 +4,10 @@ import type { StorageType, Unit } from "@/lib/anbar/types";
 import type { LoginErrorCode } from "@/lib/auth-errors";
 import { LABELS_AZ, LABELS_EN, LABELS_RU, type LabelsDictionary } from "./labels";
 import { ruPlural } from "./plural";
+import { INVENTORY_AZ, INVENTORY_EN, INVENTORY_RU, type InventoryDictionary } from "./inventory";
+import { RECEIVING_AZ, RECEIVING_EN, RECEIVING_RU, type ReceivingDictionary } from "./receiving";
+import { RECIPES_AZ, RECIPES_EN, RECIPES_RU, type RecipesDictionary } from "./recipes";
+import { OWNER_AZ, OWNER_EN, OWNER_RU, type OwnerDictionary } from "./owner";
 import { PURCHASING_AZ, PURCHASING_EN, PURCHASING_RU, type PurchasingDictionary } from "./purchasing";
 
 export type BlockDetails = {
@@ -218,6 +222,16 @@ export type AnbarDictionary = {
     submit: string;
     done: (name: string) => string;
     noLocations: string;
+    searchLabel: string;
+    searchPlaceholder: string;
+    find: string;
+    results: (count: number) => string;
+    notFound: (query: string) => string;
+    createProduct: string;
+    priceSource: { lot: string; product: string };
+    expiryHint: (days: number) => string;
+    expiryPast: string;
+    other: string;
   };
   storage: {
     add: string;
@@ -399,6 +413,7 @@ export type Dictionary = {
   };
   moduleStub: string;
   blockNumber: string;
+  noData: string;
   pagination: {
     previous: string;
     next: string;
@@ -420,6 +435,10 @@ export type Dictionary = {
   onboarding: OnboardingDictionary;
   purchasing: PurchasingDictionary;
   labels: LabelsDictionary;
+  owner: OwnerDictionary;
+  inventory: InventoryDictionary;
+  receiving: ReceivingDictionary;
+  recipes: RecipesDictionary;
 };
 
 const AZ: Dictionary = {
@@ -438,10 +457,11 @@ const AZ: Dictionary = {
     cta: "Başla - pulsuz",
   },
   footer: {
-    tagline: "Built for modern kitchens · Baku, AZ.",
+    tagline: "Built for modern kitchens worldwide.",
   },
   moduleStub: "Modul {name} - spek hazırdır, UI növbəti",
   blockNumber: "Blok",
+  noData: "Məlumat yoxdur",
   pagination: {
     previous: "Əvvəlki",
     next: "Növbəti",
@@ -716,16 +736,26 @@ const AZ: Dictionary = {
     qebul: {
       title: "Mal qəbulu",
       open: "Qəbul",
-      hint: "Barkodu skan edin və ya yazın. Barkodsuz məhsul üçün daxili ALO kodundan istifadə edin.",
+      hint: "Barkodu skan edin və ya ALO kodunu, məhsulun adını yazın.",
       scanAgain: "Növbəti məhsul",
       qty: "Miqdar",
       expiry: "Son istifadə tarixi",
       price: "Vahid qiyməti",
       location: "Saxlama yeri",
       choose: "Seçin",
-      submit: "Anbara al",
+      submit: "Anbara qəbul et",
       done: (name) => `${name} anbara alındı`,
       noLocations: "Saxlama yeri yoxdur. Əvvəlcə filial və saxlama yeri yaradın.",
+      searchLabel: "Məhsul axtarışı",
+      searchPlaceholder: "ALO kodu və ya adı daxil edin",
+      find: "Tap",
+      results: (count) => `Tapıldı: ${count}`,
+      notFound: (query) => `«${query}» tapılmadı`,
+      createProduct: "Yeni məhsul yarat",
+      priceSource: { lot: "son partiyanın qiyməti", product: "məhsul kartındakı qiymət" },
+      expiryHint: (days) => `Bu gündən ${days} gün`,
+      expiryPast: "Son istifadə tarixi bu gündən əvvəl ola bilməz",
+      other: "Başqa məhsul",
     },
     storage: {
       add: "Saxlama yeri əlavə et",
@@ -915,6 +945,10 @@ const AZ: Dictionary = {
   },
   purchasing: PURCHASING_AZ,
   labels: LABELS_AZ,
+  owner: OWNER_AZ,
+  inventory: INVENTORY_AZ,
+  receiving: RECEIVING_AZ,
+  recipes: RECIPES_AZ,
 };
 
 const RU: Dictionary = {
@@ -933,10 +967,11 @@ const RU: Dictionary = {
     cta: "Начать - бесплатно",
   },
   footer: {
-    tagline: "Создано для современных кухонь · Баку, AZ.",
+    tagline: "Создано для современных кухонь по всему миру.",
   },
   moduleStub: "Модуль {name} - спек готов, UI далее",
   blockNumber: "Блок",
+  noData: "Нет данных",
   pagination: {
     previous: "Назад",
     next: "Вперёд",
@@ -1211,16 +1246,26 @@ const RU: Dictionary = {
     qebul: {
       title: "Приёмка",
       open: "Приёмка",
-      hint: "Отсканируйте или введите штрихкод. Для товара без штрихкода используйте внутренний код ALO.",
+      hint: "Отсканируйте штрихкод или введите ALO-код либо название товара.",
       scanAgain: "Следующий товар",
       qty: "Количество",
       expiry: "Срок годности",
       price: "Цена за единицу",
       location: "Место хранения",
       choose: "Выберите",
-      submit: "Оприходовать",
+      submit: "Принять на склад",
       done: (name) => `${name} оприходован`,
       noLocations: "Нет мест хранения. Сначала создайте филиал и место хранения.",
+      searchLabel: "Поиск товара",
+      searchPlaceholder: "Введите ALO-код или название",
+      find: "Найти",
+      results: (count) => `Найдено: ${count}`,
+      notFound: (query) => `«${query}» не найдено`,
+      createProduct: "Создать товар",
+      priceSource: { lot: "цена последней партии", product: "цена из карточки товара" },
+      expiryHint: (days) => `${days} дн. от сегодня`,
+      expiryPast: "Срок годности не может быть раньше сегодняшнего дня",
+      other: "Другой товар",
     },
     storage: {
       add: "Добавить место хранения",
@@ -1410,6 +1455,10 @@ const RU: Dictionary = {
   },
   purchasing: PURCHASING_RU,
   labels: LABELS_RU,
+  owner: OWNER_RU,
+  inventory: INVENTORY_RU,
+  receiving: RECEIVING_RU,
+  recipes: RECIPES_RU,
 };
 
 const EN: Dictionary = {
@@ -1428,10 +1477,11 @@ const EN: Dictionary = {
     cta: "Start - free",
   },
   footer: {
-    tagline: "Built for modern kitchens · Baku, AZ.",
+    tagline: "Built for modern kitchens worldwide.",
   },
   moduleStub: "Module {name} - spec ready, UI next",
   blockNumber: "Block",
+  noData: "No data",
   pagination: {
     previous: "Previous",
     next: "Next",
@@ -1706,7 +1756,7 @@ const EN: Dictionary = {
     qebul: {
       title: "Goods receipt",
       open: "Receipt",
-      hint: "Scan or type a barcode. For products without a barcode use the internal ALO code.",
+      hint: "Scan a barcode or type an ALO code or product name.",
       scanAgain: "Next product",
       qty: "Quantity",
       expiry: "Expiry date",
@@ -1716,6 +1766,16 @@ const EN: Dictionary = {
       submit: "Receive into stock",
       done: (name) => `${name} received`,
       noLocations: "No storage locations. Create a branch and a storage location first.",
+      searchLabel: "Product search",
+      searchPlaceholder: "Enter an ALO code or name",
+      find: "Find",
+      results: (count) => `Found: ${count}`,
+      notFound: (query) => `“${query}” not found`,
+      createProduct: "Create product",
+      priceSource: { lot: "price of the latest lot", product: "price from the product card" },
+      expiryHint: (days) => `${days} ${days === 1 ? "day" : "days"} from today`,
+      expiryPast: "The expiry date cannot be before today",
+      other: "Another product",
     },
     storage: {
       add: "Add storage location",
@@ -1905,6 +1965,10 @@ const EN: Dictionary = {
   },
   purchasing: PURCHASING_EN,
   labels: LABELS_EN,
+  owner: OWNER_EN,
+  inventory: INVENTORY_EN,
+  receiving: RECEIVING_EN,
+  recipes: RECIPES_EN,
 };
 
 export const dictionaries = { AZ, RU, EN } satisfies Record<string, Dictionary>;

@@ -1,7 +1,11 @@
 import { isMergeMode, type MergeMode } from "@/lib/count/model";
 import { isTimeZone } from "./time";
 
-/** One tenant_settings row. Every value comes from the database; there are no code defaults. */
+/** Same as the tenant_settings column defaults; used only when a row holds an empty or unknown value. */
+export const FALLBACK_TIMEZONE = "UTC";
+export const FALLBACK_CURRENCY = "USD";
+
+/** One tenant_settings row. Every value comes from the database; timezone and currency fall back to the column defaults. */
 export type TenantSettings = {
   /** ISO 4217 code; with currencySymbol and locale it is the CurrencyInfo every amount is formatted with. */
   currency: string;
@@ -82,10 +86,9 @@ function mergeMode(value: unknown): MergeMode {
 
 export function parseTenantSettings(row: unknown): TenantSettings {
   if (!isRecord(row)) throw new TenantSettingsError("row is missing");
-  const currency = optionalText(row.currency);
-  if (!currency) throw new TenantSettingsError("currency is empty");
-  const timezone = optionalText(row.timezone);
-  if (!timezone || !isTimeZone(timezone)) throw new TenantSettingsError(`unknown timezone ${String(row.timezone)}`);
+  const currency = optionalText(row.currency) ?? FALLBACK_CURRENCY;
+  const stored = optionalText(row.timezone);
+  const timezone = stored && isTimeZone(stored) ? stored : FALLBACK_TIMEZONE;
   return {
     currency,
     currencySymbol: optionalText(row.currency_symbol),

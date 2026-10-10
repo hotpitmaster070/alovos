@@ -9,9 +9,9 @@ export default function InvoiceUpload() {
   const [note, setNote] = useState("");
 
   async function onSubmit(form: FormData) {
-    const response = await fetch("/api/ai/scan-invoice", { method: "POST", body: form });
-    const body = (await response.json()) as { mocked?: boolean; items?: unknown[] };
-    setNote(body.mocked ? String(body.items?.length ?? 0) : "—");
+    const response = await fetch("/api/scan-invoice", { method: "POST", body: form });
+    const body = (await response.json().catch(() => null)) as { items?: unknown[] } | null;
+    setNote(response.ok && Array.isArray(body?.items) ? String(body.items.length) : "—");
   }
 
   return (

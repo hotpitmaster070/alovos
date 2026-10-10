@@ -8,20 +8,11 @@ export type LabelsDictionary = {
   locale: string;
   errors: Record<LabelsErrorCode, string>;
   receipt: {
-    next: string;
-    where: string;
-    whereHint: (qty: string, product: string) => string;
     prep: string;
-    prepHint: string;
-    expiry: string;
-    shelfLife: string;
     source: Record<ShelfLifeSource, string>;
     remember: string;
     copies: string;
-    print: string;
-    back: string;
     working: string;
-    done: (lot: string) => string;
   };
   birka: {
     name: string;
@@ -161,6 +152,37 @@ export type LabelsDictionary = {
       saved: string;
     };
   };
+  move: {
+    action: string;
+    title: string;
+    hint: (qty: string, product: string, place: string) => string;
+    to: string;
+    noTargets: string;
+    qty: string;
+    qtyHint: (max: string) => string;
+    shelfLife: string;
+    expiry: string;
+    keeps: string;
+    restarts: string;
+    remember: string;
+    reason: string;
+    reasonPlaceholder: string;
+    copies: string;
+    submit: string;
+    working: string;
+    done: (expiry: string) => string;
+  };
+  norms: {
+    title: string;
+    hint: string;
+    place: string;
+    days: string;
+    fallback: (days: number) => string;
+    noPlaces: string;
+    save: string;
+    saved: string;
+    readOnly: string;
+  };
   photoAi: {
     badges: { approved: (confidence: string) => string; suspicious: string; noAi: string; pending: string; limitReached: string };
     review: string;
@@ -208,6 +230,8 @@ export type LabelsDictionary = {
     ownerOnly: string;
     signup: string;
     signupHint: string;
+    signupPick: string;
+    signupRequired: string;
     receipt: string;
     supplier: string;
     restaurant: (code: string) => string;
@@ -230,23 +254,16 @@ export const LABELS_AZ: LabelsDictionary = {
     insufficient_stock: "Anbarda kifayət qədər yoxdur — heç nə yazılmadı",
     balance_mismatch: "Balans tutmur — fərqi yoxlayın və ya itkini təsdiqləyin",
     stock_exists: "Anbarda qalıq var, valyutanı dəyişmək üçün anbarı sıfırlayın",
+    lot_expired: "Müddəti bitib - köçürmək olmaz, silin",
+    open_count: "Bu yerdə sayım gedir - bitəndən sonra köçürün",
     save_failed: "Saxlamaq alınmadı, yenidən cəhd edin",
   },
   receipt: {
-    next: "Qəbul et",
-    where: "Hara?",
-    whereHint: (qty, product) => `${qty} · ${product}`,
     prep: "Zaqotovka et",
-    prepHint: "Əvvəl qəbul olunur, sonra zaqotovkaya keçirsiniz",
-    expiry: "Son tarix",
-    shelfLife: "Saxlama müddəti, gün",
     source: { rule: "bu yer üçün norma", product: "məhsulun norması", default: "restoranın standartı" },
     remember: "Bu yer üçün norma kimi yadda saxla",
     copies: "Neçə birka?",
-    print: "Çap et",
-    back: "Geri",
     working: "Gözləyin…",
-    done: (lot) => `Qəbul edildi: ${lot}`,
   },
   birka: {
     name: "Ad",
@@ -386,6 +403,37 @@ export const LABELS_AZ: LabelsDictionary = {
       saved: "Saxlanıldı",
     },
   },
+  move: {
+    action: "Köçür",
+    title: "Başqa yerə köçür",
+    hint: (qty, product, place) => `${qty} · ${product} · indi: ${place}`,
+    to: "Hara",
+    noTargets: "Bu filialda başqa aktiv saxlama yeri yoxdur",
+    qty: "Miqdar",
+    qtyHint: (max) => `hamısı: ${max}`,
+    shelfLife: "Saxlama müddəti, gün",
+    expiry: "Yeni son tarix",
+    keeps: "Eyni növ yer - son tarix dəyişmir",
+    restarts: "Başqa növ yer - müddət bu gündən yenidən sayılır",
+    remember: "Bu məhsul üçün bu yerdə yadda saxla",
+    reason: "Səbəb",
+    reasonPlaceholder: "məs. atmamaq üçün dondurucuya",
+    copies: "Birka sayı",
+    submit: "Köçür",
+    working: "Köçürülür…",
+    done: (expiry) => `Köçürüldü · son tarix ${expiry}`,
+  },
+  norms: {
+    title: "Harada nə qədər saxlanır",
+    hint: "Hər yer üçün gün sayı. Boş - məhsulun ümumi müddəti.",
+    place: "Yer",
+    days: "Gün",
+    fallback: (days) => `boş: ${days} gün`,
+    noPlaces: "Bu filialda saxlama yeri yoxdur",
+    save: "Saxla",
+    saved: "Saxlanıldı",
+    readOnly: "Yalnız sahib, şef və aşpaz dəyişə bilər",
+  },
   photoAi: {
     badges: {
       approved: (confidence) => `AI ✅ ${confidence}%`,
@@ -439,6 +487,8 @@ export const LABELS_AZ: LabelsDictionary = {
     ownerOnly: "Yalnız sahib dəyişə bilər",
     signup: "Restoranın valyutası",
     signupHint: "Bütün qalıq və maya bu valyutada göstəriləcək. Sonra ayarlarda dəyişmək olar.",
+    signupPick: "Valyutanı seçin",
+    signupRequired: "Restoranın valyutasını seçin",
     receipt: "Qiymətin valyutası",
     supplier: "Tədarükçünün valyutası",
     restaurant: (code) => `Restoranın valyutası (${code})`,
@@ -461,23 +511,16 @@ export const LABELS_RU: LabelsDictionary = {
     insufficient_stock: "На складе не хватает — ничего не записано",
     balance_mismatch: "Баланс не сходится — проверьте разницу или подтвердите потерю",
     stock_exists: "На складе есть остатки — обнулите склад, чтобы сменить валюту",
+    lot_expired: "Срок истёк — перемещать нельзя, спишите",
+    open_count: "Здесь идёт инвентаризация — переместите после неё",
     save_failed: "Не удалось сохранить, попробуйте ещё раз",
   },
   receipt: {
-    next: "Принять",
-    where: "Куда?",
-    whereHint: (qty, product) => `${qty} · ${product}`,
     prep: "В заготовку",
-    prepHint: "Сначала приход, затем переход к заготовке",
-    expiry: "Годен до",
-    shelfLife: "Срок хранения, дней",
     source: { rule: "норма для этого места", product: "норма товара", default: "стандарт ресторана" },
     remember: "Запомнить как норму для этого места",
     copies: "Сколько бирок?",
-    print: "Печать",
-    back: "Назад",
     working: "Подождите…",
-    done: (lot) => `Принято: ${lot}`,
   },
   birka: {
     name: "Наим.",
@@ -622,6 +665,37 @@ export const LABELS_RU: LabelsDictionary = {
       saved: "Сохранено",
     },
   },
+  move: {
+    action: "Переместить",
+    title: "Переместить в другое место",
+    hint: (qty, product, place) => `${qty} · ${product} · сейчас: ${place}`,
+    to: "Куда",
+    noTargets: "В этом филиале нет других активных мест хранения",
+    qty: "Количество",
+    qtyHint: (max) => `всё: ${max}`,
+    shelfLife: "Срок хранения, дней",
+    expiry: "Новый срок годности",
+    keeps: "Место того же типа — срок не меняется",
+    restarts: "Место другого типа — срок считается заново с сегодня",
+    remember: "Запомнить для этого товара в этом месте",
+    reason: "Причина",
+    reasonPlaceholder: "напр. в морозилку, чтобы не выкидывать",
+    copies: "Бирок",
+    submit: "Переместить",
+    working: "Перемещаем…",
+    done: (expiry) => `Перемещено · годен до ${expiry}`,
+  },
+  norms: {
+    title: "Где и сколько хранить",
+    hint: "Дней для каждого места. Пусто — общий срок товара.",
+    place: "Место",
+    days: "Дней",
+    fallback: (days) => `пусто: ${days} дн.`,
+    noPlaces: "В этом филиале нет мест хранения",
+    save: "Сохранить",
+    saved: "Сохранено",
+    readOnly: "Менять могут владелец, шеф и повар",
+  },
   photoAi: {
     badges: {
       approved: (confidence) => `AI ✅ ${confidence}%`,
@@ -675,6 +749,8 @@ export const LABELS_RU: LabelsDictionary = {
     ownerOnly: "Менять может только владелец",
     signup: "Валюта ресторана",
     signupHint: "Остатки и себестоимость будут в этой валюте. Потом можно сменить в настройках.",
+    signupPick: "Выберите валюту",
+    signupRequired: "Выберите валюту ресторана",
     receipt: "Валюта цены",
     supplier: "Валюта поставщика",
     restaurant: (code) => `Валюта ресторана (${code})`,
@@ -697,23 +773,16 @@ export const LABELS_EN: LabelsDictionary = {
     insufficient_stock: "Not enough in stock — nothing was saved",
     balance_mismatch: "The balance does not add up — check the difference or confirm the loss",
     stock_exists: "Stock exists, clear inventory before currency change",
+    lot_expired: "Expired — it cannot be moved, write it off",
+    open_count: "A count is going on here — move it after the count",
     save_failed: "Could not save, try again",
   },
   receipt: {
-    next: "Receive",
-    where: "Where to?",
-    whereHint: (qty, product) => `${qty} · ${product}`,
     prep: "Prep it",
-    prepHint: "Received first, then you go on to the prep",
-    expiry: "Use by",
-    shelfLife: "Shelf life, days",
     source: { rule: "rule for this place", product: "product default", default: "restaurant default" },
     remember: "Remember as the rule for this place",
     copies: "How many labels?",
-    print: "Print",
-    back: "Back",
     working: "Please wait…",
-    done: (lot) => `Received: ${lot}`,
   },
   birka: {
     name: "Name",
@@ -854,6 +923,37 @@ export const LABELS_EN: LabelsDictionary = {
       saved: "Saved",
     },
   },
+  move: {
+    action: "Move",
+    title: "Move to another place",
+    hint: (qty, product, place) => `${qty} · ${product} · now: ${place}`,
+    to: "To",
+    noTargets: "No other active storage place in this branch",
+    qty: "Quantity",
+    qtyHint: (max) => `all: ${max}`,
+    shelfLife: "Keeps for, days",
+    expiry: "New use-by date",
+    keeps: "Same kind of place — the date stays",
+    restarts: "Another kind of place — the clock restarts today",
+    remember: "Remember for this product in this place",
+    reason: "Reason",
+    reasonPlaceholder: "e.g. to the freezer so it is not thrown away",
+    copies: "Labels",
+    submit: "Move",
+    working: "Moving…",
+    done: (expiry) => `Moved · use by ${expiry}`,
+  },
+  norms: {
+    title: "Where and how long it keeps",
+    hint: "Days for each place. Empty — the product's general shelf life.",
+    place: "Place",
+    days: "Days",
+    fallback: (days) => `empty: ${days} d`,
+    noPlaces: "No storage places in this branch",
+    save: "Save",
+    saved: "Saved",
+    readOnly: "Only the owner, chef and cook can change it",
+  },
   photoAi: {
     badges: {
       approved: (confidence) => `AI ✅ ${confidence}%`,
@@ -907,6 +1007,8 @@ export const LABELS_EN: LabelsDictionary = {
     ownerOnly: "Only the owner can change this",
     signup: "Restaurant currency",
     signupHint: "Stock and cost are shown in this currency. You can change it later in settings.",
+    signupPick: "Choose a currency",
+    signupRequired: "Choose the restaurant currency",
     receipt: "Price currency",
     supplier: "Supplier currency",
     restaurant: (code) => `Restaurant currency (${code})`,

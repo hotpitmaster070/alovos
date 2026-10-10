@@ -204,6 +204,7 @@ declare
     'select exists (select 1 from information_schema.columns where table_schema = ''public'' and table_name = $1 and column_name = $2)';
   ok boolean;
   profiles_org boolean;
+  has_tenant boolean;
 begin
   -- Drop every old and new policy name first so re-runs start clean.
   foreach t in array array['organizations', 'profiles', 'locations', 'products', 'suppliers', 'invoices'] loop
@@ -231,6 +232,7 @@ begin
   -- profiles: read own profile and profiles of the same organization; update only own row.
   execute has_col into ok using 'profiles', 'id';
   execute has_col into profiles_org using 'profiles', 'organization_id';
+  execute has_col into has_tenant using 'profiles', 'tenant_id';
   if ok then
     if profiles_org then
       execute format(
@@ -242,6 +244,12 @@ begin
       -- failed could insert a profile pointing at any tenant and join it.
       execute 'create policy profiles_insert on public.profiles for insert to authenticated
                  with check (id = (select auth.uid()) and organization_id is null)';
+    elsif has_tenant and to_regprocedure('public.current_tenant_id()') is not null then
+      -- A database already on the tenant model (20261009_unify_tenant applied by hand): the same
+      -- policy unify_tenant leaves, since its organization_id rewrite has nothing to rewrite here.
+      execute 'create policy profiles_select on public.profiles for select to authenticated
+                 using (id = (select auth.uid()) or tenant_id = (select public.current_tenant_id()))';
+      execute 'create policy profiles_insert on public.profiles for insert to authenticated with check (id = (select auth.uid()))';
     else
       raise notice 'profiles.organization_id missing: profiles policies limited to the own row';
       execute 'create policy profiles_select on public.profiles for select to authenticated using (id = (select auth.uid()))';

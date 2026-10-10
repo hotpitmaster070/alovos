@@ -98,6 +98,58 @@ export function discrepancyRow(input: DiscrepancyInput): DiscrepancyRow {
   return { counted, discrepancy, variance };
 }
 
+/** Chef detail and report: a parallel line worth a second look. */
+export const PARALLEL_REVIEW_THRESHOLD = 0.03;
+/**
+ * "Only real discrepancies": more than this quantity (kg, l, pcs), or money above this share of the
+ * line's book value (prices come from the database, so no amount is fixed in code).
+ */
+export const SIGNIFICANT_QUANTITY = 0.1;
+export const SIGNIFICANT_VALUE_SHARE = 0.05;
+
+export const isSignificant = (row: DiscrepancyRow, unitCost: number | null = null): boolean => {
+  const discrepancy = row.discrepancy;
+  if (!discrepancy) return false;
+  if (Math.abs(discrepancy.difference) > SIGNIFICANT_QUANTITY) return true;
+  if (discrepancy.cost === null || unitCost === null) return false;
+  const bookValue = Math.abs(discrepancy.expected * unitCost);
+  return Math.abs(discrepancy.cost) > (bookValue > 0 ? bookValue * SIGNIFICANT_VALUE_SHARE : 0);
+};
+
+export const DISCREPANCY_REASONS = ["receiving_error", "theft", "spoilage", "mis_sort"] as const;
+export type DiscrepancyReason = (typeof DISCREPANCY_REASONS)[number];
+export const isDiscrepancyReason = (value: unknown): value is DiscrepancyReason =>
+  typeof value === "string" && (DISCREPANCY_REASONS as readonly string[]).includes(value);
+
+export const TASK_STATUSES = ["pending", "in_progress", "completed", "closed", "cancelled"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+export const isTaskStatus = (value: unknown): value is TaskStatus =>
+  typeof value === "string" && (TASK_STATUSES as readonly string[]).includes(value);
+/** What people see: active (counting), done (all sent, waiting for the chef), closed, cancelled. */
+export type TaskPhase = "active" | "done" | "closed" | "cancelled";
+export const taskPhase = (status: TaskStatus): TaskPhase =>
+  status === "pending" || status === "in_progress" ? "active" : status === "completed" ? "done" : status;
+
+/** Net money difference against the expected value, in percent (negative: short). null without prices. */
+export function discrepancyShare(rows: { expected: number | null; difference: number | null; unitCost: number | null }[]): number | null {
+  let expectedValue = 0;
+  let differenceValue = 0;
+  for (const row of rows) {
+    if (row.expected === null || row.difference === null || row.unitCost === null) continue;
+    expectedValue += Math.abs(row.expected) * row.unitCost;
+    differenceValue += row.difference * row.unitCost;
+  }
+  return expectedValue > 0 ? Math.round((differenceValue / expectedValue) * 1000) / 10 : null;
+}
+
+/** Share of lines counted without a significant difference, in percent. */
+export function accuracy(rows: { row: DiscrepancyRow; unitCost: number | null }[]): number | null {
+  const counted = rows.filter((item) => item.row.discrepancy !== null);
+  if (counted.length === 0) return null;
+  const off = counted.filter((item) => isSignificant(item.row, item.unitCost)).length;
+  return Math.round(((counted.length - off) / counted.length) * 1000) / 10;
+}
+
 /** Lost: shortages only, in money; surplus: the value found above the expected balance. */
 export function totals(rows: DiscrepancyRow[]): { lost: number; surplus: number; suspicious: number } {
   let lost = 0;

@@ -154,6 +154,26 @@ async function withProductPrice(scope: TenantScope, product: CatalogProduct | un
   return withPrice(product, await productPrices(scope, [product.id]));
 }
 
+/**
+ * Products whose name, internal code, barcode or category contains the text (catalog_page escapes the
+ * ILIKE wildcards), in catalog order.
+ */
+export async function searchProducts(scope: TenantScope, search: string, limit: number): Promise<CatalogProduct[]> {
+  const rows = await catalogPage(scope, { ...NO_CATALOG_FILTERS, search }, 0, limit);
+  if (rows.length === 0) return [];
+  const ids = rows.map((row) => row.id);
+  const [productRows, prices] = await Promise.all([
+    scope.client.from("products").select(CATALOG_COLUMNS).eq("tenant_id", scope.tenantId).in("id", ids),
+    productPrices(scope, ids),
+  ]);
+  if (productRows.error) throw productRows.error;
+  const products = new Map(parseRows(productRows.data, parseCatalogProduct).map((product) => [product.id, product]));
+  return ids.flatMap((id) => {
+    const product = products.get(id);
+    return product ? [withPrice(product, prices)] : [];
+  });
+}
+
 /** Looks a scanned code up as a factory barcode first, then as our internal code. */
 export async function findProductByBarcode(scope: TenantScope, code: string): Promise<CatalogProduct | null> {
   const byBarcode = await scope.client

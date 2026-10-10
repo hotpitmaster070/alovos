@@ -238,7 +238,7 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
   ];
   ok("storage: used numbers per branch and type, inactive included", JSON.stringify(numbers.usedStorageNumbers(places, B1, "soyuducu")) === "[1,3]");
   ok("storage: display order soyuducu, dondurucu, anbar, other; then number", JSON.stringify([...places, { ...places[2], id: "e", type: "quru" }, { ...places[2], id: "f", type: "custom" }].sort(storageTypes.compareStorageLocations).map((p) => p.id)) === '["b","a","d","c","e","f"]');
-  ok("storage: code preview", storageTypes.storageLocationCode("NIZ", "quru", 2) === "NIZ-ANB-2");
+  ok("storage: code preview", storageTypes.storageLocationCode("quru", 2) === "ANB-2");
   const bulk = validation.validateStorageLocationInput(fd({ type: "dondurucu", branch_id: B1, count: "3", name_prefix: " Dondurucu " }));
   ok("storage input: bulk with prefix", bulk.ok && bulk.value.count === 3 && bulk.value.number === null && bulk.value.name === null && bulk.value.namePrefix === "Dondurucu");
   const fixed = validation.validateStorageLocationInput(fd({ type: "soyuducu", branchId: B1, number: "5", name: "Bar" }));
@@ -433,6 +433,10 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
       threw = true;
     }
     ok("settings: missing count_merge_mode is an error, not a default", threw);
+    const fallback = parseTenantSettings({ ...row, count_merge_mode: "last", currency: " ", timezone: "Mars/Olympus" });
+    ok("settings: empty currency and unknown timezone fall back to USD / UTC", fallback.currency === "USD" && fallback.timezone === "UTC", fallback);
+    const stored = parseTenantSettings({ ...row, count_merge_mode: "last" });
+    ok("settings: stored timezone and currency kept", stored.currency === row.currency && stored.timezone === row.timezone, stored);
     const parsedSettings = parseTenantSettings({ ...row, count_merge_mode: "last", usage_window_days: "10", invite_ttl_days: 2 });
     ok("settings: usage window and invite ttl parsed", parsedSettings.usageWindowDays === 10 && parsedSettings.inviteTtlDays === 2, parsedSettings);
     ok("settings: default shelf life parsed", parsedSettings.defaultShelfLifeDays === 3, parsedSettings);
@@ -620,7 +624,7 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     );
     ok("labels: roles", labels.canSetShelfLife("cook") && !labels.canSetShelfLife("staff") && labels.canEditPreparations("chef") && !labels.canEditPreparations("cook"));
 
-    // Preparation waste: norm, balance and the waste API input (same rules as 20261018_wastage_in_prep.sql).
+    // Preparation waste: norm, balance and the waste API input (same rules as 20261018000001_wastage_in_prep.sql).
     ok("waste: old recipe draft keeps the stored norm and items", draft.value.wastageNormPercent === null && draft.value.wastageItems === null, draft);
     const withItems = labels.validatePreparationDraft({
       name: "Baranina",
@@ -1073,6 +1077,78 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("currency: supplier currency", supplier.ok && supplier.value.currency === "TRY" &&
       purchasing.validateSupplierInput({ name: "Bazar" }).value.currency === null &&
       !purchasing.validateSupplierInput({ name: "Bazar", default_currency: "lira" }).ok, supplier);
+  }
+
+  {
+    // Moving a lot to another place (lib/labels/model.ts, public.move_stock_lot).
+    const S = "33333333-3333-4333-8333-333333333333";
+    const L = "22222222-2222-4222-8222-222222222222";
+    const whole = labels.validateMoveLotInput({ stock_id: S, to_location_id: L });
+    ok("move: whole lot, norm of the target", whole.ok && whole.value.qty === null && whole.value.shelfLifeDays === null &&
+      whole.value.remember === false && whole.value.reason === null, whole);
+    const part = labels.validateMoveLotInput({ stock_id: S, to_location_id: L, qty: "2,5", shelf_life_days: "60", remember: true, reason: "  to   the freezer " });
+    ok("move: part with an override remembered", part.ok && part.value.qty === 2.5 && part.value.shelfLifeDays === 60 &&
+      part.value.remember && part.value.reason === "to the freezer", part);
+    ok("move: bad input rejected", [
+      { stock_id: "x", to_location_id: L },
+      { stock_id: S, to_location_id: "" },
+      { stock_id: S, to_location_id: L, qty: 0 },
+      { stock_id: S, to_location_id: L, qty: "-1" },
+      { stock_id: S, to_location_id: L, shelf_life_days: 3651 },
+      { stock_id: S, to_location_id: L, shelf_life_days: "1.5" },
+      { stock_id: S, to_location_id: L, remember: true },
+      { stock_id: S, to_location_id: L, remember: "yes", shelf_life_days: 5 },
+      { stock_id: S, to_location_id: L, reason: 42 },
+      { stock_id: S, to_location_id: L, reason: "x".repeat(labels.MOVE_REASON_MAX + 1) },
+    ].every((body) => !labels.validateMoveLotInput(body).ok));
+    ok("move: clock restarts only into another kind of place or a custom one",
+      labels.moveRestartsClock("soyuducu", "dondurucu") && !labels.moveRestartsClock("soyuducu", "soyuducu") &&
+      labels.moveRestartsClock("custom", "custom") && !labels.moveRestartsClock("dondurucu", "dondurucu"));
+    const expired = labels.mapLabelsError({ message: "lot_expired", code: "55000" });
+    const counting = labels.mapLabelsError({ message: "open_count", code: "55000" });
+    ok("move: expired lot and open count -> 409", expired.code === "lot_expired" && expired.status === 409 &&
+      counting.code === "open_count" && counting.status === 409, { expired, counting });
+    const item = load("lib/labels/final.js").parseStockItem({ stock_id: S, product_id: L, product_name: "Toyuq", kind: "raw", quantity: "4", location_id: L });
+    ok("move: stock rows carry their place", item && item.locationId === L, item);
+  }
+
+  {
+    const recipes = load("lib/recipes/model.js");
+    const { grossPerPortion } = load("lib/recipes/sales.js");
+    const P1 = "33333333-3333-4333-8333-333333333333";
+    const P2 = "22222222-2222-4222-8222-222222222222";
+    ok("tech card: waste % = (brutto - netto) / brutto", recipes.wastePercent(0.25, 0.2) === 20 && recipes.wastePercent(1, 1) === 0 &&
+      recipes.wastePercent(0.3, 0.1) === 66.67);
+    ok("tech card: no waste % when netto > brutto or empty", recipes.wastePercent(0.1, 0.2) === null && recipes.wastePercent(0, 0) === null &&
+      recipes.wastePercent(NaN, 0.1) === null);
+    const fc = recipes.foodCost(3.1, 20);
+    ok("tech card: food cost 15.5 %, margin 16.9", fc.foodCostPercent === 15.5 && fc.margin === 16.9, fc);
+    const noPrice = recipes.foodCost(3, null);
+    const noCost = recipes.foodCost(null, 20);
+    ok("tech card: no food cost without price or cost", noPrice.foodCostPercent === null && noPrice.margin === null &&
+      noCost.foodCostPercent === null && recipes.foodCost(3, 0).foodCostPercent === null, { noPrice, noCost });
+    ok("tech card: gross = brutto; netto grossed up by the waste without it", grossPerPortion({ brutto: 0.3, netto: 0.24, wastePercent: 20 }) === 0.3 &&
+      Math.abs(grossPerPortion({ brutto: 0, netto: 0.2, wastePercent: 20 }) - 0.25) < 1e-9 && grossPerPortion({ brutto: 0, netto: 0, wastePercent: 0 }) === 0);
+    const input = recipes.parseTechCardInput({
+      id: null, name: "  Lula   kebab ", category: "", salePrice: 20, yieldQty: 0.35, yieldUnit: "kg",
+      ingredients: [{ productId: P1, brutto: 0.25, netto: 0.2, priceLotId: "" }, { productId: P2, brutto: 0.05, netto: 0.05, priceLotId: P1 }],
+    });
+    ok("tech card input: normalised", input && input.name === "Lula kebab" && input.category === null && input.ingredients.length === 2 &&
+      input.ingredients[0].priceLotId === null && input.ingredients[1].priceLotId === P1, input);
+    const base = { id: null, name: "X", category: null, salePrice: null, yieldQty: null, yieldUnit: null, ingredients: [] };
+    ok("tech card input: rejected", [
+      { ...base, name: "  " },
+      { ...base, id: "nope" },
+      { ...base, salePrice: -1 },
+      { ...base, yieldQty: 0 },
+      { ...base, ingredients: [{ productId: P1, brutto: 0.1, netto: 0.2 }] },
+      { ...base, ingredients: [{ productId: P1, brutto: 0.1, netto: 0.1 }, { productId: P1, brutto: 0.2, netto: 0.2 }] },
+      { ...base, ingredients: [{ productId: P1, brutto: "0.1", netto: 0.1 }] },
+      { ...base, ingredients: [{ productId: P1, brutto: 0.1, netto: 0.1, priceLotId: "lot" }] },
+    ].every((body) => recipes.parseTechCardInput(body) === null));
+    ok("tech card: decimal comma", recipes.parseDecimal("0,25") === 0.25 && Number.isNaN(recipes.parseDecimal("")));
+    ok("tech card: errors mapped", recipes.mapTechCardError("duplicate_product") === "duplicate_product" &&
+      recipes.mapTechCardError("boom") === "save_failed");
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

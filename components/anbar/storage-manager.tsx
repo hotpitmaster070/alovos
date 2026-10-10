@@ -53,8 +53,8 @@ function AddLocationsForm({
   const numbers = count > 1 ? `#${next}–${last}` : `#${next}`;
   const code =
     count > 1
-      ? `${storageLocationCode(branch.code, type, next)} … ${storageLocationCode(branch.code, type, last)}`
-      : storageLocationCode(branch.code, type, next);
+      ? `${storageLocationCode(type, next)} … ${storageLocationCode(type, last)}`
+      : storageLocationCode(type, next);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -211,7 +211,7 @@ export default function StorageManager({
             >
               {branches.map((item) => (
                 <option key={item.id} value={item.id}>
-                  {item.name} ({item.code})
+                  {item.name}
                 </option>
               ))}
             </Select>
@@ -237,7 +237,11 @@ export default function StorageManager({
         <StorageGrid
           locations={locations}
           renderCard={(location) => (
-            <StorageCard key={location.id} location={location}>
+            <StorageCard
+              key={location.id}
+              location={location}
+              branchName={branches.find((item) => item.id === location.branchId)?.name ?? null}
+            >
               <Button
                 type="button"
                 variant="ghost"

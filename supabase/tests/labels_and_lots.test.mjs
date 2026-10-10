@@ -1,10 +1,10 @@
-// 20261018_labels_and_lots.sql: shelf-life rules (place -> product -> tenant default), lot numbers
+// 20261018000000_labels_and_lots.sql: shelf-life rules (place -> product -> tenant default), lot numbers
 // unique per branch and day, expiry = production + shelf life, receipt with lot in one transaction,
 // preparations writing inputs off and creating one lot per output, label print logs, expiring lots.
 // Usage: PGLITE_DIR=/path/to/node_modules node supabase/tests/labels_and_lots.test.mjs
 import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
-const LOTS = "20261018_labels_and_lots.sql";
+const LOTS = "20261018000000_labels_and_lots.sql";
 const { ok, done } = reporter();
 const { q, as, apply } = await freshDb();
 

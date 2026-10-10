@@ -15,6 +15,7 @@ export type RecordGroup = {
   rows: Record<string, unknown>[];
   page: number;
   hasMore: boolean;
+  failed?: boolean;
 };
 
 export function RecordList({
@@ -47,7 +48,7 @@ export function RecordList({
         <Card key={group.label}>
           <CardTitle className="text-[10px] uppercase tracking-widest text-muted">{group.label}</CardTitle>
           {group.rows.length === 0 ? (
-            <p className="mt-3 text-sm text-muted">—</p>
+            <p className="mt-3 text-sm text-muted">{t.noData}</p>
           ) : (
             <ul className="mt-4 flex flex-col gap-3">
               {group.rows.map((row) => (

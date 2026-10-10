@@ -39,6 +39,7 @@ type LogRow = {
   photoPath: string | null;
   ai: WasteAiCheck | null;
   userId: string | null;
+  createdAt: string | null;
 };
 
 export function parseAiCheck(row: Record<string, unknown>): WasteAiCheck | null {
@@ -72,10 +73,17 @@ function parseLog(row: unknown): LogRow | null {
     photoPath: asString(row.photo_url),
     ai: parseAiCheck(row),
     userId: asString(row.user_id),
+    createdAt: asString(row.created_at),
   };
 }
 
-export type WasteFilters = { branchId: string | "all"; locationId: string | "all" };
+export type WasteFilters = {
+  branchId: string | "all";
+  locationId: string | "all";
+  /** Chef feed only. */
+  reason?: LoggedWasteReason | null;
+  userId?: string | null;
+};
 
 /** Logged waste value per log id; empty for roles that may not see costs. */
 async function wasteCosts(scope: TenantScope, ids: string[]): Promise<Map<string, number | null>> {
@@ -178,6 +186,8 @@ export async function listWasteCards(
     .lt("created_at", day.end);
   if (filters.branchId !== "all") query = query.eq("branch_id", filters.branchId);
   if (filters.locationId !== "all") query = query.eq("location_id", filters.locationId);
+  if (filters.reason) query = query.eq("reason", filters.reason);
+  if (filters.userId) query = query.eq("user_id", filters.userId);
 
   const listed = await query.order("created_at", { ascending: false }).order("id").range(from, to);
   if (listed.error) {
@@ -238,6 +248,7 @@ export async function listWasteCards(
       photoUrl: await signedPhoto(scope, log.photoPath),
       ai: log.ai,
       actor: log.userId ? emails.get(log.userId) ?? null : null,
+      createdAt: log.createdAt,
       cost: costs.has(log.id) ? (costs.get(log.id) ?? 0) : null,
     })),
   );
@@ -257,6 +268,8 @@ export async function wasteTotal(
     p_end: day.end,
     p_branch_id: filters.branchId === "all" ? null : filters.branchId,
     p_location_id: filters.locationId === "all" ? null : filters.locationId,
+    p_reason: filters.reason ?? null,
+    p_user_id: filters.userId ?? null,
   });
   if (error) throw error;
   return asNumber(data);

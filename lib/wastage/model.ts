@@ -60,6 +60,7 @@ export type WasteCard = {
   /** null for logs without a photo. */
   ai: WasteAiCheck | null;
   actor: string | null;
+  createdAt: string | null;
   /** null when the caller may not see costs (cook, staff). */
   cost: number | null;
 };

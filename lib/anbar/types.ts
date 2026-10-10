@@ -20,13 +20,22 @@ export type CatalogProduct = {
   storageLocationId: string | null;
 };
 
+/** A product offered on goods receipt; lastLotPrice is null when the role may not see costs. */
+export type ReceiptProduct = CatalogProduct & {
+  /** Cost per unit of the newest priced lot; pre-fills the price before products.cost. */
+  lastLotPrice: number | null;
+};
+
+/** Matches shown for a typed name or code on goods receipt. */
+export const RECEIPT_SEARCH_LIMIT = 20;
+
 export type CatalogLine = CatalogProduct & {
   stock: number;
   nearestExpiry: string | null;
   value: number;
 };
 
-/** code: unique in the tenant, the first part of its storage place codes. */
+/** code: unique in the tenant; used in lot numbers, not in storage place codes. */
 export type Branch = { id: string; name: string; code: string };
 
 /** Display order; public.storage_type_rank() sorts the same way. */
@@ -38,11 +47,10 @@ export const isStorageType = (value: string): value is StorageType =>
 /** Middle part of a place code; public.storage_type_code() is the source the database uses. */
 export const STORAGE_TYPE_CODES: Record<StorageType, string> = { soyuducu: "SOY", dondurucu: "DON", quru: "ANB", custom: "DIG" };
 
-/** The code the database gives a place: {BRANCH}-{TYPE}-{number}. */
-export const storageLocationCode = (branchCode: string, type: StorageType, number: number): string =>
-  `${branchCode}-${STORAGE_TYPE_CODES[type]}-${number}`;
+/** The code the database gives a place: {TYPE}-{number}, unique within its branch. */
+export const storageLocationCode = (type: StorageType, number: number): string => `${STORAGE_TYPE_CODES[type]}-${number}`;
 
-/** number: fixed per branch and type (Soyuducu #1, #2 ...); code: NIZ-SOY-1. */
+/** number: fixed per branch and type (Soyuducu #1, #2 ...); code: SOY-1. The branch is branchId only. */
 export type StorageLocation = {
   id: string;
   name: string;

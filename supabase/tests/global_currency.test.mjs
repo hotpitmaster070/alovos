@@ -35,11 +35,11 @@ let r;
 ok("currencies readable before sign-in", Array.isArray(anon) && anon.map((c) => c.code).join() === "AZN,RUB,TRY,USD,EUR", anon);
 
 const sA = await settings(tA);
-ok("Baku tenant (no choice at signup): AZN ₼ az-AZ", sA.currency === "AZN" && sA.currency_symbol === "₼" && sA.locale === "az-AZ", sA);
+ok("no choice at signup: neutral defaults USD $ en-US, UTC", sA.currency === "USD" && sA.currency_symbol === "$" && sA.locale === "en-US" && sA.timezone === "UTC", sA);
 const sM = await settings(tM);
 ok("Moscow signup: RUB ₽ ru-RU, Europe/Moscow", sM.currency === "RUB" && sM.currency_symbol === "₽" && sM.locale === "ru-RU" && sM.timezone === "Europe/Moscow", sM);
 const sX = await settings(tX);
-ok("unknown currency / time zone at signup: defaults kept", sX.currency === "AZN" && sX.timezone !== "Mars/Olympus", sX);
+ok("unknown currency / time zone at signup: defaults kept", sX.currency === "USD" && sX.timezone === "UTC", sX);
 
 r = await as(C, "select * from public.set_tenant_currency('RUB')");
 ok("cook cannot change the currency", /forbidden/.test(r.err ?? ""), r);

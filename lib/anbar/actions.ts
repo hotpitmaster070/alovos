@@ -11,11 +11,13 @@ import {
   createStorageLocations,
   insertStorageLocation,
   receiveStock,
+  searchProducts,
   updateExpiry,
   updateStorageLocation,
 } from "./repository";
+import { latestLotPrices } from "./costs";
 import { resolveScope, type TenantScope } from "./scope";
-import type { CatalogLine, CatalogProduct, StorageLocation } from "./types";
+import { RECEIPT_SEARCH_LIMIT, type CatalogLine, type CatalogProduct, type ReceiptProduct, type StorageLocation } from "./types";
 import {
   normalizeCode,
   validateBarcodeProductInput,
@@ -51,6 +53,35 @@ export async function lookupCodeAction(raw: string): Promise<LookupResult> {
     return { ok: true, code, product: await findProductByBarcode(current.scope, code) };
   } catch (error) {
     console.error("lookupCodeAction failed", error instanceof Error ? error.message : "unknown");
+    return { ok: false, error: "saveFailed" };
+  }
+}
+
+export type ReceiptSearchResult =
+  | { ok: true; query: string; exact: boolean; products: ReceiptProduct[] }
+  | { ok: false; error: AnbarErrorCode };
+
+/**
+ * Goods receipt by scan or typed text: an exact barcode / internal code match wins; otherwise products
+ * whose name or code contains the text. Prices come from the newest lot, else products.cost.
+ */
+export async function searchReceiptProductsAction(raw: string): Promise<ReceiptSearchResult> {
+  const query = normalizeCode(raw);
+  if (!query) return { ok: false, error: "invalidInput" };
+  const current = await scopeOrFailure();
+  if ("error" in current) return { ok: false, error: current.error };
+  try {
+    const exact = await findProductByBarcode(current.scope, query);
+    const products = exact ? [exact] : await searchProducts(current.scope, query, RECEIPT_SEARCH_LIMIT);
+    const lastPrices = await latestLotPrices(current.scope, products.map((product) => product.id));
+    return {
+      ok: true,
+      query,
+      exact: exact !== null,
+      products: products.map((product) => ({ ...product, lastLotPrice: lastPrices.get(product.id) ?? null })),
+    };
+  } catch (error) {
+    console.error("searchReceiptProductsAction failed", error instanceof Error ? error.message : "unknown");
     return { ok: false, error: "saveFailed" };
   }
 }

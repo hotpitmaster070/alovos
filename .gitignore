@@ -38,6 +38,9 @@ next-env.d.ts
 # test build output
 .test-out
 
+# supabase cli state (project ref, pooler url)
+supabase/.temp/
+
 # local git artifacts
 anbar.bundle
 h

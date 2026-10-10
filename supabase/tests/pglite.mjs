@@ -12,7 +12,12 @@ const { PGlite } = await load("@electric-sql/pglite");
 const { pgcrypto } = await load("@electric-sql/pglite/contrib/pgcrypto");
 
 const MIGRATIONS = path.resolve("supabase/migrations");
-export const migrationFiles = fs.readdirSync(MIGRATIONS).filter((f) => f.endsWith(".sql")).sort();
+/** In `supabase db push` order: by version, the part of the name before the first "_". */
+const version = (file) => file.split("_")[0];
+export const migrationFiles = fs
+  .readdirSync(MIGRATIONS)
+  .filter((f) => f.endsWith(".sql"))
+  .sort((a, b) => (version(a) < version(b) ? -1 : version(a) > version(b) ? 1 : a < b ? -1 : 1));
 export const readMigration = (file) => fs.readFileSync(path.join(MIGRATIONS, file), "utf8");
 
 process.on("unhandledRejection", (e) => {
@@ -44,7 +49,7 @@ export async function freshDb() {
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true),'')::uuid $$;
     create function auth.role() returns text language sql stable as $$ select nullif(current_setting('request.jwt.claim.role', true),'') $$;
     create schema storage;
-    create table storage.buckets(id text primary key, name text, public boolean);
+    create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
     create table storage.objects(id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner_id text default auth.uid()::text);
     alter table storage.objects enable row level security;
     create function storage.foldername(name text) returns text[] language sql immutable as $$

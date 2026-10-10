@@ -12,10 +12,12 @@ import StorageIcon from "./storage-icon";
 /** Icon, name, code, product count and count status of one storage place; actions go in children. */
 export function StorageCard({
   location,
+  branchName = null,
   selected = false,
   children,
 }: {
   location: StorageOverview;
+  branchName?: string | null;
   selected?: boolean;
   children?: ReactNode;
 }) {
@@ -39,7 +41,10 @@ export function StorageCard({
         <StorageIcon type={location.type} className="mt-0.5 h-6 w-6 shrink-0 text-beige" />
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold text-white">{location.name}</p>
-          <p className="font-mono text-xs text-white/50">{location.code}</p>
+          <p className="text-xs text-white/50">
+            <span className="font-mono">{location.code}</span>
+            {branchName && <> · {branchName}</>}
+          </p>
         </div>
         <Badge className={cn(open && location.active ? "border-beige text-beige" : "border-white/20 text-white/60")}>{status}</Badge>
       </div>

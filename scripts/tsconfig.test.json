@@ -38,6 +38,8 @@
     "../lib/waste/ai-check.ts",
     "../lib/waste/plan.ts",
     "../lib/money.ts",
+    "../lib/recipes/model.ts",
+    "../lib/recipes/sales.ts",
     "../lib/currency/model.ts",
     "../lib/supabase/fetch-all.ts",
     "../lib/pagination.ts",

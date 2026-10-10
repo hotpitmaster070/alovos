@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
-import { LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { ClipboardList, LayoutDashboard, ListChecks, LogOut, Menu, X } from "lucide-react";
 import Logo from "@/components/logo";
 import { signOut } from "@/lib/auth";
+import { CHEF_INVENTORY_PATH, COOK_TASKS_PATH } from "@/lib/auth-redirect";
 import { BLOCKS, blockHref, getBlockLabel } from "@/lib/blocks";
 import { useT } from "@/lib/i18n/useT";
 
@@ -92,6 +93,14 @@ export default function Sidebar() {
           >
             <LayoutDashboard className={ICON_CLASSES} strokeWidth={1.5} aria-hidden="true" />
             {t.sidebar.dashboard}
+          </NavItem>
+          <NavItem href={COOK_TASKS_PATH} active={pathname.startsWith(COOK_TASKS_PATH)} onNavigate={close}>
+            <ListChecks className={ICON_CLASSES} strokeWidth={1.5} aria-hidden="true" />
+            {t.inventory.count.back}
+          </NavItem>
+          <NavItem href={CHEF_INVENTORY_PATH} active={pathname.startsWith(CHEF_INVENTORY_PATH)} onNavigate={close}>
+            <ClipboardList className={ICON_CLASSES} strokeWidth={1.5} aria-hidden="true" />
+            {t.inventory.chef.title}
           </NavItem>
           {BLOCKS.map((block) => {
             const Icon = block.icon;

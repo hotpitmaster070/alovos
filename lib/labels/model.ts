@@ -505,6 +505,42 @@ export function validateShelfLifeRuleInput(body: Body): Valid<ShelfLifeRuleInput
   return { ok: true, value: { productId: body.product_id, storageLocationId: body.storage_location_id, days } };
 }
 
+export const MOVE_REASON_MAX = 200;
+
+/** Same rule as public.move_stock_lot(): the clock restarts when the kind of place changes or the target is custom. */
+export const moveRestartsClock = (fromType: string, toType: string): boolean => fromType !== toType || toType === "custom";
+
+export type MoveLotInput = {
+  stockId: string;
+  toLocationId: string;
+  /** null: the whole lot. */
+  qty: number | null;
+  /** Overrides the norm of the target place; only when the clock restarts. */
+  shelfLifeDays: number | null;
+  remember: boolean;
+  reason: string | null;
+};
+
+export function validateMoveLotInput(body: Body): Valid<MoveLotInput> | Invalid {
+  const qty = isBlank(body.qty) ? null : positive(body.qty);
+  const shelfLifeDays = optionalDays(body.shelf_life_days);
+  const remember = body.remember ?? false;
+  const reason = isBlank(body.reason) ? null : typeof body.reason === "string" ? trimmed(body.reason) || null : undefined;
+  if (
+    !isUuid(body.stock_id) ||
+    !isUuid(body.to_location_id) ||
+    qty === undefined ||
+    shelfLifeDays === undefined ||
+    typeof remember !== "boolean" ||
+    (remember && shelfLifeDays === null) ||
+    reason === undefined ||
+    (reason !== null && reason.length > MOVE_REASON_MAX)
+  ) {
+    return invalid;
+  }
+  return { ok: true, value: { stockId: body.stock_id, toLocationId: body.to_location_id, qty, shelfLifeDays, remember, reason } };
+}
+
 export function validatePrintInput(body: Body): Valid<{ lotIds: string[]; copies: number }> | Invalid {
   const copies = typeof body.copies === "string" && /^\d+$/.test(body.copies) ? Number(body.copies) : body.copies ?? 1;
   if (!Array.isArray(body.lot_ids) || body.lot_ids.length === 0 || body.lot_ids.length > LABEL_LOTS_MAX) return invalid;
@@ -615,6 +651,8 @@ export const LABELS_ERROR_CODES = [
   "insufficient_stock",
   "balance_mismatch",
   "stock_exists",
+  "lot_expired",
+  "open_count",
   "save_failed",
 ] as const;
 export type LabelsErrorCode = (typeof LABELS_ERROR_CODES)[number];
@@ -634,6 +672,8 @@ const STATUS: Record<LabelsErrorCode, number> = {
   insufficient_stock: 409,
   balance_mismatch: 409,
   stock_exists: 409,
+  lot_expired: 409,
+  open_count: 409,
   save_failed: 500,
 };
 

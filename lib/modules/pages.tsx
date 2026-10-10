@@ -28,21 +28,13 @@ export async function SupplyPage({ searchParams }: PageProps) {
 }
 
 export async function InvoicePage({ searchParams }: PageProps) {
-  const groups = await Promise.all([
-    group("/app/hesablar", "invoices", "id, total, created_at", searchParams),
-    group("/app/hesablar", "price_alerts", "id, contract_price, invoice_price, created_at", searchParams),
-  ]);
+  const groups = [await group("/app/hesablar", "invoices", "id, total, created_at", searchParams)];
   return (
     <div className="flex flex-col gap-6">
       <InvoiceUpload />
       <RecordList slug="hesablar" groups={groups} query={query(searchParams)} />
     </div>
   );
-}
-
-export async function RecipePage({ searchParams }: PageProps) {
-  const groups = [await group("/app/reseptler", "tech_cards", "id, name, allergens, calories", searchParams)];
-  return <RecordList slug="reseptler" groups={groups} query={query(searchParams)} />;
 }
 
 export async function PrepPage({ searchParams }: PageProps) {
@@ -56,10 +48,7 @@ export async function PosPage({ searchParams }: PageProps) {
 }
 
 export async function ReportPage({ searchParams }: PageProps) {
-  const groups = await Promise.all([
-    group("/app/analitika", "stock_movements", "id, movement_type, quantity, created_at", searchParams),
-    group("/app/analitika", "price_alerts", "id, contract_price, invoice_price, created_at", searchParams),
-  ]);
+  const groups = [await group("/app/analitika", "stock_movements", "id, movement_type, quantity, created_at", searchParams)];
   return <RecordList slug="analitika" groups={groups} query={query(searchParams)} />;
 }
 

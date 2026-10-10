@@ -153,6 +153,7 @@ export type StockItem = {
   quantity: number;
   expiryDate: string | null;
   daysLeft: number | null;
+  locationId: string | null;
   locationName: string;
   lotNumber: string | null;
   costPerUnit: number | null;
@@ -176,6 +177,7 @@ export function parseStockItem(row: unknown): StockItem | null {
     quantity,
     expiryDate: text(row.expiry_date),
     daysLeft: num(row.days_left),
+    locationId: text(row.location_id),
     locationName: text(row.location_name) ?? "",
     lotNumber: text(row.lot_number),
     costPerUnit: num(row.cost_per_unit),

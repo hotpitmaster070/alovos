@@ -6,6 +6,8 @@ export type RowPage = {
   rows: Record<string, unknown>[];
   page: number;
   hasMore: boolean;
+  /** The query failed (missing table or column); the group shows "no data" instead of failing the page. */
+  failed?: boolean;
 };
 
 export type PageParams = Record<string, string | string[] | undefined>;
@@ -31,7 +33,10 @@ export async function loadRows(path: string, table: string, columns: string, pag
     .eq("tenant_id", gated.scope.tenantId)
     .order("id")
     .range(from, from + PAGE_SIZE);
-  if (error) throw error;
+  if (error) {
+    console.error(`${path}: ${table} could not be read`, error.message);
+    return { rows: [], page, hasMore: false, failed: true };
+  }
   const rows = Array.isArray(data) ? (data as unknown as Record<string, unknown>[]) : [];
   return { rows: rows.slice(0, PAGE_SIZE), page, hasMore: rows.length > PAGE_SIZE };
 }

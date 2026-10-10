@@ -38,6 +38,29 @@ export async function lotCosts(
   return costMap(rows, "cost_per_unit");
 }
 
+/**
+ * Cost per unit of the newest priced lot, by products.id. product_lot_costs returns rows to owners and
+ * chefs only, so the map is empty for other roles.
+ */
+export async function latestLotPrices(scope: TenantScope, productIds: string[]): Promise<Map<string, number>> {
+  const latest = await Promise.all(
+    productIds.map(async (productId) => {
+      const { data, error } = await scope.client
+        .from("product_lot_costs")
+        .select("cost_per_unit, lot:product_lots!inner(product_id)")
+        .eq("tenant_id", scope.tenantId)
+        .eq("lot.product_id", productId)
+        .not("cost_per_unit", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (error) throw error;
+      const cost = Number((data?.[0] as { cost_per_unit?: unknown } | undefined)?.cost_per_unit);
+      return [productId, cost] as const;
+    }),
+  );
+  return new Map(latest.filter(([, cost]) => Number.isFinite(cost)));
+}
+
 /** Price per unit by products.id. */
 export async function productPrices(scope: TenantScope, productIds: string[]): Promise<Map<string, number>> {
   if (productIds.length === 0) return new Map();

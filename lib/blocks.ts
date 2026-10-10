@@ -30,7 +30,7 @@ export type Block = {
 // KILLER 2: 5.2 + 11.3 AI Tani bucket Vision API
 // KILLER 3: 4.4 Allergens auto 14 + KBJU
 // KILLER 4: 8.4 Stars/Horses/Dogs + "Remove dog - lose $500" + 8.5 AI 1g coffee = $200 loss
-// KILLER 5: 10.1 IoT temp Shelly + WhatsApp alert + Bazar Benchmark 2.4 average price Baku
+// KILLER 5: 10.1 IoT temp Shelly + WhatsApp alert + Bazar Benchmark 2.4 average local market price
 
 export const BLOCKS: Block[] = [
   {
@@ -126,7 +126,7 @@ export const BLOCKS: Block[] = [
     labelEN: "HACCP",
     icon: ShieldCheck,
     killer: true,
-    // KILLER 5: 10.1 IoT temp Shelly + WhatsApp alert + Bazar Benchmark 2.4 average price Baku
+    // KILLER 5: 10.1 IoT temp Shelly + WhatsApp alert + Bazar Benchmark 2.4 average local market price
   },
   {
     id: 11,

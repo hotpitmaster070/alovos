@@ -1,10 +1,10 @@
-// 20261018_wastage_in_prep.sql: waste norm on recipes, waste and balance check inside a preparation
+// 20261018000001_wastage_in_prep.sql: waste norm on recipes, waste and balance check inside a preparation
 // (one transaction with the lots), confirmed losses, tolerance from tenant_settings, write-offs through
 // log_wastage() and write_off_expired_stock(), reports.
 // Usage: PGLITE_DIR=/path/to/node_modules node supabase/tests/wastage_in_prep.test.mjs
 import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
-const WASTE = "20261018_wastage_in_prep.sql";
+const WASTE = "20261018000001_wastage_in_prep.sql";
 const { ok, done } = reporter();
 const { q, as, apply } = await freshDb();
 
@@ -229,7 +229,7 @@ r = await as(C, `select r.id, r.created_at, p.name from preparation_runs r join 
 ok("…and the preparation behind a run", !r.err && r.rows.length === 1 && !!r.rows[0].name, r);
 
 // ---- migration order: labels after waste keeps the waste version
-const LABELS = "20261018_labels_and_lots.sql";
+const LABELS = "20261018000000_labels_and_lots.sql";
 failure = await apply([LABELS]);
 ok(`${LABELS} re-applies after ${WASTE}`, !failure, failure);
 const prepFunctions = async () =>
