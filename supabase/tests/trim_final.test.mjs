@@ -185,7 +185,10 @@ ok("labels and wastage re-applied after the final scheme: still one function eac
 await receive(lamb, 10, 10);
 r = await cook(prep.id, yields(5, 2), { qty: 1 }, boneBack(2));
 ok("…and trim still works", !r.err && r.rows.length === 3, r);
-failure = await apply([FINAL, "20261018000001_wastage_in_prep.sql", FINAL]);
+// 20261028001300 changed stock_summary's result; Postgres re-creates a function with another result
+// only after a drop, and the later migration restores its version.
+await q("drop function public.stock_summary(uuid)");
+failure = await apply([FINAL, "20261018000001_wastage_in_prep.sql", FINAL, "20261028001300_fix_cost_expired.sql"]);
 fns = await prepFunctions();
 ok("final -> wastage -> final: same result", !failure && fns.length === 2, { failure, fns });
 

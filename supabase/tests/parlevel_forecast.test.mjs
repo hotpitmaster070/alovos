@@ -5,6 +5,7 @@
 import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const FORECAST = "20261016_parlevel_forecast.sql";
+const COST_FIX = "20261028001300_fix_cost_expired.sql";
 const { ok, done } = reporter();
 const { q, as, sys, apply, applyTwice } = await freshDb();
 
@@ -226,8 +227,11 @@ const snapshot = async () =>
       (select json_agg(json_build_object('id', id, 'used', used_at) order by id) from invitations) i`),
   );
 const before = await snapshot();
-failure = await apply([FORECAST]);
-ok(`${FORECAST} re-applies on live data`, !failure, failure);
+// 20261028001300 changed stock_value_by_type's result; Postgres re-creates a function with another
+// result only after a drop, and the later migration restores its version.
+await q("drop function public.stock_value_by_type(uuid)");
+failure = await apply([FORECAST, COST_FIX]);
+ok(`${FORECAST} re-applies on live data (then ${COST_FIX})`, !failure, failure);
 ok("suppliers, limits, requests and invitations survive the re-run", (await snapshot()) === before);
 
 done();
