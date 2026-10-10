@@ -5,14 +5,12 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const FINAL = "20261019_final_world_scheme.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < FINAL));
 ok(`migrations before ${FINAL} apply`, !failure, failure);
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= FINAL));
-  ok(`${FINAL} applies (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= FINAL));
+ok(`${FINAL} and later apply, each twice`, !failure, failure);
 
 const [A, C, B] = [U("2a"), U("2c"), U("2b")];
 await q(`insert into auth.users(id,email) values ('${A}','owner@acme.az'),('${C}','cook@acme.az'),('${B}','bob@beta.az')`);

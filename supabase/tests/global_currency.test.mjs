@@ -5,14 +5,12 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const FILE = "20261020000000_global_currency.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < FILE));
 ok(`migrations before ${FILE} apply`, !failure, failure);
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= FILE));
-  ok(`${FILE} and later apply (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= FILE));
+ok(`${FILE} and later apply, each twice`, !failure, failure);
 ok("five currencies seeded once", Number((await q("select count(*) n from currencies"))[0].n) === 5);
 
 const near = (a, b) => Math.abs(Number(a) - b) < 1e-6;

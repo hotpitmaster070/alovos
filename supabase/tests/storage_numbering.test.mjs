@@ -1,11 +1,12 @@
-// 20261015_storage_numbering.sql: fixed numbers per (branch, type), place codes NIZ-SOY-1, branch codes
-// unique per tenant, bulk creation, display order, product/open-count overview, deactivation guard.
+// 20261015_storage_numbering.sql: fixed numbers per (branch, type), branch codes unique per tenant, bulk
+// creation, display order, product/open-count overview, deactivation guard. Place codes are {TYPE}-{number}
+// (SOY-1) since 20261028000300, unique per branch; 20261023 adds two default fridges to existing branches.
 // Usage: PGLITE_DIR=/path/to/node_modules node supabase/tests/storage_numbering.test.mjs
 import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const NUMBERING = "20261015_storage_numbering.sql";
 const { ok, done } = reporter();
-const { q, as, sys, apply } = await freshDb();
+const { q, as, sys, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < NUMBERING));
 ok(`migrations before ${NUMBERING} apply`, !failure, failure);
@@ -33,10 +34,8 @@ for (const name of ["Bar", "Mətbəx", "Desert"]) {
   ok(`seed legacy fridge ${name}`, !r.err, r);
 }
 
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= NUMBERING));
-  ok(`${NUMBERING} and later apply (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= NUMBERING));
+ok(`${NUMBERING} and later apply, each twice`, !failure, failure);
 
 // ---- branch codes
 const codes = Object.fromEntries((await q(`select name, code from branches where tenant_id='${tA}'`)).map((row) => [row.name, row.code]));
@@ -51,11 +50,12 @@ ok("another tenant may use the same code", !r.err && r.rows[0].code === "NIZ", r
 
 // ---- numbers and codes of existing places
 const fridges = await q(`select name, number, code from storage_locations where branch_id='${branch.Nizami}' and type='soyuducu' order by number`);
-ok("legacy places numbered by creation within branch and type (the branch's default fridge first)",
-  JSON.stringify(fridges.map((row) => [row.name, row.number])) === JSON.stringify([["Soyuducu", 1], ["Bar", 2], ["Mətbəx", 3], ["Desert", 4]]), fridges);
-ok("codes {BRANCH}-{TYPE}-{number}", JSON.stringify(fridges.map((row) => row.code)) === JSON.stringify(["NIZ-SOY-1", "NIZ-SOY-2", "NIZ-SOY-3", "NIZ-SOY-4"]), fridges);
+ok("legacy places numbered by creation within branch and type (the branch's default fridge first, then 20261023 zones)",
+  JSON.stringify(fridges.map((row) => [row.name, row.number])) ===
+    JSON.stringify([["Soyuducu", 1], ["Bar", 2], ["Mətbəx", 3], ["Desert", 4], ["Ət soyuducusu", 5], ["Tərəvəz", 6]]), fridges);
+ok("codes {TYPE}-{number}", JSON.stringify(fridges.map((row) => row.code)) === JSON.stringify(["SOY-1", "SOY-2", "SOY-3", "SOY-4", "SOY-5", "SOY-6"]), fridges);
 ok("default places of a new branch are numbered too",
-  (await q(`select count(*)::int c from storage_locations where branch_id='${branch["Şəki"]}' and code like 'SEK-%-1'`))[0].c >= 1);
+  (await q(`select count(*)::int c from storage_locations where branch_id='${branch["Şəki"]}' and code ~ '^[A-Z]+-1$'`))[0].c >= 1);
 ok("no place without number or code", (await q("select count(*)::int c from storage_locations where number is null or code is null"))[0].c === 0);
 
 // ---- bulk creation
@@ -64,15 +64,15 @@ const bulk = (uid, args) =>
     args.branch, args.type, args.count ?? 1, args.number ?? null, args.name ?? null, args.prefix ?? null,
   ]);
 r = await bulk(A, { branch: branch.Nizami, type: "soyuducu", prefix: "Soyuducu" });
-ok("next number is MAX+1: Soyuducu #5", !r.err && r.rows[0].number === 5 && r.rows[0].name === "Soyuducu #5" && r.rows[0].code === "NIZ-SOY-5", r);
+ok("next number is MAX+1: Soyuducu #7", !r.err && r.rows[0].number === 7 && r.rows[0].name === "Soyuducu #7" && r.rows[0].code === "SOY-7", r);
 r = await bulk(A, { branch: branch.Nizami, type: "dondurucu", count: 3, prefix: "Dondurucu" });
 const freezers = r.rows ?? [];
 ok("bulk: 3 freezers", !r.err && freezers.length === 3, r);
-ok("bulk freezers continue after the default one", JSON.stringify(freezers.map((row) => row.number)) === JSON.stringify([2, 3, 4]) && freezers[2].name === "Dondurucu #4" && freezers[2].code === "NIZ-DON-4", freezers);
+ok("bulk freezers continue after the default one", JSON.stringify(freezers.map((row) => row.number)) === JSON.stringify([2, 3, 4]) && freezers[2].name === "Dondurucu #4" && freezers[2].code === "DON-4", freezers);
 r = await bulk(A, { branch: branch.Nizami, type: "soyuducu", number: 2, name: "Extra" });
 ok("an explicit taken number is rejected", /number_taken/.test(r.err ?? ""), r);
 r = await bulk(A, { branch: branch.Nizami, type: "soyuducu", number: 10, name: "Bar 10" });
-ok("an explicit free number is used", !r.err && r.rows[0].number === 10 && r.rows[0].code === "NIZ-SOY-10", r);
+ok("an explicit free number is used", !r.err && r.rows[0].number === 10 && r.rows[0].code === "SOY-10", r);
 r = await bulk(A, { branch: branch.Nizami, type: "soyuducu", prefix: "Soyuducu" });
 ok("auto numbering continues after the highest", !r.err && r.rows[0].number === 11, r);
 r = await bulk(A, { branch: branch.Nizami, type: "soyuducu", name: "Bar" });
@@ -93,18 +93,18 @@ ok("and created exactly those", (await q(`select count(*)::int c from storage_lo
 
 // ---- direct writes keep the rules
 r = await as(C, `insert into storage_locations(tenant_id, branch_id, name, type) values ('${tA}','${branch.Nizami}','Cook fridge','soyuducu') returning number, code`);
-ok("a direct insert without number gets MAX+1", !r.err && r.rows[0].number === 12 && r.rows[0].code === "NIZ-SOY-12", r);
+ok("a direct insert without number gets MAX+1", !r.err && r.rows[0].number === 12 && r.rows[0].code === "SOY-12", r);
 r = await as(C, `insert into storage_locations(tenant_id, branch_id, name, type, number) values ('${tA}','${branch.Nizami}','Dup','soyuducu', 1)`);
 ok("two Soyuducu #1 in one branch impossible", /uniq_location_number_per_branch|duplicate/.test(r.err ?? ""), r);
 r = await as(C, `update storage_locations set code = 'HACK' where branch_id='${branch.Nizami}' and number = 1 and type = 'soyuducu' returning code`);
-ok("the code cannot be set by hand", !r.err && r.rows[0].code === "NIZ-SOY-1", r);
+ok("the code cannot be set by hand", !r.err && r.rows[0].code === "SOY-1", r);
 r = await as(A, `update storage_locations set type = 'dondurucu' where name = 'Cook fridge' returning number, code`);
-ok("a type change takes the next number of the new type", !r.err && r.rows[0].number === 5 && r.rows[0].code === "NIZ-DON-5", r);
+ok("a type change takes the next number of the new type", !r.err && r.rows[0].number === 5 && r.rows[0].code === "DON-5", r);
 
-// ---- branch code change follows into place codes
+// ---- branch code change: place codes do not carry the branch code
 r = await as(A, `update branches set code = 'nzm' where id='${branch.Nizami}' returning code`);
 ok("owner changes a branch code (uppercased)", !r.err && r.rows[0]?.code === "NZM", r);
-ok("place codes follow", (await q(`select count(*)::int c from storage_locations where branch_id='${branch.Nizami}' and code not like 'NZM-%'`))[0].c === 0);
+ok("place codes stay {TYPE}-{number}", (await q(`select count(*)::int c from storage_locations where branch_id='${branch.Nizami}' and code !~ '^[A-Z]+-[0-9]+$'`))[0].c === 0);
 r = await as(A, `update branches set code = 'N-1' where id='${branch.Nizami}'`);
 ok("invalid branch code rejected", /branches_code_check/.test(r.err ?? ""), r);
 

@@ -31,11 +31,19 @@ const tB = (await q(`select tenant_id t from profiles where id='${B}'`))[0].t;
 const branchB = (await q(`select id from branches where tenant_id='${tB}'`))[0].id;
 
 // ---- default zones
-const DEFAULT_NAMES = ["Ət soyuducusu", "Tərəvəz", "Quru anbar", "Bar", "Мясной холодильник", "Овощи", "Сухой склад", "Бар", "Meat fridge", "Vegetables", "Dry store"];
+// One per kind, found by type (dry / cold / frozen); the receiving zone is a custom place found by name.
+const RECEIVING = ["Qəbul zonası", "Зона приёмки", "Receiving"];
 const zonesOf = async (b) =>
-  q(`select id, name, type from storage_locations where branch_id='${b}' and name = any(array[${DEFAULT_NAMES.map((n) => `'${n}'`).join(",")}]) order by number`);
+  q(
+    `select id, name, type from storage_locations
+     where branch_id = $1 and (type in ('quru', 'soyuducu', 'dondurucu') or name = any($2))
+     order by array_position(array['quru', 'soyuducu', 'dondurucu', 'custom'], type), number`,
+    [b, RECEIVING],
+  );
 let zones = await zonesOf(branch);
-ok("the migration seeded 4 default zones per branch", zones.length === 4 && (await zonesOf(branchB)).length === 4, zones);
+const kinds = (list) => list.map((z) => z.type).join(",");
+ok("the migration seeded 4 default zones per branch, one per kind", zones.length === 4 && kinds(zones) === "quru,soyuducu,dondurucu,custom" &&
+  kinds(await zonesOf(branchB)) === "quru,soyuducu,dondurucu,custom", zones);
 let r = await as(H, `select public.ensure_default_zones('${branch}') n`);
 ok("ensure_default_zones is idempotent", !r.err && r.rows[0].n === 0, r);
 r = await as(C1, `select public.ensure_default_zones('${branch}')`);

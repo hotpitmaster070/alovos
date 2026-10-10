@@ -6,7 +6,7 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const CLEANUP = "20261017_cleanup_empty_tenants.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < CLEANUP));
 ok(`migrations before ${CLEANUP} apply`, !failure, failure);
@@ -53,10 +53,8 @@ await q(`insert into auth.users(id,email) values ('${KEEPER}','keeper@x.az')`);
 const tKeeper = await tenantOf(KEEPER);
 await age(tKeeper, 20);
 
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= CLEANUP));
-  ok(`${CLEANUP} applies (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= CLEANUP));
+ok(`${CLEANUP} and later apply, each twice`, !failure, failure);
 
 ok("empty tenant from 10 days ago without products is deleted", !(await exists(empty10.tenant)));
 ok("…with its memberships, branches, storage places and settings", (await q(`select

@@ -1,19 +1,17 @@
 // 20261018000000_labels_and_lots.sql: shelf-life rules (place -> product -> tenant default), lot numbers
-// unique per branch and day, expiry = production + shelf life, receipt with lot in one transaction,
+// LOT-YYYYMMDD-NNNN per restaurant and day (20261028000400), expiry = production + shelf life, receipt with lot in one transaction,
 // preparations writing inputs off and creating one lot per output, label print logs, expiring lots.
 // Usage: PGLITE_DIR=/path/to/node_modules node supabase/tests/labels_and_lots.test.mjs
 import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const LOTS = "20261018000000_labels_and_lots.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < LOTS));
 ok(`migrations before ${LOTS} apply`, !failure, failure);
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= LOTS));
-  ok(`${LOTS} applies (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= LOTS));
+ok(`${LOTS} and later apply, each twice`, !failure, failure);
 
 const [A, C, B] = [U("0a"), U("0c"), U("0b")];
 await q(`insert into auth.users(id,email) values ('${A}','owner@acme.az'),('${C}','cook@acme.az'),('${B}','bob@beta.az')`);
@@ -53,11 +51,13 @@ r = await as(A, `insert into product_shelf_life_rules(tenant_id, product_id, sto
 ok("rules are not written directly", !!r.err, r);
 
 // ---- receipt with lot
-const lotRe = (prefix, seq) => new RegExp(`^${branch.code}-${prefix}-${ddmm}-${seq}$`);
+// Since 20261028000400: LOT-YYYYMMDD-NNNN, one counter per restaurant and tenant-local day.
+const ymd = iso(today).replaceAll("-", "");
+const lotNo = (seq) => `LOT-${ymd}-${String(seq).padStart(4, "0")}`;
 r = await as(C, `select * from public.receive_stock_with_lot('${toyuq}', 10, '${soy.id}', 4.5)`);
 const lot1 = r.rows?.[0];
 ok("receipt creates a raw lot", !r.err && lot1.lot_type === "raw" && Number(lot1.quantity) === 10 && lot1.unit === "kg", r);
-ok("lot number BRANCH-STORnum-DDMM-001", lotRe(`SOY${soy.number}`, "001").test(lot1.lot_number), lot1.lot_number);
+ok("lot number LOT-YYYYMMDD-0001", lot1.lot_number === lotNo(1), lot1.lot_number);
 ok("expiry = production + rule (soyuducu 3)", iso(lot1.production_date) === iso(today) && iso(lot1.expiry_date) === plus(3), lot1);
 r = await q(`select quantity, expiry_date from product_stocks where product_id='${toyuq}' and location_id='${soy.id}'`);
 ok("the stock row carries the same expiry", r.length === 1 && Number(r[0].quantity) === 10 && iso(r[0].expiry_date) === plus(3), r);
@@ -66,7 +66,7 @@ ok("lot points at its prihod movement", r[0]?.movement_type === "prihod" && Numb
 
 r = await as(C, `select * from public.receive_stock_with_lot('${toyuq}', 4, '${don.id}')`);
 const lot2 = r.rows[0];
-ok("dondurucu: 90 days, next sequence of the branch", iso(lot2.expiry_date) === plus(90) && lotRe(`DON${don.number}`, "002").test(lot2.lot_number), lot2);
+ok("dondurucu: 90 days, next number of the restaurant", iso(lot2.expiry_date) === plus(90) && lot2.lot_number === lotNo(2), lot2);
 r = await as(C, `select * from public.receive_stock_with_lot('${toyuq}', 2, '${soy.id}', null, '${plus(-1)}')`);
 ok("expiry follows the given production date", iso(r.rows[0].production_date) === plus(-1) && iso(r.rows[0].expiry_date) === plus(2), r.rows[0]);
 r = await as(C, `select * from public.receive_stock_with_lot('${baranina}', 12, '${soy.id}', 9, null, 2, true)`);
@@ -82,25 +82,27 @@ ok("another tenant cannot receive into it", /product_not_found/.test(r.err ?? ""
 r = await q(`select count(*)::int n, count(distinct lot_number)::int u, max(seq) m from product_lots where tenant_id='${tA}'`);
 ok("lot numbers are unique and sequential within the day", r[0].n === 4 && r[0].u === 4 && r[0].m === 4, r);
 r = await as(A, `select public.generate_lot_number('${branch.id}','${soy.id}') n`);
-ok("generate_lot_number previews the next one", lotRe(`SOY${soy.number}`, "005").test(r.rows[0].n), r);
+ok("generate_lot_number previews the next one", r.rows?.[0]?.n === lotNo(5), r);
 const before = (await q("select count(*)::int n from stock_movements"))[0].n;
 r = await as(C, `select * from public.create_lot('${toyuq}', 3, '${soy.id}')`);
 ok("create_lot labels existing stock without a movement", !r.err && r.rows[0].movement_id === null &&
-  (await q("select count(*)::int n from stock_movements"))[0].n === before && lotRe(`SOY${soy.number}`, "005").test(r.rows[0].lot_number), r);
-await q(`update product_lots set numbered_on = numbered_on - 1 where tenant_id='${tA}'`);
+  (await q("select count(*)::int n from stock_movements"))[0].n === before && r.rows[0].lot_number === lotNo(5), r);
+// Everything numbered so far moves to yesterday: today counts from 0001 again.
+const yesterday = plus(-1).replaceAll("-", "");
+await q(`update batch_daily_counters set date = date - 1 where tenant_id='${tA}'`);
+await q(`update product_lots set numbered_on = numbered_on - 1, lot_number = replace(lot_number, '${ymd}', '${yesterday}') where tenant_id='${tA}'`);
 r = await as(C, `select * from public.create_lot('${toyuq}', 1, '${soy.id}')`);
-ok("a new day starts again at 001", lotRe(`SOY${soy.number}`, "001").test(r.rows[0].lot_number), r.rows[0].lot_number);
-await q(`update product_lots set numbered_on = numbered_on + 1 where tenant_id='${tA}' and seq > 1`);
+ok("a new day starts again at 0001", r.rows?.[0]?.lot_number === lotNo(1), r.rows?.[0]?.lot_number);
 const b2 = (await as(A, "insert into branches(name) values ('Gənclik') returning id, code")).rows[0];
 const b2soy = (await q(`select id, number from storage_locations where branch_id='${b2.id}' and type='soyuducu' limit 1`))[0];
 r = await as(C, `select * from public.create_lot('${toyuq}', 1, '${b2soy.id}')`);
-ok("sequence is per branch", r.rows[0].lot_number === `${b2.code}-SOY${b2soy.number}-${ddmm}-001`, r.rows[0]);
+ok("the counter is shared by all branches of the restaurant", r.rows?.[0]?.lot_number === lotNo(2), r.rows?.[0]);
 r = await as(A, `insert into product_lots(tenant_id, branch_id, product_id, lot_number, numbered_on, seq, expiry_date, quantity, unit, storage_location_id, lot_type)
   values ('${tA}','${branch.id}','${toyuq}','X','${iso(today)}',99,'${plus(1)}',1,'kg','${soy.id}','raw')`);
 ok("lots are not inserted directly", !!r.err, r);
 r = await q(`insert into product_lots(tenant_id, branch_id, product_id, lot_number, numbered_on, seq, expiry_date, quantity, unit, storage_location_id, lot_type)
   values ('${tA}','${branch.id}','${toyuq}','${lot1.lot_number}','${iso(today)}',98,'${plus(1)}',1,'kg','${soy.id}','raw')`).catch((e) => ({ err: e.message }));
-ok("a lot number cannot repeat within the day", /uniq_product_lot_number_day/.test(r.err ?? ""), r);
+ok("a lot number cannot repeat in the restaurant", /uq_product_lots_tenant_batch_number|uniq_product_lot_number_day/.test(r.err ?? ""), r);
 
 // ---- preparation: 10 kg lamb -> 5 kg shashlik + 8 portions koreyka + 2 kg farsh
 await as(A, `select public.set_shelf_life_rule('${shashlik}','${soy.id}', 3), public.set_shelf_life_rule('${koreyka}','${soy.id}', 2), public.set_shelf_life_rule('${farsh}','${don.id}', 60)`);
@@ -131,11 +133,11 @@ const lots = r.rows ?? [];
 ok("preparation creates 3 semi lots", !r.err && lots.length === 3 && lots.every((l) => l.lot_type === "semi"), r);
 const byProduct = Object.fromEntries(lots.map((l) => [l.product_id, l]));
 ok("each output has its own expiry by its rule", iso(byProduct[shashlik]?.expiry_date) === plus(3) && iso(byProduct[koreyka]?.expiry_date) === plus(2) && iso(byProduct[farsh]?.expiry_date) === plus(60), lots.map((l) => iso(l.expiry_date)));
-ok("farsh went to the freezer", byProduct[farsh]?.storage_location_id === don.id && byProduct[farsh].lot_number.includes(`-DON${don.number}-`), byProduct[farsh]);
+ok("farsh went to the freezer", byProduct[farsh]?.storage_location_id === don.id && /^LOT-\d{8}-\d{4,}$/.test(byProduct[farsh].lot_number), byProduct[farsh]);
 ok("portions kept for koreyka", Number(byProduct[koreyka]?.portions) === 8, byProduct[koreyka]);
 ok("parent lot is the lamb lot", lots.every((l) => l.parent_lot_id === baraninaLot.id), lots.map((l) => l.parent_lot_id));
 const comp = byProduct[shashlik]?.composition_json ?? [];
-ok("composition lists the input with its lot", comp.length === 1 && comp[0].name === "Baranina" && Number(comp[0].qty) === 10 && comp[0].lot_number === baraninaLot.lot_number, comp);
+ok("composition lists the input with its lot", comp.length === 1 && comp[0].name === "Baranina" && Number(comp[0].qty) === 10 && comp[0].lot_number === (await q(`select lot_number from product_lots where id='${baraninaLot.id}'`))[0].lot_number, comp);
 r = await q(`select (select coalesce(sum(quantity),0) from product_stocks where product_id='${baranina}') b,
   (select coalesce(sum(quantity),0) from product_stocks where product_id='${shashlik}' and location_id='${soy.id}') s,
   (select coalesce(sum(quantity),0) from product_stocks where product_id='${farsh}' and location_id='${don.id}') f`);

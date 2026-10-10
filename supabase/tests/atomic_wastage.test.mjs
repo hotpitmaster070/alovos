@@ -10,10 +10,13 @@ const { q, as, sys, apply } = await freshDb();
 let failure = await apply(migrationFiles);
 if (failure) console.log(failure);
 ok(`all ${migrationFiles.length} migrations apply`, !failure);
-for (const file of ["20261012_wastage_atomic.sql", "20261013_paged_reads.sql"]) {
+// 20261024 replaced wastage_total(4 args) by a 6-argument one; re-running 20261013 brings the old
+// overload back, so 20261024 follows it, as in a deploy.
+for (const file of ["20261012_wastage_atomic.sql", "20261013_paged_reads.sql", "20261024000000_par_wastage.sql"]) {
   failure = await apply([file]);
   ok(`${file} applies again`, !failure, failure);
 }
+ok("one wastage_total after the re-run", Number((await q("select count(*) n from pg_proc where proname = 'wastage_total'"))[0].n) === 1);
 
 // ---- tenant A: owner, cook, staff; tenant B: owner
 const [A, C, S, B] = [U("0a"), U("0c"), U("05"), U("0b")];

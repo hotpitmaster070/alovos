@@ -6,14 +6,12 @@ import { freshDb, migrationFiles, reporter, userId as U } from "./pglite.mjs";
 
 const WASTE = "20261018000001_wastage_in_prep.sql";
 const { ok, done } = reporter();
-const { q, as, apply } = await freshDb();
+const { q, as, apply, applyTwice } = await freshDb();
 
 let failure = await apply(migrationFiles.filter((f) => f < WASTE));
 ok(`migrations before ${WASTE} apply`, !failure, failure);
-for (const run of [1, 2]) {
-  failure = await apply(migrationFiles.filter((f) => f >= WASTE));
-  ok(`${WASTE} applies (run ${run})`, !failure, failure);
-}
+failure = await applyTwice(migrationFiles.filter((f) => f >= WASTE));
+ok(`${WASTE} and later apply, each twice`, !failure, failure);
 
 const [A, C, B] = [U("1a"), U("1c"), U("1b")];
 await q(`insert into auth.users(id,email) values ('${A}','owner@acme.az'),('${C}','cook@acme.az'),('${B}','bob@beta.az')`);
