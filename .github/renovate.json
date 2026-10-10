@@ -1,0 +1,10 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "schedule": ["before 6am on monday"],
+  "packageRules": [
+    { "matchPackageNames": ["node"], "groupName": "node", "allowedVersions": "22.x" },
+    { "matchPackageNames": ["next", "typescript"], "groupName": "core", "automerge": false }
+  ],
+  "postUpdateOptions": ["npmDedupe"]
+}
