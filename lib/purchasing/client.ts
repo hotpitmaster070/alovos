@@ -3,7 +3,7 @@ import { isPurchasingErrorCode, type PurchasingErrorCode } from "./model";
 export type ApiOutcome = { ok: true; data: unknown } | { ok: false; error: PurchasingErrorCode };
 
 /** JSON call to a purchasing route; network failures and unknown errors become save_failed. */
-export async function callPurchasingApi(url: string, method: "POST" | "PATCH" | "DELETE", body?: unknown): Promise<ApiOutcome> {
+export async function callPurchasingApi(url: string, method: "POST" | "PUT" | "PATCH" | "DELETE", body?: unknown): Promise<ApiOutcome> {
   const response = await fetch(url, {
     method,
     headers: body === undefined ? undefined : { "content-type": "application/json" },

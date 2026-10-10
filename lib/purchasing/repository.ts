@@ -32,7 +32,7 @@ import {
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: PurchasingErrorCode; status: number };
 
-const failed = (error: { message?: unknown; code?: unknown }): { ok: false; error: PurchasingErrorCode; status: number } => {
+export const failed = (error: { message?: unknown; code?: unknown }): { ok: false; error: PurchasingErrorCode; status: number } => {
   const mapped = mapPurchasingError(error);
   return { ok: false, error: mapped.code, status: mapped.status };
 };
@@ -40,13 +40,22 @@ const failed = (error: { message?: unknown; code?: unknown }): { ok: false; erro
 const rows = <T>(data: unknown, parse: (row: unknown) => T | null): T[] =>
   (Array.isArray(data) ? data : []).flatMap((row) => parse(row) ?? []);
 
-const SUPPLIER_COLUMNS = "id, name, code, contact, delivery_days, branch_id, lead_time_days, default_currency, is_active";
+const BASE_SUPPLIER_COLUMNS = "id, name, code, contact, delivery_days, branch_id, lead_time_days, default_currency, is_active";
+const SUPPLIER_COLUMNS = `${BASE_SUPPLIER_COLUMNS}, phone, email`;
+
+/** Until 20261029000200 is applied the phone and email columns do not exist; the list still loads. */
+const missingContactColumns = (error: unknown) => error instanceof Error && /\b(phone|email)\b.*does not exist|column .*(phone|email)/i.test(error.message);
 
 export async function listSuppliers(scope: TenantScope, { includeInactive = false } = {}): Promise<Supplier[]> {
-  const data = await fetchAll((from, to) => {
-    let query = scope.client.from("suppliers").select(SUPPLIER_COLUMNS).eq("tenant_id", scope.tenantId);
-    if (!includeInactive) query = query.eq("is_active", true);
-    return query.order("name").order("id").range(from, to);
+  const read = (columns: string) =>
+    fetchAll((from, to) => {
+      let query = scope.client.from("suppliers").select(columns).eq("tenant_id", scope.tenantId);
+      if (!includeInactive) query = query.eq("is_active", true);
+      return query.order("name").order("id").range(from, to);
+    });
+  const data = await read(SUPPLIER_COLUMNS).catch((error: unknown) => {
+    if (missingContactColumns(error)) return read(BASE_SUPPLIER_COLUMNS);
+    throw error;
   });
   return rows(data, parseSupplier);
 }
@@ -55,17 +64,22 @@ const supplierRow = (input: Partial<SupplierInput>) => ({
   ...(input.name !== undefined && { name: input.name }),
   ...(input.code !== undefined && { code: input.code }),
   ...(input.contact !== undefined && { contact: input.contact }),
+  ...(input.phone !== undefined && { phone: input.phone }),
+  ...(input.email !== undefined && { email: input.email }),
   ...(input.deliveryDays !== undefined && { delivery_days: input.deliveryDays }),
   ...(input.branchId !== undefined && { branch_id: input.branchId }),
   ...(input.leadTimeDays !== undefined && { lead_time_days: input.leadTimeDays }),
   ...(input.currency !== undefined && { default_currency: input.currency }),
 });
 
+const columnsFor = (input: Partial<SupplierInput>) =>
+  input.phone !== undefined || input.email !== undefined ? SUPPLIER_COLUMNS : BASE_SUPPLIER_COLUMNS;
+
 export async function createSupplier(scope: TenantScope, input: SupplierInput): Promise<Result<Supplier>> {
   const { data, error } = await scope.client
     .from("suppliers")
     .insert({ tenant_id: scope.tenantId, ...supplierRow(input) })
-    .select(SUPPLIER_COLUMNS)
+    .select(columnsFor(input))
     .single();
   if (error) return failed(error);
   const supplier = parseSupplier(data);
@@ -78,7 +92,7 @@ export async function updateSupplier(scope: TenantScope, id: string, patch: Supp
     .update({ ...supplierRow(patch), ...(patch.active !== undefined && { is_active: patch.active }) })
     .eq("tenant_id", scope.tenantId)
     .eq("id", id)
-    .select(SUPPLIER_COLUMNS)
+    .select(columnsFor(patch))
     .maybeSingle();
   if (error) return failed(error);
   if (!data) return { ok: false, error: "supplier_not_found", status: 404 };

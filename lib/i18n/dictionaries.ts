@@ -11,6 +11,7 @@ import { CATALOG_IMPORT_AZ, CATALOG_IMPORT_EN, CATALOG_IMPORT_RU, type CatalogIm
 import { TRANSFERS_AZ, TRANSFERS_EN, TRANSFERS_RU, type TransfersDictionary } from "./transfers";
 import { EXPIRY_AZ, EXPIRY_EN, EXPIRY_RU, type ExpiryDictionary } from "./expiry";
 import { OWNER_AZ, OWNER_EN, OWNER_RU, type OwnerDictionary } from "./owner";
+import { AUTO_ORDER_AZ, AUTO_ORDER_EN, AUTO_ORDER_RU, type AutoOrderDictionary } from "./auto-order";
 import { PURCHASING_AZ, PURCHASING_EN, PURCHASING_RU, type PurchasingDictionary } from "./purchasing";
 
 export type BlockDetails = {
@@ -439,6 +440,7 @@ export type Dictionary = {
   purchasing: PurchasingDictionary;
   labels: LabelsDictionary;
   owner: OwnerDictionary;
+  autoOrder: AutoOrderDictionary;
   inventory: InventoryDictionary;
   receiving: ReceivingDictionary;
   recipes: RecipesDictionary;
@@ -952,6 +954,7 @@ const AZ: Dictionary = {
   purchasing: PURCHASING_AZ,
   labels: LABELS_AZ,
   owner: OWNER_AZ,
+  autoOrder: AUTO_ORDER_AZ,
   inventory: INVENTORY_AZ,
   receiving: RECEIVING_AZ,
   recipes: RECIPES_AZ,
@@ -1465,6 +1468,7 @@ const RU: Dictionary = {
   purchasing: PURCHASING_RU,
   labels: LABELS_RU,
   owner: OWNER_RU,
+  autoOrder: AUTO_ORDER_RU,
   inventory: INVENTORY_RU,
   receiving: RECEIVING_RU,
   recipes: RECIPES_RU,
@@ -1978,6 +1982,7 @@ const EN: Dictionary = {
   purchasing: PURCHASING_EN,
   labels: LABELS_EN,
   owner: OWNER_EN,
+  autoOrder: AUTO_ORDER_EN,
   inventory: INVENTORY_EN,
   receiving: RECEIVING_EN,
   recipes: RECIPES_EN,
