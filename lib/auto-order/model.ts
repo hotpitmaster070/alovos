@@ -129,7 +129,10 @@ export function parseAutoOrderClaim(row: unknown): AutoOrderClaim | null {
   };
 }
 
-/** One delivery of auto_order_send_log(): value is null for roles that do not see costs. */
+/**
+ * One delivery of auto_order_send_log(). estimated: at the latest purchase prices when sent; actual: its
+ * receipts at invoice prices, null until received. Both null for roles that do not see costs.
+ */
 export type SendLogEntry = {
   requestId: string;
   supplierName: string;
@@ -139,7 +142,9 @@ export type SendLogEntry = {
   error: string | null;
   sentAt: string;
   lines: number;
-  value: number | null;
+  linesReceived: number;
+  estimated: number | null;
+  actual: number | null;
   currency: string | null;
 };
 
@@ -158,29 +163,56 @@ export function parseSendLogEntry(row: unknown): SendLogEntry | null {
     error: text(row.error),
     sentAt: row.sent_at,
     lines: num(row.lines) ?? 0,
-    value: num(row.value),
+    linesReceived: num(row.lines_received) ?? 0,
+    estimated: num(row.estimated_amount),
+    actual: num(row.actual_amount),
     currency: text(row.currency),
   };
 }
 
-export type SendSummary = { orders: number; chef: number; auto: number; failed: number; value: number | null; currency: string | null };
+export type SendSummary = {
+  orders: number;
+  chef: number;
+  auto: number;
+  failed: number;
+  /** Orders with at least one receipt. */
+  received: number;
+  /** Phase 1: everything that went out at the latest purchase prices; null when costs are hidden. */
+  estimated: number | null;
+  /** Phase 2: the received orders at invoice prices; null when nothing is received or costs are hidden. */
+  actual: number | null;
+  /** The estimate of the received orders only, to compare with actual. */
+  estimatedReceived: number | null;
+  /** actual - estimatedReceived: what the invoices cost more (+) or less (-) than expected. */
+  delta: number | null;
+  currency: string | null;
+};
+
+const money = (value: number) => Math.round(value * 100) / 100;
 
 /**
  * A request counts once, by its last delivery: sent if it reached the supplier (or was sent without a message),
- * failed if it did not. value: what went out; null when costs are hidden.
+ * failed if it did not.
  */
 export function summarizeSendLog(entries: SendLogEntry[]): SendSummary {
   const last = new Map<string, SendLogEntry>();
   for (const entry of entries) last.set(entry.requestId, entry);
   const rows = Array.from(last.values());
   const out = rows.filter((row) => row.status !== "failed" && !(row.trigger === "auto" && row.status === "skipped"));
-  const hidden = out.some((row) => row.value === null);
+  const hidden = out.some((row) => row.estimated === null);
+  const received = out.filter((row) => row.actual !== null);
+  const actual = hidden || received.length === 0 ? null : money(received.reduce((sum, row) => sum + (row.actual ?? 0), 0));
+  const estimatedReceived = hidden || received.length === 0 ? null : money(received.reduce((sum, row) => sum + (row.estimated ?? 0), 0));
   return {
     orders: out.length,
     chef: out.filter((row) => row.trigger === "chef").length,
     auto: out.filter((row) => row.trigger === "auto").length,
     failed: rows.length - out.length,
-    value: hidden ? null : Math.round(out.reduce((sum, row) => sum + (row.value ?? 0), 0) * 100) / 100,
+    received: received.length,
+    estimated: hidden ? null : money(out.reduce((sum, row) => sum + (row.estimated ?? 0), 0)),
+    actual,
+    estimatedReceived,
+    delta: actual === null || estimatedReceived === null ? null : money(actual - estimatedReceived),
     currency: rows.find((row) => row.currency)?.currency ?? null,
   };
 }

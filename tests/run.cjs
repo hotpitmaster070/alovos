@@ -1586,26 +1586,44 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
       claim.language === null && claim.supplierEmail === "b@b.az" &&
       auto.parseAutoOrderClaim({ tenant_id: TEN, request_id: REQ, items: [] }) === null && auto.parseAutoOrderClaim(null) === null, claim);
 
-    const entry = (request, trigger, status, value, at, error = null) => ({ request_id: request, supplier_name: "S", trigger, channel: status === "skipped" ? "none" : "whatsapp",
-      status, error, sent_at: at, lines: 2, value, currency: "AZN" });
-    const log = [
+    const entry = (request, trigger, status, estimated, at, error = null, actual = null) => ({ request_id: request, supplier_name: "S", trigger,
+      channel: status === "skipped" ? "none" : "whatsapp", status, error, sent_at: at, lines: 2, lines_received: actual === null ? 0 : 2,
+      estimated_amount: estimated, actual_amount: actual, currency: "AZN" });
+    const R3 = "dddddddd-0000-4000-8000-000000000003";
+    const R4 = "dddddddd-0000-4000-8000-000000000004";
+    const raw = [
       entry(REQ, "chef", "sent", "120.50", "2026-10-10T10:00:00Z"),
       entry(REQ2, "auto", "failed", 80, "2026-10-10T14:00:00Z", "http_500"),
       entry(REQ2, "chef", "sent", 80, "2026-10-10T15:00:00Z"),
-      entry("dddddddd-0000-4000-8000-000000000003", "auto", "skipped", 40, "2026-10-10T14:00:00Z", "no_contact"),
-      entry("dddddddd-0000-4000-8000-000000000004", "auto", "sent", 319.5, "2026-10-10T14:00:00Z"),
-    ].map(auto.parseSendLogEntry);
-    const sum = auto.summarizeSendLog(log);
-    ok("morning summary: each order once by its last delivery, value of what went out",
-      log.every(Boolean) && sum.orders === 3 && sum.chef === 2 && sum.auto === 1 && sum.failed === 1 && sum.value === 520 && sum.currency === "AZN", sum);
-    ok("morning summary: value hidden when costs are hidden; empty log",
-      auto.summarizeSendLog([auto.parseSendLogEntry(entry(REQ, "chef", "sent", null, "2026-10-10T10:00:00Z"))]).value === null &&
+      entry(R3, "auto", "skipped", 40, "2026-10-10T14:00:00Z", "no_contact"),
+      entry(R4, "auto", "sent", 319.5, "2026-10-10T14:00:00Z"),
+    ];
+    const log = raw.map(auto.parseSendLogEntry);
+    let sum = auto.summarizeSendLog(log);
+    ok("phase 1: each order once by its last delivery, ~estimate of what went out, nothing received yet",
+      log.every(Boolean) && sum.orders === 3 && sum.chef === 2 && sum.auto === 1 && sum.failed === 1 && sum.estimated === 520 &&
+      sum.actual === null && sum.delta === null && sum.received === 0 && sum.currency === "AZN", sum);
+    sum = auto.summarizeSendLog([
+      ...raw.slice(0, 4),
+      entry(R4, "auto", "sent", 319.5, "2026-10-10T14:00:00Z", null, 579.5),
+    ].map(auto.parseSendLogEntry));
+    ok("phase 2 partly received: actual and delta against the estimate of the received order only",
+      sum.received === 1 && sum.actual === 579.5 && sum.estimatedReceived === 319.5 && sum.delta === 260 && sum.estimated === 520, sum);
+    sum = auto.summarizeSendLog([
+      entry(REQ, "chef", "sent", 120.5, "2026-10-10T10:00:00Z", null, 110.5),
+      entry(R4, "auto", "sent", 319.5, "2026-10-10T14:00:00Z", null, 669.5),
+    ].map(auto.parseSendLogEntry));
+    ok("phase 2 all received: ~440 -> 780, +340", sum.received === 2 && sum.estimatedReceived === 440 && sum.actual === 780 && sum.delta === 340, sum);
+    ok("amounts hidden when costs are hidden; empty log",
+      auto.summarizeSendLog([auto.parseSendLogEntry(entry(REQ, "chef", "sent", null, "2026-10-10T10:00:00Z"))]).estimated === null &&
       auto.summarizeSendLog([]).orders === 0 && auto.parseSendLogEntry({ request_id: REQ, sent_at: "x", trigger: "robot", channel: "none", status: "sent" }) === null);
 
     ok("texts: schedule banner, delivery and the owner's morning line",
       AUTO_ORDER_RU.board.schedule("15:00", "18:00", true) === "Черновик в 15:00 · авто-отправка в 18:00" &&
       AUTO_ORDER_RU.board.schedule("15:00", "18:00", false) === "Черновик в 15:00 · отправляет шеф" &&
-      AUTO_ORDER_RU.owner.sent(5, "520 ₼") === "Отправлено 5 заказов на 520 ₼" && AUTO_ORDER_RU.owner.sent(1, null) === "Отправлено 1 заказ" &&
+      AUTO_ORDER_RU.owner.sent(5) === "Отправлено 5 заказов" && AUTO_ORDER_RU.owner.estimated("520 ₼") === "~520 ₼" &&
+      AUTO_ORDER_RU.owner.estimatedHint === "примерно · по последним ценам, уточнится после приёмки" &&
+      AUTO_ORDER_RU.owner.actual("520 ₼", "780 ₼") === "Заказано ~520 ₼ → Принято 780 ₼ (факт)" && AUTO_ORDER_RU.owner.delta("+260 ₼") === "+260 ₼ к оценке" &&
       Object.keys(AUTO_ORDER_RU.board.reasons).join() === delivery.SKIP_REASONS.join());
   }
 

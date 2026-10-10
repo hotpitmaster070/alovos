@@ -138,11 +138,32 @@ export default function OwnerDashboard({
             <Card className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-col gap-1">
                 <p className="text-[11px] font-medium uppercase tracking-widest text-white/50">{t.autoOrder.owner.title}</p>
-                <p className="text-base font-medium text-white">
-                  {orders.orders > 0
-                    ? t.autoOrder.owner.sent(orders.orders, orders.value === null ? null : formatMoney(orders.value, currency))
-                    : t.autoOrder.owner.none}
-                </p>
+                <p className="text-base font-medium text-white">{orders.orders > 0 ? t.autoOrder.owner.sent(orders.orders) : t.autoOrder.owner.none}</p>
+                {orders.orders > 0 && orders.estimated !== null && orders.actual === null && (
+                  <p className="flex flex-col">
+                    <span className="font-serif text-[22px] font-bold leading-tight text-white">
+                      {t.autoOrder.owner.estimated(formatMoney(orders.estimated, currency))}
+                    </span>
+                    <span className="text-xs text-white/50">{t.autoOrder.owner.estimatedHint}</span>
+                  </p>
+                )}
+                {orders.actual !== null && orders.estimatedReceived !== null && (
+                  <p className="flex flex-wrap items-baseline gap-x-3">
+                    <span className="font-serif text-[22px] font-bold leading-tight text-white">
+                      {t.autoOrder.owner.actual(formatMoney(orders.estimatedReceived, currency), formatMoney(orders.actual, currency))}
+                    </span>
+                    {orders.delta !== null && orders.delta !== 0 && (
+                      <span className={cn("text-sm font-medium", orders.delta > 0 ? "text-red-400" : "text-emerald-400")}>
+                        {t.autoOrder.owner.delta(`${orders.delta > 0 ? "+" : "−"}${formatMoney(Math.abs(orders.delta), currency)}`)}
+                      </span>
+                    )}
+                  </p>
+                )}
+                {orders.actual !== null && orders.received < orders.orders && orders.estimated !== null && (
+                  <p className="text-xs text-white/50">
+                    {t.autoOrder.owner.partial(orders.received, orders.orders)} · {t.autoOrder.owner.estimated(formatMoney(orders.estimated, currency))}
+                  </p>
+                )}
                 {orders.orders > 0 && <p className="text-xs text-white/50">{t.autoOrder.owner.split(orders.chef, orders.auto)}</p>}
                 {orders.failed > 0 && <p className="text-xs text-amber-200">{t.autoOrder.owner.failed(orders.failed)}</p>}
               </div>

@@ -6,6 +6,8 @@
 --   notified at the deadline; the owner reads auto_order_send_log() on the dashboard the next morning.
 -- * Delivery (WhatsApp Cloud API / Resend) happens in the app (/api/cron/auto-order); the database only
 --   claims, logs and reverts what could not be delivered back to draft.
+-- * Amounts in two phases: estimated_amount at sending (latest purchase prices), actual_amount once the
+--   goods are received (the receipt movements' invoice prices, matched by trigger to the sent request).
 -- * The alovos-auto-order job (20261029000300) now runs auto_order_tick(): drafts in the database, then a
 --   call to the app's cron route through pg_net when the Vault holds alovos_app_url and alovos_cron_secret.
 --   Without them it only drafts, as before. No other job is touched.
@@ -52,15 +54,61 @@ create table if not exists public.purchase_request_deliveries (
   status text not null,
   provider_message_id text,
   error text,
+  -- Phase 1, at sending: the request at the latest purchase prices, in the restaurant's currency.
+  estimated_amount numeric(14,2) not null default 0,
+  -- Phase 2, after receiving: what the receipts linked to the request cost (invoice prices); null until then.
+  actual_amount numeric(14,2),
   created_at timestamptz not null default now(),
   constraint purchase_request_deliveries_trigger_check check (trigger in ('chef', 'auto')),
   constraint purchase_request_deliveries_channel_check check (channel in ('whatsapp', 'email', 'none')),
   constraint purchase_request_deliveries_status_check check (status in ('sent', 'failed', 'skipped')),
   constraint purchase_request_deliveries_error_check check (error is null or length(error) <= 500)
 );
+alter table public.purchase_request_deliveries add column if not exists estimated_amount numeric(14,2) not null default 0;
+alter table public.purchase_request_deliveries add column if not exists actual_amount numeric(14,2);
 create index if not exists idx_purchase_request_deliveries_tenant_created on public.purchase_request_deliveries (tenant_id, created_at desc);
+create index if not exists idx_purchase_request_deliveries_request on public.purchase_request_deliveries (request_id);
 alter table public.purchase_request_deliveries enable row level security;
 revoke all on public.purchase_request_deliveries from public, anon, authenticated;
+
+-- Receipts (stock_movements 'prihod' with the invoice price) counted towards a sent request.
+create table if not exists public.purchase_request_receipts (
+  movement_id uuid primary key references public.stock_movements(id) on delete cascade,
+  tenant_id uuid not null references public.tenants(id) on delete cascade,
+  request_id uuid not null references public.purchase_requests(id) on delete cascade,
+  product_id uuid not null references public.products(id) on delete cascade,
+  qty numeric not null,
+  amount numeric(14,2) not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_purchase_request_receipts_request on public.purchase_request_receipts (request_id, product_id);
+alter table public.purchase_request_receipts enable row level security;
+revoke all on public.purchase_request_receipts from public, anon, authenticated;
+
+-- The request at the latest purchase prices (else catalog cost) in the restaurant's currency.
+create or replace function public.purchase_request_estimate(p_items jsonb)
+returns numeric
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select coalesce(round(sum((x ->> 'qty')::numeric * coalesce(public.product_last_purchase_price((x ->> 'product_id')::uuid), 0)), 2), 0)
+  from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) x
+$$;
+revoke execute on function public.purchase_request_estimate(jsonb) from public, anon, authenticated;
+
+-- What the request's receipts cost; null while nothing has been received against it.
+create or replace function public.purchase_request_actual(p_request_id uuid)
+returns numeric
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select round(sum(amount), 2) from public.purchase_request_receipts where request_id = p_request_id
+$$;
+revoke execute on function public.purchase_request_actual(uuid) from public, anon, authenticated;
 
 create or replace function public.log_delivery(
   p_request public.purchase_requests, p_trigger text, p_channel text, p_status text, p_provider_id text, p_error text
@@ -70,11 +118,65 @@ language sql
 security definer
 set search_path = public
 as $$
-  insert into public.purchase_request_deliveries (tenant_id, request_id, supplier_id, trigger, channel, status, provider_message_id, error)
+  insert into public.purchase_request_deliveries (
+    tenant_id, request_id, supplier_id, trigger, channel, status, provider_message_id, error, estimated_amount, actual_amount
+  )
   values (p_request.tenant_id, p_request.id, p_request.supplier_id, p_trigger, coalesce(p_channel, 'none'), p_status,
-    left(nullif(btrim(p_provider_id), ''), 200), left(nullif(btrim(p_error), ''), 500));
+    left(nullif(btrim(p_provider_id), ''), 200), left(nullif(btrim(p_error), ''), 500),
+    public.purchase_request_estimate(p_request.items), public.purchase_request_actual(p_request.id));
 $$;
 revoke execute on function public.log_delivery(public.purchase_requests, text, text, text, text, text) from public, anon, authenticated;
+
+-- A receipt with a price (receiving screen, invoice scan, manual receipt: all write a 'prihod' movement)
+-- counts towards the latest sent request of the restaurant that ordered the product and has not had all
+-- of it yet (branch matched when both are set); its deliveries get the new actual_amount. Receiving
+-- never fails because of this: any error is only reported.
+create or replace function public.match_receipt_to_request()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_request uuid;
+begin
+  if new.movement_type is distinct from 'prihod' or new.cost_per_unit is null or new.quantity is null or new.quantity <= 0 then
+    return null;
+  end if;
+  begin
+    select pr.id into v_request
+    from public.purchase_requests pr
+    where pr.tenant_id = new.tenant_id
+      and pr.status in ('sent', 'received')
+      and pr.sent_at is not null
+      and (pr.branch_id is null or new.branch_id is null or pr.branch_id = new.branch_id)
+      and exists (select 1 from public.purchase_request_deliveries d where d.request_id = pr.id)
+      and (select coalesce(sum((x ->> 'qty')::numeric), 0) from jsonb_array_elements(pr.items) x
+           where (x ->> 'product_id')::uuid = new.product_id)
+        > (select coalesce(sum(rc.qty), 0) from public.purchase_request_receipts rc
+           where rc.request_id = pr.id and rc.product_id = new.product_id)
+    order by pr.sent_at desc, pr.id
+    limit 1
+    for update of pr;
+    if v_request is null then
+      return null;
+    end if;
+    insert into public.purchase_request_receipts (movement_id, tenant_id, request_id, product_id, qty, amount)
+    values (new.id, new.tenant_id, v_request, new.product_id, new.quantity, round(new.quantity * new.cost_per_unit, 2))
+    on conflict (movement_id) do nothing;
+    update public.purchase_request_deliveries set actual_amount = public.purchase_request_actual(v_request)
+    where request_id = v_request;
+  exception when others then
+    raise warning 'match_receipt_to_request: %', sqlerrm;
+  end;
+  return null;
+end;
+$$;
+revoke execute on function public.match_receipt_to_request() from public, anon, authenticated;
+drop trigger if exists trg_match_receipt_to_request on public.stock_movements;
+create trigger trg_match_receipt_to_request
+  after insert on public.stock_movements
+  for each row execute function public.match_receipt_to_request();
 
 -- The chef sent a request (send_purchase_request) and the app tried to deliver it.
 create or replace function public.log_purchase_request_delivery(p_request_id uuid, p_channel text, p_status text, p_provider_id text, p_error text)
@@ -251,7 +353,9 @@ grant execute on function public.finish_auto_order_send(uuid, text, text, text, 
 -- ---------------------------------------------------------------------------
 -- 5. What went out on a day (the restaurant's day): for the owner's morning look
 -- ---------------------------------------------------------------------------
--- value: the request at the latest purchase prices; null for roles that do not see costs.
+-- estimated_amount: at the latest purchase prices when it was sent; actual_amount: its receipts at invoice
+-- prices (null until received), lines_received of lines; amounts null for roles that do not see costs.
+-- Currency and day boundaries are the restaurant's (tenant_settings).
 create or replace function public.auto_order_send_log(p_day date default null)
 returns table (
   request_id uuid,
@@ -263,7 +367,9 @@ returns table (
   error text,
   sent_at timestamptz,
   lines integer,
-  value numeric,
+  lines_received integer,
+  estimated_amount numeric,
+  actual_amount numeric,
   currency text
 )
 language plpgsql
@@ -282,10 +388,9 @@ begin
   return query
   select d.request_id, d.supplier_id, sp.name, d.trigger, d.channel, d.status, d.error, d.created_at,
     jsonb_array_length(pr.items),
-    case when v_costs then (
-      select round(sum((x ->> 'qty')::numeric * coalesce(public.product_last_purchase_price((x ->> 'product_id')::uuid), 0)), 2)
-      from jsonb_array_elements(pr.items) x
-    ) end,
+    (select count(distinct rc.product_id)::integer from public.purchase_request_receipts rc where rc.request_id = d.request_id),
+    case when v_costs then d.estimated_amount end,
+    case when v_costs then d.actual_amount end,
     (select ts.currency from public.tenant_settings ts where ts.tenant_id = v_tenant)
   from public.purchase_request_deliveries d
   join public.purchase_requests pr on pr.id = d.request_id

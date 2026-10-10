@@ -106,7 +106,15 @@ export type AutoOrderDictionary = {
   /** Owner dashboard: what went to suppliers yesterday. */
   owner: {
     title: string;
-    sent: (orders: number, amount: string | null) => string;
+    sent: (orders: number) => string;
+    /** Phase 1, before receiving: "~520 ₼". */
+    estimated: (amount: string) => string;
+    estimatedHint: string;
+    /** Phase 2: "Заказано ~520 ₼ → Принято 780 ₼ (факт)". */
+    actual: (estimated: string, actual: string) => string;
+    /** Signed amount, e.g. "+260 ₼". */
+    delta: (signed: string) => string;
+    partial: (received: number, orders: number) => string;
     split: (chef: number, auto: number) => string;
     failed: (count: number) => string;
     none: string;
@@ -223,7 +231,12 @@ export const AUTO_ORDER_AZ: AutoOrderDictionary = {
   },
   owner: {
     title: "Dünən təchizatçılara",
-    sent: (n, a) => `${n} sifariş göndərildi${a ? `, ${a}` : ""}`,
+    sent: (n) => `${n} sifariş göndərildi`,
+    estimated: (a) => `~${a}`,
+    estimatedHint: "təxmini · son alış qiymətləri ilə, qəbuldan sonra dəqiqləşəcək",
+    actual: (e, a) => `Sifariş ~${e} → Qəbul ${a} (fakt)`,
+    delta: (s) => `${s} təxminə görə`,
+    partial: (r, n) => `${n} sifarişdən ${r}-i qəbul edilib, qalanları yoldadır`,
     split: (c, a) => `şef: ${c} · avtomatik: ${a}`,
     failed: (n) => `${n} getmədi`,
     none: "Dünən sifariş göndərilməyib",
@@ -339,7 +352,12 @@ export const AUTO_ORDER_RU: AutoOrderDictionary = {
   },
   owner: {
     title: "Вчера поставщикам",
-    sent: (n, a) => `Отправлено ${n} ${ruPlural(n, "заказ", "заказа", "заказов")}${a ? ` на ${a}` : ""}`,
+    sent: (n) => `Отправлено ${n} ${ruPlural(n, "заказ", "заказа", "заказов")}`,
+    estimated: (a) => `~${a}`,
+    estimatedHint: "примерно · по последним ценам, уточнится после приёмки",
+    actual: (e, a) => `Заказано ~${e} → Принято ${a} (факт)`,
+    delta: (s) => `${s} к оценке`,
+    partial: (r, n) => `принято ${r} из ${n}, остальные ещё в пути`,
     split: (c, a) => `шеф: ${c} · автоматически: ${a}`,
     failed: (n) => `не ушло: ${n}`,
     none: "Вчера заказы не отправлялись",
@@ -455,7 +473,12 @@ export const AUTO_ORDER_EN: AutoOrderDictionary = {
   },
   owner: {
     title: "Yesterday to suppliers",
-    sent: (n, a) => `${n} order${n === 1 ? "" : "s"} sent${a ? ` for ${a}` : ""}`,
+    sent: (n) => `${n} order${n === 1 ? "" : "s"} sent`,
+    estimated: (a) => `~${a}`,
+    estimatedHint: "approximate · at the latest purchase prices, confirmed after receiving",
+    actual: (e, a) => `Ordered ~${e} → Received ${a} (actual)`,
+    delta: (s) => `${s} vs estimate`,
+    partial: (r, n) => `${r} of ${n} received, the rest on the way`,
     split: (c, a) => `chef: ${c} · automatic: ${a}`,
     failed: (n) => `${n} not delivered`,
     none: "No orders were sent yesterday",

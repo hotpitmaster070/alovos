@@ -101,21 +101,54 @@ r = await finish(d3.id, "skipped", "none", "no_contact");
 ok("not delivered: back to draft for the chef", !r.err && (await draftOf(s3)).status === "draft", r);
 ok("unknown status refused", /invalid_input/.test((await finish(d2.id, "maybe")).err ?? ""));
 
-await q(`update purchase_requests set status = 'sent', sent_by = null where id='${d3.id}'`);
+await q(`update purchase_requests set status = 'sent', sent_at = now(), sent_by = null where id='${d3.id}'`);
 await sys(`insert into purchase_requests(tenant_id, branch_id, supplier_id, status, items, request_date)
   values ('${tA}','${branch}','${s3}','draft','[]', public.stock_today('${tA}'))`);
 r = await finish(d3.id, "failed", "email", "http_500");
 ok("a new draft for the supplier in the meantime: the failed one stays sent, no error", !r.err && (await draftOf(s3)).status === "sent", r);
 
+// ---- amounts: phase 1 estimate at sending, phase 2 actual from receipts at invoice prices
+const amounts = async (id) =>
+  (await q(`select estimated_amount::float8 e, actual_amount::float8 a from purchase_request_deliveries where request_id='${id}' order by created_at`));
+let am = await amounts(d1.id);
+ok("phase 1: estimate stored at sending (5 kg x last price 3), actual empty", am.length === 1 && am[0].e === 15 && am[0].a === null, am);
+const fridge = (await q(`select id from storage_locations where tenant_id='${tA}' and type='soyuducu' order by created_at limit 1`))[0].id;
+const receipts = async (id) => (await q(`select count(*)::int n from purchase_request_receipts where request_id='${id}'`))[0].n;
+r = await as(CH, `select (public.receive_stock_with_lot('${p1}', 4, '${fridge}', 7)).id`);
+am = await amounts(d1.id);
+ok("phase 2: receiving 4 kg at the invoice price 7 (receiving screen) sets actual 28", !r.err && am[0].a === 28 && (await receipts(d1.id)) === 1, { r, am });
+ok("the estimate stays what it was at sending", am[0].e === 15);
+const receive = (id, qty, cost) =>
+  sys(`insert into stock_movements(tenant_id, product_id, branch_id, to_location_id, quantity, movement_type, cost_per_unit, unit)
+    values ('${tA}','${id}','${branch}','${fridge}',${qty},'prihod',${cost},'kg')`);
+await receive(p1, 2, 7);
+am = await amounts(d1.id);
+ok("a second receipt of the same order adds up: 28 + 14 = 42", am[0].a === 42 && (await receipts(d1.id)) === 2, am);
+await receive(p1, 1, 7);
+ok("once all of it has come (6 of 5 kg), further receipts are not counted", (await receipts(d1.id)) === 2 && (await amounts(d1.id))[0].a === 42);
+await receive(p2, 5, null);
+ok("a receipt without a price is not counted", (await receipts(d2.id)) === 0 && (await amounts(d2.id)).every((x) => x.a === null));
+const p4 = (await sys(`insert into products(tenant_id, branch_id, name, unit, cost) values ('${tA}','${branch}','Un','kg', 1) returning id`)).rows[0].id;
+r = await receive(p4, 3, 2);
+ok("a product nobody ordered: received normally, counted nowhere", !r.err && (await q("select count(*)::int n from purchase_request_receipts"))[0].n === 2, r);
+await receive(p2, 5, 4.5);
+am = await amounts(d2.id);
+ok("Beta's 5 kg at 4.5: actual 22.5", am.length === 1 && am[0].a === 22.5, am);
+await receive(p3, 5, 2);
+am = await amounts(d3.id);
+ok("Gamma's request (two delivery attempts): actual 10 on every delivery row", am.length === 2 && am.every((x) => x.a === 10), am);
+
 // ---- the day's log
 const log = async (uid, day) =>
-  as(uid, `select supplier_name, trigger, channel, status, error, value::float8 v, currency from public.auto_order_send_log(${day ? `'${day}'` : "null"}) order by sent_at`);
+  as(uid, `select supplier_name, trigger, channel, status, error, lines, lines_received, estimated_amount::float8 e, actual_amount::float8 a, currency
+    from public.auto_order_send_log(${day ? `'${day}'` : "null"}) order by sent_at`);
 const today = (await q(`select public.stock_today('${tA}')::text d`))[0].d;
 r = await log(A, today);
 ok("today's log: the chef's send and the system's three outcomes", !r.err && r.rows.length === 4 &&
   r.rows[0].trigger === "chef" && r.rows[0].supplier_name === "Alfa" && r.rows.slice(1).every((x) => x.trigger === "auto"), r);
-ok("the owner sees value (qty x last price) and the restaurant's currency",
-  r.rows[0].v === 15 && typeof r.rows[0].currency === "string" && r.rows[0].currency !== "", r.rows[0]);
+ok("the owner sees ~estimate, actual, lines received and the restaurant's currency",
+  r.rows[0].e === 15 && r.rows[0].a === 42 && r.rows[0].lines === 1 && r.rows[0].lines_received === 1 &&
+  typeof r.rows[0].currency === "string" && r.rows[0].currency !== "", r.rows[0]);
 ok("reasons are kept", r.rows.some((x) => x.status === "skipped" && x.error === "no_contact" && x.channel === "none"), r.rows);
 ok("default day is yesterday: empty", (await log(A, null)).rows?.length === 0);
 ok("cook may not read the log; another restaurant sees none of it",
