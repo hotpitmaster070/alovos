@@ -46,6 +46,31 @@ ok("supplier phone and email are checked",
   /suppliers_phone_check/.test((await sys(`update suppliers set phone = 'call me' where id='${s2}'`)).err ?? "") &&
   /suppliers_email_check/.test((await sys(`update suppliers set email = 'nope' where id='${s2}'`)).err ?? ""));
 
+// ---- 20261029000300: alovos-auto-order replaces alovos-auto-purchase-requests, other jobs stay
+const cronSql = readMigration("20261029000300_auto_order_cron_only.sql");
+const unscheduled = Array.from(cronSql.matchAll(/cron\.unschedule\([^)]*\)[^']*'([^']+)'/gi), (m) => m[1]);
+ok("cron migration unschedules only the old auto-purchase job and defines no functions",
+  JSON.stringify(unscheduled) === JSON.stringify(["alovos-auto-purchase-requests"]) && !/create or replace function|drop function/i.test(cronSql), unscheduled);
+
+// pg_cron is not in PGlite: the migration's cron statements run against a stand-in cron.job with the production jobs.
+for (const statement of [
+  "create schema if not exists cron",
+  "create table cron.job (jobid bigserial primary key, jobname text unique, schedule text, command text)",
+  `create function cron.schedule(p_name text, p_schedule text, p_command text) returns bigint language sql as
+    $f$ insert into cron.job (jobname, schedule, command) values (p_name, p_schedule, p_command)
+        on conflict (jobname) do update set schedule = excluded.schedule, command = excluded.command returning jobid $f$`,
+  "create function cron.unschedule(p_jobid bigint) returns boolean language sql as $f$ delete from cron.job where jobid = p_jobid returning true $f$",
+  "select cron.schedule('alovos-auto-purchase-requests', '0 * * * *', 'select public.check_and_create_auto_requests_all()')",
+  "select cron.schedule('cleanup-empty-tenants', '0 3 * * *', 'select public.cleanup_empty_tenants()')",
+  "select cron.schedule('notify-expiring', '*/15 * * * *', 'select public.notify_expiring_batches()')",
+]) await q(statement);
+const cronStatements = Array.from(cronSql.matchAll(/execute \$cron\$([\s\S]*?)\$cron\$/g), (m) => m[1]);
+for (let run = 0; run < 2; run += 1) for (const statement of cronStatements) await q(statement);
+const jobs = await q("select jobname, schedule, command from cron.job order by jobname");
+ok("cron.job: alovos-auto-order every 15 min instead of the old job, cleanup-empty-tenants and notify-expiring stay (run twice)",
+  JSON.stringify(jobs.map((job) => job.jobname)) === JSON.stringify(["alovos-auto-order", "cleanup-empty-tenants", "notify-expiring"]) &&
+  jobs[0].schedule === "*/15 * * * *" && jobs[0].command === "select public.run_due_auto_orders()", jobs);
+
 // ---- limits: branch -> product -> restaurant -> 0
 const save = (items, uid = CH, b = branch) => as(uid, `select public.save_stock_limits(${b ? `'${b}'` : "null"}, '${JSON.stringify(items)}'::jsonb) n`);
 const limit = async (id) => (await as(A, `select min_qty::float8 m, source, quantity::float8 qty from public.stock_limits('${branch}') where product_id='${id}'`)).rows?.[0];
