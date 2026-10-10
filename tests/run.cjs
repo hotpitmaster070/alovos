@@ -1452,9 +1452,17 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
       [{ loss_alert_percent: 0 }, { loss_alert_percent: 31 }, { low_stock_default: -1 }, { low_stock_default: 1.5 }, { auto_order_notify: "sms" },
         { auto_order_time: "25:00" }, { auto_order_enabled: "yes" }, {}, null].every((body) => smart.parseSmartSettingsPatch(body) === null));
     const row = smart.parseSmartSettings({ timezone: "Asia/Baku", low_stock_default: 5, loss_alert_percent: "10", loss_alert_enabled: true,
-      auto_order_enabled: false, auto_order_time: "06:00:00", auto_order_notify: "system" });
-    ok("smart: settings row parsed; without the new columns null", row && row.autoOrderTime === "06:00" && row.lossAlertPercent === 10 && row.timezone === "Asia/Baku" &&
-      smart.parseSmartSettings({ timezone: "UTC", low_stock_default: 5 }) === null, row);
+      auto_order_enabled: false, auto_order_draft_time: "15:00:00", auto_order_time: "18:00:00", auto_send_if_not_confirmed: true, auto_order_notify: "system" });
+    ok("smart: settings row parsed; without the new columns null", row && row.autoOrderTime === "18:00" && row.autoOrderDraftTime === "15:00" &&
+      row.autoSendIfNotConfirmed === true && row.lossAlertPercent === 10 && row.timezone === "Asia/Baku" &&
+      smart.parseSmartSettings({ timezone: "UTC", low_stock_default: 5 }) === null &&
+      smart.parseSmartSettings({ timezone: "UTC", low_stock_default: 5, loss_alert_percent: 10, auto_order_time: "18:00", auto_order_notify: "system" }) === null, row);
+    const hybrid = smart.parseSmartSettingsPatch({ auto_order_draft_time: "15:00", auto_order_time: "18:00", auto_send_if_not_confirmed: false });
+    ok("smart: draft time, deadline and auto-send in the patch", JSON.stringify(hybrid) ===
+      JSON.stringify({ auto_send_if_not_confirmed: false, auto_order_draft_time: "15:00", auto_order_time: "18:00" }), hybrid);
+    ok("smart: draft after the deadline or a non-boolean auto-send refused",
+      smart.parseSmartSettingsPatch({ auto_order_draft_time: "19:00", auto_order_time: "18:00" }) === null &&
+      smart.parseSmartSettingsPatch({ auto_send_if_not_confirmed: "yes" }) === null && smart.parseSmartSettingsPatch({ auto_order_draft_time: "x" }) === null);
 
     const eff = (b, p, d) => JSON.stringify(smart.effectiveMin(b, p, d));
     ok("smart: inheritance 20 -> 15 -> 5 -> 0", eff(20, 15, 5) === JSON.stringify({ min: 20, source: "branch" }) &&
@@ -1506,6 +1514,99 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
     ok("purchasing: no phone field, no phone column written", !("phone" in purchasing.validateSupplierInput({ name: "Alfa" }).value) &&
       !purchasing.validateSupplierInput({ name: "Alfa", phone: "call me" }).ok && !purchasing.validateSupplierInput({ name: "Alfa", email: "nope" }).ok);
     ok("purchasing: minimum above par error", purchasing.mapPurchasingError({ message: "min_above_par", code: "22023" }).code === "min_above_par");
+  }
+
+  // ---- sending orders: WhatsApp Cloud API / Resend, deadline claims, the day's log
+  {
+    const delivery = load("lib/auto-order/delivery.js");
+    const auto = load("lib/auto-order/model.js");
+    const { AUTO_ORDER_RU } = load("lib/i18n/auto-order.js");
+    const REQ = "dddddddd-0000-4000-8000-000000000001";
+    const REQ2 = "dddddddd-0000-4000-8000-000000000002";
+    const TEN = "aaaaaaaa-0000-4000-8000-000000000001";
+
+    const none = delivery.deliveryConfig({});
+    const full = delivery.deliveryConfig({
+      WHATSAPP_TOKEN: " tok ", WHATSAPP_PHONE_NUMBER_ID: "123", WHATSAPP_TEMPLATE: "order_v1", RESEND_API_KEY: "re_1", RESEND_FROM: "Alovos <orders@alovos.az>",
+    });
+    ok("delivery: config only with every credential, token trimmed, default Graph version",
+      none.whatsapp === null && none.email === null && full.whatsapp.token === "tok" && full.whatsapp.apiVersion === delivery.WHATSAPP_DEFAULT_API_VERSION &&
+      full.email.from === "Alovos <orders@alovos.az>" && delivery.deliveryConfig({ WHATSAPP_TOKEN: "t", WHATSAPP_PHONE_NUMBER_ID: "1" }).whatsapp === null);
+
+    const both = { phone: "+994501112233", email: "a@b.az" };
+    const ch = (pref, contact, config) => JSON.stringify(delivery.chooseChannel(pref, contact, config));
+    ok("delivery: preference first, the other channel as fallback",
+      ch("whatsapp", both, full) === JSON.stringify({ channel: "whatsapp", reason: null }) &&
+      ch("email", both, full) === JSON.stringify({ channel: "email", reason: null }) &&
+      ch("whatsapp", { phone: null, email: "a@b.az" }, full) === JSON.stringify({ channel: "email", reason: null }) &&
+      ch("whatsapp", both, { whatsapp: null, email: full.email }) === JSON.stringify({ channel: "email", reason: null }));
+    ok("delivery: messages off, no contact, nothing connected",
+      ch("system", both, full) === JSON.stringify({ channel: "none", reason: "disabled" }) &&
+      ch("email", { phone: null, email: null }, full) === JSON.stringify({ channel: "none", reason: "no_contact" }) &&
+      ch("whatsapp", both, none) === JSON.stringify({ channel: "none", reason: "not_configured" }));
+
+    ok("delivery: template parameters without new lines, tabs or long spaces, capped",
+      delivery.templateParam("Toyuq 15kg,\n\tEt     10kg ") === "Toyuq 15kg, Et 10kg" && delivery.templateParam("x".repeat(1200)).length === 1000 &&
+      delivery.templateParam("abcdef", 4) === "abc…");
+    const wa = delivery.whatsappRequest(full.whatsapp, "+994 50 111-22-33", "ru", "Acme", "Toyuq 15kg, Et 10kg");
+    const waBody = JSON.parse(wa.init.body);
+    ok("delivery: WhatsApp template request ({{1}} restaurant, {{2}} lines, digits-only number)",
+      wa.url === "https://graph.facebook.com/v21.0/123/messages" && wa.init.headers.authorization === "Bearer tok" && waBody.messaging_product === "whatsapp" &&
+      waBody.to === "994501112233" && waBody.type === "template" && waBody.template.name === "order_v1" && waBody.template.language.code === "ru" &&
+      waBody.template.components[0].parameters.map((p) => p.text).join("|") === "Acme|Toyuq 15kg, Et 10kg", waBody);
+    const em = delivery.emailRequest(full.email, "a@b.az", "Заказ · Acme", "Здравствуйте! Заказ: Toyuq 15kg");
+    const emBody = JSON.parse(em.init.body);
+    ok("delivery: Resend request", em.url === "https://api.resend.com/emails" && em.init.headers.authorization === "Bearer re_1" &&
+      emBody.from === full.email.from && emBody.to[0] === "a@b.az" && emBody.subject === "Заказ · Acme" && emBody.text.startsWith("Здравствуйте!"), emBody);
+    ok("delivery: language codes for the template", delivery.WHATSAPP_LANGUAGE.AZ === "az" && delivery.WHATSAPP_LANGUAGE.RU === "ru" && delivery.WHATSAPP_LANGUAGE.EN === "en");
+    ok("delivery: provider ids and errors read from both APIs",
+      delivery.providerMessageId({ messages: [{ id: "wamid.X" }] }) === "wamid.X" && delivery.providerMessageId({ id: "re-1" }) === "re-1" &&
+      delivery.providerMessageId(null) === null && delivery.providerError(401, { error: { message: "bad token" } }) === "http_401: bad token" &&
+      delivery.providerError(422, { message: "domain" }) === "http_422: domain" && delivery.providerError(500, null) === "http_500");
+
+    const order = { ...both, restaurant: "Acme", whatsappLanguage: "ru", lines: "Toyuq 15kg", subject: "Заказ", text: "Здравствуйте! Заказ: Toyuq 15kg" };
+    const calls = [];
+    const fake = (status, payload) => async (url, init) => {
+      calls.push(url);
+      return { ok: status < 300, status, json: async () => payload };
+    };
+    let out = await delivery.deliverOrder(order, "whatsapp", full, fake(200, { messages: [{ id: "wamid.1" }] }));
+    ok("delivery: WhatsApp sent with its id", out.status === "sent" && out.channel === "whatsapp" && out.providerId === "wamid.1" && calls[0].includes("graph.facebook.com"), out);
+    out = await delivery.deliverOrder(order, "email", full, fake(422, { message: "domain not verified" }));
+    ok("delivery: provider refusal is a failure with its reason", out.status === "failed" && out.channel === "email" && out.error === "http_422: domain not verified", out);
+    out = await delivery.deliverOrder(order, "email", full, async () => { throw new Error("offline"); });
+    ok("delivery: network error is a failure", out.status === "failed" && out.error === "network: offline", out);
+    const before = calls.length;
+    out = await delivery.deliverOrder(order, "system", full, fake(200, {}));
+    ok("delivery: messages off: skipped without a call", out.status === "skipped" && out.error === "disabled" && calls.length === before, out);
+
+    const claim = auto.parseAutoOrderClaim({ tenant_id: TEN, request_id: REQ, restaurant: "Acme", language: null, channel: "email", supplier_name: "Beta",
+      supplier_phone: null, supplier_email: "b@b.az", items: [{ name: "Et", qty: "5", unit: "kg" }, { name: "x", qty: 0 }, "bad"] });
+    ok("deadline claim parsed, empty lines dropped", claim && claim.channel === "email" && claim.items.length === 1 && claim.items[0].qty === 5 &&
+      claim.language === null && claim.supplierEmail === "b@b.az" &&
+      auto.parseAutoOrderClaim({ tenant_id: TEN, request_id: REQ, items: [] }) === null && auto.parseAutoOrderClaim(null) === null, claim);
+
+    const entry = (request, trigger, status, value, at, error = null) => ({ request_id: request, supplier_name: "S", trigger, channel: status === "skipped" ? "none" : "whatsapp",
+      status, error, sent_at: at, lines: 2, value, currency: "AZN" });
+    const log = [
+      entry(REQ, "chef", "sent", "120.50", "2026-10-10T10:00:00Z"),
+      entry(REQ2, "auto", "failed", 80, "2026-10-10T14:00:00Z", "http_500"),
+      entry(REQ2, "chef", "sent", 80, "2026-10-10T15:00:00Z"),
+      entry("dddddddd-0000-4000-8000-000000000003", "auto", "skipped", 40, "2026-10-10T14:00:00Z", "no_contact"),
+      entry("dddddddd-0000-4000-8000-000000000004", "auto", "sent", 319.5, "2026-10-10T14:00:00Z"),
+    ].map(auto.parseSendLogEntry);
+    const sum = auto.summarizeSendLog(log);
+    ok("morning summary: each order once by its last delivery, value of what went out",
+      log.every(Boolean) && sum.orders === 3 && sum.chef === 2 && sum.auto === 1 && sum.failed === 1 && sum.value === 520 && sum.currency === "AZN", sum);
+    ok("morning summary: value hidden when costs are hidden; empty log",
+      auto.summarizeSendLog([auto.parseSendLogEntry(entry(REQ, "chef", "sent", null, "2026-10-10T10:00:00Z"))]).value === null &&
+      auto.summarizeSendLog([]).orders === 0 && auto.parseSendLogEntry({ request_id: REQ, sent_at: "x", trigger: "robot", channel: "none", status: "sent" }) === null);
+
+    ok("texts: schedule banner, delivery and the owner's morning line",
+      AUTO_ORDER_RU.board.schedule("15:00", "18:00", true) === "Черновик в 15:00 · авто-отправка в 18:00" &&
+      AUTO_ORDER_RU.board.schedule("15:00", "18:00", false) === "Черновик в 15:00 · отправляет шеф" &&
+      AUTO_ORDER_RU.owner.sent(5, "520 ₼") === "Отправлено 5 заказов на 520 ₼" && AUTO_ORDER_RU.owner.sent(1, null) === "Отправлено 1 заказ" &&
+      Object.keys(AUTO_ORDER_RU.board.reasons).join() === delivery.SKIP_REASONS.join());
   }
 
   console.log(`\n${pass} passed, ${fail} failed`);

@@ -149,7 +149,7 @@ ok("no extras on a sent request; cook may not add", /invalid_status/.test((await
 
 // ---- settings: owner only, checked values
 r = await as(A, `update tenant_settings set loss_alert_percent = 15, loss_alert_enabled = false, auto_order_enabled = true,
-  auto_order_time = '05:30', auto_order_notify = 'whatsapp' where tenant_id='${tA}'`);
+  auto_order_draft_time = '05:00', auto_order_time = '05:30', auto_order_notify = 'whatsapp' where tenant_id='${tA}'`);
 ok("owner changes the smart settings", !r.err && r.affected === 1, r);
 r = await as(CH, `update tenant_settings set loss_alert_percent = 20 where tenant_id='${tA}'`);
 ok("chef cannot (row-level security: nothing updated)", !r.err && r.affected === 0, r);
@@ -177,9 +177,9 @@ await q(`update tenant_settings set loss_alert_enabled = false where tenant_id='
 lr = await riceRow();
 ok("alert switched off: 15% is not red", lr?.p === 15 && lr?.over_limit === false, lr);
 
-// ---- the scheduled run, in the restaurant's time
+// ---- the scheduled run, in the restaurant's time (since 20261029000400 at auto_order_draft_time)
 const run = async () => q("select tenant_id, branch_id, drafts, notify from public.run_due_auto_orders()");
-await q(`update tenant_settings set auto_order_enabled = true, auto_order_time = '00:00', auto_order_notify = 'system' where tenant_id='${tA}'`);
+await q(`update tenant_settings set auto_order_enabled = true, auto_order_draft_time = '00:00', auto_order_time = '00:00', auto_order_notify = 'system' where tenant_id='${tA}'`);
 let rows = await run();
 const mine = rows.filter((x) => x.tenant_id === tA);
 ok("due restaurant: drafts for its branch, channel returned", mine.length === 1 && mine[0].branch_id === branch && mine[0].drafts === 2 && mine[0].notify === "system", rows);
@@ -190,11 +190,11 @@ ok("runs once per local day", (await run()).length === 0);
 ok("restaurant B with auto order off: not run", (await q(`select auto_order_last_run from tenant_settings where tenant_id='${tB}'`))[0].auto_order_last_run === null);
 const zone = (await q(`select z from unnest(array['UTC','Asia/Tokyo','America/New_York']) z
   where extract(hour from now() at time zone z) between 1 and 21 limit 1`))[0].z;
-await q(`update tenant_settings set auto_order_enabled = true, timezone = '${zone}',
-  auto_order_time = ((now() at time zone '${zone}') + interval '1 hour')::time where tenant_id='${tB}'`);
+await q(`update tenant_settings set auto_order_enabled = true, timezone = '${zone}', auto_order_time = '23:59',
+  auto_order_draft_time = ((now() at time zone '${zone}') + interval '1 hour')::time where tenant_id='${tB}'`);
 await run();
 ok("restaurant B before its local time: not run yet", (await q(`select auto_order_last_run from tenant_settings where tenant_id='${tB}'`))[0].auto_order_last_run === null);
-await q(`update tenant_settings set auto_order_time = ((now() at time zone '${zone}') - interval '1 hour')::time where tenant_id='${tB}'`);
+await q(`update tenant_settings set auto_order_draft_time = ((now() at time zone '${zone}') - interval '1 hour')::time where tenant_id='${tB}'`);
 await run();
 ok("after its local time: run, on its own date", (await q(`select auto_order_last_run::text d from tenant_settings where tenant_id='${tB}'`))[0].d ===
   (await q(`select (now() at time zone '${zone}')::date::text d`))[0].d);

@@ -1,6 +1,7 @@
 import { formatQty } from "@/lib/purchasing/format";
 import { isUuid } from "@/lib/purchasing/model";
-import { LIMIT_SOURCES, type LimitSource } from "@/lib/smart-settings/model";
+import { isAutoOrderNotify, LIMIT_SOURCES, type AutoOrderNotify, type LimitSource } from "@/lib/smart-settings/model";
+import { DELIVERY_CHANNELS, DELIVERY_STATUSES, type DeliveryChannel, type DeliveryStatus } from "./delivery";
 
 /** What get_auto_order_items_grouped() returns: per supplier what is below its minimum and how much to order. */
 export type AutoOrderItem = {
@@ -93,6 +94,96 @@ export function parseExtraBody(body: unknown): { productId: string; qty: number 
 
 /** {branch_id} for preview and drafts. */
 export const parseBranchId = (value: unknown): string | null => (isUuid(value) ? value : null);
+
+/** A request claim_due_auto_order_sends() took at the deadline, with what its message needs. */
+export type AutoOrderClaim = {
+  tenantId: string;
+  requestId: string;
+  restaurant: string;
+  language: string | null;
+  channel: AutoOrderNotify;
+  supplierName: string;
+  supplierPhone: string | null;
+  supplierEmail: string | null;
+  items: { name: string; qty: number; unit: string; extra: boolean }[];
+};
+
+export function parseAutoOrderClaim(row: unknown): AutoOrderClaim | null {
+  if (!isRecord(row) || typeof row.tenant_id !== "string" || typeof row.request_id !== "string" || !Array.isArray(row.items)) return null;
+  const items = row.items.flatMap((item) => {
+    if (!isRecord(item)) return [];
+    const qty = num(item.qty);
+    return qty !== null && qty > 0 ? [{ name: text(item.name) ?? "", qty, unit: text(item.unit) ?? "", extra: item.extra === true }] : [];
+  });
+  if (items.length === 0) return null;
+  return {
+    tenantId: row.tenant_id,
+    requestId: row.request_id,
+    restaurant: text(row.restaurant) ?? "",
+    language: text(row.language),
+    channel: isAutoOrderNotify(row.channel) ? row.channel : "system",
+    supplierName: text(row.supplier_name) ?? "",
+    supplierPhone: text(row.supplier_phone),
+    supplierEmail: text(row.supplier_email),
+    items,
+  };
+}
+
+/** One delivery of auto_order_send_log(): value is null for roles that do not see costs. */
+export type SendLogEntry = {
+  requestId: string;
+  supplierName: string;
+  trigger: "chef" | "auto";
+  channel: DeliveryChannel;
+  status: DeliveryStatus;
+  error: string | null;
+  sentAt: string;
+  lines: number;
+  value: number | null;
+  currency: string | null;
+};
+
+export function parseSendLogEntry(row: unknown): SendLogEntry | null {
+  if (!isRecord(row) || typeof row.request_id !== "string" || typeof row.sent_at !== "string") return null;
+  const trigger = row.trigger === "chef" || row.trigger === "auto" ? row.trigger : null;
+  const channel = (DELIVERY_CHANNELS as readonly unknown[]).includes(row.channel) ? (row.channel as DeliveryChannel) : null;
+  const status = (DELIVERY_STATUSES as readonly unknown[]).includes(row.status) ? (row.status as DeliveryStatus) : null;
+  if (!trigger || !channel || !status) return null;
+  return {
+    requestId: row.request_id,
+    supplierName: text(row.supplier_name) ?? "",
+    trigger,
+    channel,
+    status,
+    error: text(row.error),
+    sentAt: row.sent_at,
+    lines: num(row.lines) ?? 0,
+    value: num(row.value),
+    currency: text(row.currency),
+  };
+}
+
+export type SendSummary = { orders: number; chef: number; auto: number; failed: number; value: number | null; currency: string | null };
+
+/**
+ * A request counts once, by its last delivery: sent if it reached the supplier (or was sent without a message),
+ * failed if it did not. value: what went out; null when costs are hidden.
+ */
+export function summarizeSendLog(entries: SendLogEntry[]): SendSummary {
+  const last = new Map<string, SendLogEntry>();
+  for (const entry of entries) last.set(entry.requestId, entry);
+  const rows = Array.from(last.values());
+  const out = rows.filter((row) => row.status !== "failed" && !(row.trigger === "auto" && row.status === "skipped"));
+  const hidden = out.some((row) => row.value === null);
+  return {
+    orders: out.length,
+    chef: out.filter((row) => row.trigger === "chef").length,
+    auto: out.filter((row) => row.trigger === "auto").length,
+    failed: rows.length - out.length,
+    value: hidden ? null : Math.round(out.reduce((sum, row) => sum + (row.value ?? 0), 0) * 100) / 100,
+    currency: rows.find((row) => row.currency)?.currency ?? null,
+  };
+}
 
 /** {ids?: uuid[]}: the drafts to send; without ids every draft of the restaurant. */
 export function parseSendAllBody(body: unknown): { ids: string[] | null } | null {

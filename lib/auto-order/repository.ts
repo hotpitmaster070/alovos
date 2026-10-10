@@ -3,7 +3,7 @@ import type { TenantScope } from "@/lib/anbar/scope";
 import { failed, type Result } from "@/lib/purchasing/repository";
 import { fetchAll } from "@/lib/supabase/fetch-all";
 import { isAutoOrderNotify, type AutoOrderNotify } from "@/lib/smart-settings/model";
-import { parseAutoOrderGroups, type AutoOrderGroup } from "./model";
+import { parseAutoOrderClaim, parseAutoOrderGroups, parseSendLogEntry, type AutoOrderClaim, type AutoOrderGroup, type SendLogEntry } from "./model";
 
 /** What the branch needs, grouped by supplier (owners and chefs). */
 export async function autoOrderPreview(scope: TenantScope, branchId: string): Promise<Result<AutoOrderGroup[]>> {
@@ -39,7 +39,24 @@ export async function productOptions(scope: TenantScope): Promise<ProductOption[
 
 export type AutoOrderRun = { tenantId: string; branchId: string; drafts: number; notify: AutoOrderNotify };
 
-/** service_role only: every restaurant whose auto-order time has come today in its own timezone. */
+/** service_role only: today's still-open drafts of every restaurant whose deadline has come, marked sent. */
+export async function claimDueAutoOrderSends(admin: SupabaseClient): Promise<AutoOrderClaim[]> {
+  const { data, error } = await admin.rpc("claim_due_auto_order_sends");
+  if (error) throw new Error(`claim_due_auto_order_sends: ${error.message}`);
+  return ((data ?? []) as unknown[]).flatMap((row) => parseAutoOrderClaim(row) ?? []);
+}
+
+/** Deliveries of a day in the restaurant's timezone (default: yesterday); null until 20261029000400 is applied. */
+export async function autoOrderSendLog(scope: TenantScope, day: string | null = null): Promise<SendLogEntry[] | null> {
+  const { data, error } = await scope.client.rpc("auto_order_send_log", { p_day: day });
+  if (error) {
+    if (error.code !== "PGRST202" && error.code !== "42883") console.error("auto_order_send_log:", error.message);
+    return null;
+  }
+  return ((data ?? []) as unknown[]).flatMap((row) => parseSendLogEntry(row) ?? []);
+}
+
+/** service_role only: every restaurant whose draft time has come today in its own timezone. */
 export async function runDueAutoOrders(admin: SupabaseClient): Promise<AutoOrderRun[]> {
   const { data, error } = await admin.rpc("run_due_auto_orders");
   if (error) throw new Error(`run_due_auto_orders: ${error.message}`);

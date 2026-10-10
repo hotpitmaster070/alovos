@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { Branch } from "@/lib/anbar/types";
+import type { SendSummary } from "@/lib/auto-order/model";
 import { AUTO_ORDER_PATH, CHEF_WASTE_PATH, OWNER_DISCREPANCIES_PATH, OWNER_LOSSES_PATH, OWNER_SETTINGS_PATH } from "@/lib/auth-redirect";
 import { useT } from "@/lib/i18n/useT";
 import { formatMoney, type CurrencyInfo } from "@/lib/money";
@@ -41,6 +42,7 @@ export default function OwnerDashboard({
   cards,
   alerts = [],
   week = null,
+  orders = null,
 }: {
   allowed: boolean;
   branches: Branch[];
@@ -50,6 +52,8 @@ export default function OwnerDashboard({
   alerts?: ParAlert[];
   /** null when inventory results could not be read. */
   week?: { lost: number; suspicious: number } | null;
+  /** Yesterday's orders to suppliers; null until the send log exists. */
+  orders?: SendSummary | null;
 }) {
   const { t } = useT();
   const copy = t.owner.dashboard;
@@ -129,6 +133,24 @@ export default function OwnerDashboard({
               tone={week && (week.lost > 0 || week.suspicious > 0) ? "bad" : "neutral"}
             />
           </div>
+
+          {orders && (
+            <Card className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <p className="text-[11px] font-medium uppercase tracking-widest text-white/50">{t.autoOrder.owner.title}</p>
+                <p className="text-base font-medium text-white">
+                  {orders.orders > 0
+                    ? t.autoOrder.owner.sent(orders.orders, orders.value === null ? null : formatMoney(orders.value, currency))
+                    : t.autoOrder.owner.none}
+                </p>
+                {orders.orders > 0 && <p className="text-xs text-white/50">{t.autoOrder.owner.split(orders.chef, orders.auto)}</p>}
+                {orders.failed > 0 && <p className="text-xs text-amber-200">{t.autoOrder.owner.failed(orders.failed)}</p>}
+              </div>
+              <Link href={AUTO_ORDER_PATH} className={buttonVariants("outline", "sm")}>
+                {t.autoOrder.owner.open}
+              </Link>
+            </Card>
+          )}
 
           <Card>
             <h2 className="mb-3 text-base font-medium">{copy.runningOut}</h2>

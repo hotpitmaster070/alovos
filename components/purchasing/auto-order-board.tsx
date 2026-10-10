@@ -12,7 +12,8 @@ import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { isUnit } from "@/lib/anbar/types";
 import { ANBAR_CATALOG_PATH, AUTO_ORDER_PATH, ORDERS_PATH, SUPPLIERS_PATH } from "@/lib/auth-redirect";
-import { supplierCount, type AutoOrderGroup } from "@/lib/auto-order/model";
+import { SKIP_REASONS, type SkipReason } from "@/lib/auto-order/delivery";
+import { supplierCount, type AutoOrderGroup, type SendLogEntry } from "@/lib/auto-order/model";
 import type { ProductOption } from "@/lib/auto-order/repository";
 import type { OrderMessage } from "@/lib/auto-order/send";
 import { useT } from "@/lib/i18n/useT";
@@ -40,10 +41,26 @@ function SentList({ sent }: { sent: OrderMessage[] }) {
     <Card className="flex flex-col gap-3 border-emerald-400/40">
       <CardTitle>{copy.sent(sent.length)}</CardTitle>
       <ul className="flex flex-col gap-3">
-        {sent.map((order) => (
+        {sent.map((order) => {
+          const delivered = order.delivery?.status === "sent" && order.delivery.channel !== "none" ? order.delivery.channel : null;
+          const reason = order.delivery && isSkipReason(order.delivery.error) ? copy.reasons[order.delivery.error] : null;
+          return (
           <li key={order.requestId} className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium text-white">{order.supplierName}</span>
+            <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-white">
+              {order.supplierName}
+              {delivered ? (
+                <Badge className="border-emerald-400/50 text-emerald-200">{copy.delivered(delivered)}</Badge>
+              ) : (
+                order.delivery && (
+                  <Badge className="border-amber-300/60 text-amber-200">
+                    {copy.notDelivered}
+                    {reason ? ` (${reason})` : ""}
+                  </Badge>
+                )
+              )}
+            </span>
             <span className="text-xs text-white/60">{order.message}</span>
+            {!delivered && (
             <span className="flex flex-wrap gap-2">
               {order.whatsapp && (
                 <a href={order.whatsapp} target="_blank" rel="noreferrer" className={buttonVariants("default", "sm")}>
@@ -57,6 +74,29 @@ function SentList({ sent }: { sent: OrderMessage[] }) {
               )}
               {!order.whatsapp && !order.mailto && <span className="text-xs text-amber-200">{copy.noContact}</span>}
             </span>
+            )}
+          </li>
+          );
+        })}
+      </ul>
+    </Card>
+  );
+}
+
+const isSkipReason = (value: string | null): value is SkipReason => (SKIP_REASONS as readonly unknown[]).includes(value);
+
+/** Yesterday's deadline sends that did not reach the supplier; the requests are back among the drafts. */
+function MissedList({ missed }: { missed: SendLogEntry[] }) {
+  const { t } = useT();
+  const copy = t.autoOrder.board;
+  if (missed.length === 0) return null;
+  return (
+    <Card className="flex flex-col gap-2 border-amber-300/50">
+      <CardTitle>{copy.yesterdayFailed}</CardTitle>
+      <ul className="flex flex-col gap-1 text-sm text-white/80">
+        {missed.map((entry) => (
+          <li key={entry.requestId}>
+            {entry.supplierName}: <span className="text-amber-200">{isSkipReason(entry.error) ? copy.reasons[entry.error] : (entry.error ?? copy.notDelivered)}</span>
           </li>
         ))}
       </ul>
@@ -145,6 +185,8 @@ export default function AutoOrderBoard({
   groups,
   drafts,
   products,
+  schedule,
+  missed,
 }: {
   canEdit: boolean;
   branches: { id: string; name: string }[];
@@ -152,6 +194,9 @@ export default function AutoOrderBoard({
   groups: AutoOrderGroup[];
   drafts: BoardDraft[];
   products: ProductOption[];
+  /** null when auto-order is off. */
+  schedule: { draftTime: string; deadline: string; autoSend: boolean } | null;
+  missed: SendLogEntry[];
 }) {
   const { t } = useT();
   const copy = t.autoOrder.board;
@@ -206,6 +251,9 @@ export default function AutoOrderBoard({
         <div>
           <h1 className="font-serif text-[32px] font-bold leading-[1.1] tracking-tight">{copy.title}</h1>
           <p className="mt-1 text-sm text-white/60">{copy.subtitle}</p>
+          {schedule && (
+            <Badge className="mt-2 border-beige/50 text-beige">{copy.schedule(schedule.draftTime, schedule.deadline, schedule.autoSend)}</Badge>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={ORDERS_PATH} className={buttonVariants("outline", "sm")}>
@@ -261,6 +309,7 @@ export default function AutoOrderBoard({
 
       <NoticeLine notice={notice} />
       <SentList sent={sent} />
+      <MissedList missed={missed} />
 
       {current && (
         <section className="flex flex-col gap-3">
