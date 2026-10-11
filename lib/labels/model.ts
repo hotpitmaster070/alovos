@@ -326,6 +326,8 @@ export type ReceiveLotInput = {
   /** Overrides the norm for this delivery; remembered as the place rule when remember is set. */
   shelfLifeDays: number | null;
   remember: boolean;
+  /** The sent purchase request this delivery belongs to, chosen by hand (needs a price); null: matched automatically. */
+  requestId: string | null;
 };
 
 export function validateReceiveLotInput(body: Body): Valid<ReceiveLotInput> | Invalid {
@@ -338,6 +340,7 @@ export function validateReceiveLotInput(body: Body): Valid<ReceiveLotInput> | In
   const productionDate = optionalDate(body.production_date);
   const shelfLifeDays = optionalDays(body.shelf_life_days);
   const remember = body.remember ?? false;
+  const requestId = isBlank(body.purchase_request_id) ? null : isUuid(body.purchase_request_id) ? body.purchase_request_id : undefined;
   if (
     !isUuid(body.product_id) ||
     qty === undefined ||
@@ -346,13 +349,26 @@ export function validateReceiveLotInput(body: Body): Valid<ReceiveLotInput> | In
     productionDate === undefined ||
     shelfLifeDays === undefined ||
     typeof remember !== "boolean" ||
-    (remember && shelfLifeDays === null)
+    (remember && shelfLifeDays === null) ||
+    requestId === undefined ||
+    (requestId !== null && price === null)
   ) {
     return invalid;
   }
   return {
     ok: true,
-    value: { productId: body.product_id, qty, storageLocationId: body.storage_location_id, price, currency, fxRate, productionDate, shelfLifeDays, remember },
+    value: {
+      productId: body.product_id,
+      qty,
+      storageLocationId: body.storage_location_id,
+      price,
+      currency,
+      fxRate,
+      productionDate,
+      shelfLifeDays,
+      remember,
+      requestId,
+    },
   };
 }
 
@@ -653,6 +669,7 @@ export const LABELS_ERROR_CODES = [
   "stock_exists",
   "lot_expired",
   "open_count",
+  "request_not_found",
   "save_failed",
 ] as const;
 export type LabelsErrorCode = (typeof LABELS_ERROR_CODES)[number];
@@ -674,6 +691,7 @@ const STATUS: Record<LabelsErrorCode, number> = {
   stock_exists: 409,
   lot_expired: 409,
   open_count: 409,
+  request_not_found: 404,
   save_failed: 500,
 };
 

@@ -256,6 +256,7 @@ export const LABELS_AZ: LabelsDictionary = {
     stock_exists: "Anbarda qalıq var, valyutanı dəyişmək üçün anbarı sıfırlayın",
     lot_expired: "Müddəti bitib - köçürmək olmaz, silin",
     open_count: "Bu yerdə sayım gedir - bitəndən sonra köçürün",
+    request_not_found: "Sifariş tapılmadı: bu məhsul və filial üçün göndərilmiş sifariş seçin",
     save_failed: "Saxlamaq alınmadı, yenidən cəhd edin",
   },
   receipt: {
@@ -513,6 +514,7 @@ export const LABELS_RU: LabelsDictionary = {
     stock_exists: "На складе есть остатки — обнулите склад, чтобы сменить валюту",
     lot_expired: "Срок истёк — перемещать нельзя, спишите",
     open_count: "Здесь идёт инвентаризация — переместите после неё",
+    request_not_found: "Заказ не найден: выберите отправленный заказ этого товара и филиала",
     save_failed: "Не удалось сохранить, попробуйте ещё раз",
   },
   receipt: {
@@ -775,6 +777,7 @@ export const LABELS_EN: LabelsDictionary = {
     stock_exists: "Stock exists, clear inventory before currency change",
     lot_expired: "Expired — it cannot be moved, write it off",
     open_count: "A count is going on here — move it after the count",
+    request_not_found: "Order not found: pick a sent order of this product and branch",
     save_failed: "Could not save, try again",
   },
   receipt: {

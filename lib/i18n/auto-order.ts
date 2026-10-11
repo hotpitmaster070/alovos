@@ -115,10 +115,20 @@ export type AutoOrderDictionary = {
     /** Signed amount, e.g. "+260 ₼". */
     delta: (signed: string) => string;
     partial: (received: number, orders: number) => string;
+    /** "🔗 вручную привязано: 2". */
+    manual: (orders: number) => string;
     split: (chef: number, auto: number) => string;
     failed: (count: number) => string;
     none: string;
     open: string;
+  };
+  /** Receiving form: link the delivery to a sent order. */
+  receipt: {
+    label: string;
+    auto: string;
+    /** "Заказ #3F9A1C от 29.10 — Поставщик A — Трюфель 10 кг (принято 4) — ~520 ₼" */
+    option: (o: { code: string; date: string; supplier: string; product: string; qty: string; received: string | null; amount: string | null }) => string;
+    needsPrice: string;
   };
   /** Start of the order message to the supplier: "Salam! Sifariş:". */
   message: { greeting: string; subject: string };
@@ -237,10 +247,18 @@ export const AUTO_ORDER_AZ: AutoOrderDictionary = {
     actual: (e, a) => `Sifariş ~${e} → Qəbul ${a} (fakt)`,
     delta: (s) => `${s} təxminə görə`,
     partial: (r, n) => `${n} sifarişdən ${r}-i qəbul edilib, qalanları yoldadır`,
+    manual: (n) => `🔗 əl ilə bağlanıb: ${n}`,
     split: (c, a) => `şef: ${c} · avtomatik: ${a}`,
     failed: (n) => `${n} getmədi`,
     none: "Dünən sifariş göndərilməyib",
     open: "Sifarişlər",
+  },
+  receipt: {
+    label: "Sifarişlə bağla (istəyə bağlı)",
+    auto: "Avtomatik — bu məhsulun son sifarişi",
+    option: (o) =>
+      `Sifariş #${o.code}, ${o.date} — ${o.supplier} — ${o.product} ${o.qty}${o.received ? ` (qəbul: ${o.received})` : ""}${o.amount ? ` — ~${o.amount}` : ""}`,
+    needsPrice: "Sifarişlə bağlamaq üçün qiymət yazın",
   },
   message: { greeting: "Salam! Sifariş:", subject: "Sifariş" },
 };
@@ -358,10 +376,18 @@ export const AUTO_ORDER_RU: AutoOrderDictionary = {
     actual: (e, a) => `Заказано ~${e} → Принято ${a} (факт)`,
     delta: (s) => `${s} к оценке`,
     partial: (r, n) => `принято ${r} из ${n}, остальные ещё в пути`,
+    manual: (n) => `🔗 вручную привязано: ${n}`,
     split: (c, a) => `шеф: ${c} · автоматически: ${a}`,
     failed: (n) => `не ушло: ${n}`,
     none: "Вчера заказы не отправлялись",
     open: "Заказы",
+  },
+  receipt: {
+    label: "Связать с заказом (необязательно)",
+    auto: "Автоматически — последний заказ этого товара",
+    option: (o) =>
+      `Заказ #${o.code} от ${o.date} — ${o.supplier} — ${o.product} ${o.qty}${o.received ? ` (принято ${o.received})` : ""}${o.amount ? ` — ~${o.amount}` : ""}`,
+    needsPrice: "Чтобы связать с заказом, укажите цену",
   },
   message: { greeting: "Здравствуйте! Заказ:", subject: "Заказ" },
 };
@@ -479,10 +505,18 @@ export const AUTO_ORDER_EN: AutoOrderDictionary = {
     actual: (e, a) => `Ordered ~${e} → Received ${a} (actual)`,
     delta: (s) => `${s} vs estimate`,
     partial: (r, n) => `${r} of ${n} received, the rest on the way`,
+    manual: (n) => `🔗 linked by hand: ${n}`,
     split: (c, a) => `chef: ${c} · automatic: ${a}`,
     failed: (n) => `${n} not delivered`,
     none: "No orders were sent yesterday",
     open: "Orders",
+  },
+  receipt: {
+    label: "Link to an order (optional)",
+    auto: "Automatic — the latest order of this product",
+    option: (o) =>
+      `Order #${o.code} of ${o.date} — ${o.supplier} — ${o.product} ${o.qty}${o.received ? ` (received ${o.received})` : ""}${o.amount ? ` — ~${o.amount}` : ""}`,
+    needsPrice: "Enter a price to link to an order",
   },
   message: { greeting: "Hello! Order:", subject: "Order" },
 };

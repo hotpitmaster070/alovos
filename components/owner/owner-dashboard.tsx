@@ -164,6 +164,7 @@ export default function OwnerDashboard({
                     {t.autoOrder.owner.partial(orders.received, orders.orders)} · {t.autoOrder.owner.estimated(formatMoney(orders.estimated, currency))}
                   </p>
                 )}
+                {orders.manual > 0 && <p className="text-xs text-sky-200">{t.autoOrder.owner.manual(orders.manual)}</p>}
                 {orders.orders > 0 && <p className="text-xs text-white/50">{t.autoOrder.owner.split(orders.chef, orders.auto)}</p>}
                 {orders.failed > 0 && <p className="text-xs text-amber-200">{t.autoOrder.owner.failed(orders.failed)}</p>}
               </div>

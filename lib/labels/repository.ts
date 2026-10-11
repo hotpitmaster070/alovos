@@ -91,7 +91,8 @@ export async function createLot(scope: TenantScope, input: LotInput): Promise<Re
  * another currency is stored converted (maya) with the original price, currency and rate kept.
  */
 export async function receiveWithLot(scope: TenantScope, input: ReceiveLotInput): Promise<Result<Lot>> {
-  const { data, error } = await scope.client.rpc("receive_stock_with_lot_fx", {
+  const { data, error } = await scope.client.rpc(input.requestId ? "receive_stock_for_request" : "receive_stock_with_lot_fx", {
+    ...(input.requestId ? { p_request_id: input.requestId } : {}),
     p_product_id: input.productId,
     p_qty: input.qty,
     p_storage_id: input.storageLocationId,

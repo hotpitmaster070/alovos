@@ -29,7 +29,9 @@ import {
   type Lot,
   type ShelfLifeInfo,
 } from "@/lib/labels/model";
-import { formatRate, type CurrencyInfo } from "@/lib/money";
+import type { ReceiptOrderOption } from "@/lib/auto-order/model";
+import { formatMoney, formatRate, type CurrencyInfo } from "@/lib/money";
+import { formatQty } from "@/lib/purchasing/format";
 import type { ExpirySettings } from "@/lib/tenant-settings/parse";
 import { addDays, daysBetween, todayIn } from "@/lib/tenant-settings/time";
 import ActionMessage from "./action-message";
@@ -108,7 +110,7 @@ function ReceiptForm({
   const [expiryEdited, setExpiryEdited] = useState(false);
   const [remember, setRemember] = useState(false);
   const [copies, setCopies] = useState("1");
-  const [invalid, setInvalid] = useState<"qty" | "expiry" | null>(null);
+  const [invalid, setInvalid] = useState<"qty" | "expiry" | "price" | null>(null);
   const [error, setError] = useState<LabelsErrorCode | null>(null);
   const [pending, setPending] = useState(false);
   const [printing, setPrinting] = useState<{ lot: Lot; label: BirkaLabel; copies: number } | null>(null);
@@ -126,6 +128,26 @@ function ReceiptForm({
     };
   }, [product.id]);
 
+  const branchId = locations.find((item) => item.id === locationId)?.branchId ?? null;
+  const [orders, setOrders] = useState<ReceiptOrderOption[]>([]);
+  const [orderId, setOrderId] = useState("");
+  useEffect(() => {
+    let active = true;
+    const params = new URLSearchParams({ product_id: product.id, ...(branchId ? { branch_id: branchId } : {}) });
+    void fetch(`/api/lots/receive/orders?${params.toString()}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .catch(() => null)
+      .then((payload: { orders?: ReceiptOrderOption[] } | null) => {
+        if (!active) return;
+        const next = Array.isArray(payload?.orders) ? payload.orders : [];
+        setOrders(next);
+        setOrderId((current) => (next.some((order) => order.requestId === current) ? current : ""));
+      });
+    return () => {
+      active = false;
+    };
+  }, [product.id, branchId]);
+
   const norm = info && locationId ? resolveShelfLife(info, locationId) : null;
   const normDays = norm?.days ?? null;
   useEffect(() => {
@@ -137,6 +159,12 @@ function ReceiptForm({
   }
 
   const unit = isUnit(product.unit) ? t.anbar.units[product.unit] : product.unit;
+  const orderCopy = t.autoOrder.receipt;
+  const shortDate = new Intl.DateTimeFormat(lang === "EN" ? "en-GB" : lang === "RU" ? "ru-RU" : "az-AZ", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: settings.timezone,
+  });
   const foreign = money.currencies.find((item) => item.code === currency && item.code !== money.base.code) ?? null;
   const priceValue = decimal(price);
   const rateValue = decimal(rate);
@@ -161,6 +189,10 @@ function ReceiptForm({
       setInvalid("qty");
       return null;
     }
+    if (orderId && priceValue === null) {
+      setInvalid("price");
+      return null;
+    }
     if (shelfDays === null || shelfDays < 0 || shelfDays > SHELF_LIFE_DAYS_MAX) {
       setInvalid("expiry");
       return null;
@@ -177,6 +209,7 @@ function ReceiptForm({
       production_date: today,
       shelf_life_days: shelfDays,
       remember: changed && remember && canSetShelfLife(role),
+      purchase_request_id: orderId || null,
     });
     const lot = outcome.ok ? parseLot(field(outcome.data, "lot")) : null;
     if (!lot) setError(outcome.ok ? "save_failed" : outcome.error);
@@ -308,6 +341,28 @@ function ReceiptForm({
         )}
       </div>
 
+      {orders.length > 0 && (
+        <div className="col-span-2">
+          <Label htmlFor="receipt-order">{orderCopy.label}</Label>
+          <Select id="receipt-order" value={orderId} onChange={(event) => setOrderId(event.target.value)}>
+            <option value="">{orderCopy.auto}</option>
+            {orders.map((order) => (
+              <option key={order.requestId} value={order.requestId}>
+                {orderCopy.option({
+                  code: order.code,
+                  date: shortDate.format(new Date(order.sentAt)),
+                  supplier: order.supplierName,
+                  product: product.name,
+                  qty: `${formatQty(order.ordered)} ${unit}`,
+                  received: order.received > 0 ? `${formatQty(order.received)} ${unit}` : null,
+                  amount: order.estimated === null ? null : formatMoney(order.estimated, money.base),
+                })}
+              </option>
+            ))}
+          </Select>
+        </div>
+      )}
+
       {changed && canSetShelfLife(role) && (
         <label className="col-span-2 flex items-center gap-2 text-sm text-white/80">
           <Checkbox checked={remember} onChange={(event) => setRemember(event.target.checked)} />
@@ -331,6 +386,11 @@ function ReceiptForm({
 
       <div className="col-span-2">
         {invalid === "qty" && <ActionMessage result={{ ok: false, error: "invalidQty" }} />}
+        {invalid === "price" && (
+          <p role="alert" className="text-sm text-red-400">
+            {orderCopy.needsPrice}
+          </p>
+        )}
         {invalid === "expiry" && (
           <p role="alert" className="text-sm text-red-400">
             {copy.expiryPast}

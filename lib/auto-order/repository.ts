@@ -3,7 +3,16 @@ import type { TenantScope } from "@/lib/anbar/scope";
 import { failed, type Result } from "@/lib/purchasing/repository";
 import { fetchAll } from "@/lib/supabase/fetch-all";
 import { isAutoOrderNotify, type AutoOrderNotify } from "@/lib/smart-settings/model";
-import { parseAutoOrderClaim, parseAutoOrderGroups, parseSendLogEntry, type AutoOrderClaim, type AutoOrderGroup, type SendLogEntry } from "./model";
+import {
+  parseAutoOrderClaim,
+  parseAutoOrderGroups,
+  parseReceiptOrderOption,
+  parseSendLogEntry,
+  type AutoOrderClaim,
+  type AutoOrderGroup,
+  type ReceiptOrderOption,
+  type SendLogEntry,
+} from "./model";
 
 /** What the branch needs, grouped by supplier (owners and chefs). */
 export async function autoOrderPreview(scope: TenantScope, branchId: string): Promise<Result<AutoOrderGroup[]>> {
@@ -48,12 +57,32 @@ export async function claimDueAutoOrderSends(admin: SupabaseClient): Promise<Aut
 
 /** Deliveries of a day in the restaurant's timezone (default: yesterday); null until 20261029000400 is applied. */
 export async function autoOrderSendLog(scope: TenantScope, day: string | null = null): Promise<SendLogEntry[] | null> {
-  const { data, error } = await scope.client.rpc("auto_order_send_log", { p_day: day });
-  if (error) {
-    if (error.code !== "PGRST202" && error.code !== "42883") console.error("auto_order_send_log:", error.message);
+  const [log, links] = await Promise.all([
+    scope.client.rpc("auto_order_send_log", { p_day: day }),
+    scope.client.rpc("auto_order_manual_links", { p_day: day }),
+  ]);
+  if (log.error) {
+    if (log.error.code !== "PGRST202" && log.error.code !== "42883") console.error("auto_order_send_log:", log.error.message);
     return null;
   }
-  return ((data ?? []) as unknown[]).flatMap((row) => parseSendLogEntry(row) ?? []);
+  const manual = new Map<string, number>();
+  for (const row of links.error ? [] : ((links.data ?? []) as Record<string, unknown>[])) {
+    if (typeof row.request_id === "string") manual.set(row.request_id, Number(row.manual_links ?? 0));
+  }
+  return ((log.data ?? []) as unknown[]).flatMap((row) => {
+    const entry = parseSendLogEntry(row);
+    return entry ? [{ ...entry, manualLinks: manual.get(entry.requestId) ?? entry.manualLinks }] : [];
+  });
+}
+
+/** Sent orders with the product still to come (branch when given), for the receiving form; [] until 20261029000500. */
+export async function receiptOrderOptions(scope: TenantScope, productId: string, branchId: string | null): Promise<ReceiptOrderOption[]> {
+  const { data, error } = await scope.client.rpc("receipt_order_options", { p_product_id: productId, p_branch_id: branchId });
+  if (error) {
+    if (error.code !== "PGRST202" && error.code !== "42883") console.error("receipt_order_options:", error.message);
+    return [];
+  }
+  return ((data ?? []) as unknown[]).flatMap((row) => parseReceiptOrderOption(row) ?? []);
 }
 
 /** service_role only: every restaurant whose draft time has come today in its own timezone. */

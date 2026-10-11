@@ -129,6 +129,38 @@ export function parseAutoOrderClaim(row: unknown): AutoOrderClaim | null {
   };
 }
 
+/** A sent order the receiving form can link a delivery to (receipt_order_options()). */
+export type ReceiptOrderOption = {
+  requestId: string;
+  /** Short reference shown to people: the first 6 characters of the id, upper case. */
+  code: string;
+  sentAt: string;
+  supplierName: string;
+  ordered: number;
+  received: number;
+  unit: string;
+  /** The order's ~amount at sending; null when costs are hidden. */
+  estimated: number | null;
+};
+
+export const orderCode = (requestId: string): string => requestId.replace(/-/g, "").slice(0, 6).toUpperCase();
+
+export function parseReceiptOrderOption(row: unknown): ReceiptOrderOption | null {
+  if (!isRecord(row) || !isUuid(row.request_id) || typeof row.sent_at !== "string") return null;
+  const ordered = num(row.ordered);
+  if (ordered === null) return null;
+  return {
+    requestId: row.request_id,
+    code: orderCode(row.request_id),
+    sentAt: row.sent_at,
+    supplierName: text(row.supplier_name) ?? "",
+    ordered,
+    received: num(row.received) ?? 0,
+    unit: text(row.unit) ?? "",
+    estimated: num(row.estimated_amount),
+  };
+}
+
 /**
  * One delivery of auto_order_send_log(). estimated: at the latest purchase prices when sent; actual: its
  * receipts at invoice prices, null until received. Both null for roles that do not see costs.
@@ -143,6 +175,8 @@ export type SendLogEntry = {
   sentAt: string;
   lines: number;
   linesReceived: number;
+  /** Receipts linked to the request by hand on the receiving form. */
+  manualLinks: number;
   estimated: number | null;
   actual: number | null;
   currency: string | null;
@@ -164,6 +198,7 @@ export function parseSendLogEntry(row: unknown): SendLogEntry | null {
     sentAt: row.sent_at,
     lines: num(row.lines) ?? 0,
     linesReceived: num(row.lines_received) ?? 0,
+    manualLinks: num(row.manual_links) ?? 0,
     estimated: num(row.estimated_amount),
     actual: num(row.actual_amount),
     currency: text(row.currency),
@@ -177,6 +212,8 @@ export type SendSummary = {
   failed: number;
   /** Orders with at least one receipt. */
   received: number;
+  /** Orders with a receipt linked by hand. */
+  manual: number;
   /** Phase 1: everything that went out at the latest purchase prices; null when costs are hidden. */
   estimated: number | null;
   /** Phase 2: the received orders at invoice prices; null when nothing is received or costs are hidden. */
@@ -209,6 +246,7 @@ export function summarizeSendLog(entries: SendLogEntry[]): SendSummary {
     auto: out.filter((row) => row.trigger === "auto").length,
     failed: rows.length - out.length,
     received: received.length,
+    manual: out.filter((row) => row.manualLinks > 0).length,
     estimated: hidden ? null : money(out.reduce((sum, row) => sum + (row.estimated ?? 0), 0)),
     actual,
     estimatedReceived,
