@@ -9,8 +9,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * Goods receipt with its lot in one transaction: {product_id, qty, storage_location_id, price?,
- * production_date?, shelf_life_days?, remember?}. shelf_life_days overrides the norm for this
- * delivery; remember stores it as the rule for the product in that place.
+ * production_date?, shelf_life_days?, remember?, purchase_request_id?}. shelf_life_days overrides the norm for
+ * this delivery; remember stores it as the rule for the product in that place. purchase_request_id links the
+ * receipt to that sent order (a price is then required); without it the receipt is matched automatically.
  */
 export async function POST(request: Request) {
   const current = await apiScope();

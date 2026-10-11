@@ -1627,6 +1627,39 @@ function makeClient({ tables = {}, rpc = {} } = {}) {
       Object.keys(AUTO_ORDER_RU.board.reasons).join() === delivery.SKIP_REASONS.join());
   }
 
+  // ---- receiving against a chosen order
+  {
+    const labelsModel = load("lib/labels/model.js");
+    const auto = load("lib/auto-order/model.js");
+    const { AUTO_ORDER_RU } = load("lib/i18n/auto-order.js");
+    const PROD = "cccccccc-0000-4000-8000-000000000011";
+    const LOC = "cccccccc-0000-4000-8000-000000000012";
+    const REQ = "3f9a1c0d-0000-4000-8000-000000000013";
+    const base = { product_id: PROD, qty: 6, storage_location_id: LOC, price: 30 };
+    const linked = labelsModel.validateReceiveLotInput({ ...base, purchase_request_id: REQ });
+    ok("receipt: purchase_request_id accepted; absent or empty = automatic",
+      linked.ok && linked.value.requestId === REQ && labelsModel.validateReceiveLotInput(base).value.requestId === null &&
+      labelsModel.validateReceiveLotInput({ ...base, purchase_request_id: "" }).value.requestId === null);
+    ok("receipt: a bad id or a link without a price refused",
+      !labelsModel.validateReceiveLotInput({ ...base, purchase_request_id: "x" }).ok &&
+      !labelsModel.validateReceiveLotInput({ ...base, price: null, purchase_request_id: REQ }).ok);
+    ok("receipt: request_not_found mapped", labelsModel.mapLabelsError({ message: "request_not_found", code: "P0002" }).code === "request_not_found" &&
+      labelsModel.mapLabelsError({ message: "request_not_found" }).status === 404);
+
+    const option = auto.parseReceiptOrderOption({ request_id: REQ, sent_at: "2026-10-29T14:00:00Z", supplier_name: "Alfa", ordered: "10", received: 4,
+      unit: "kg", estimated_amount: "520" });
+    ok("receipt: order option parsed with a short code", option && option.code === "3F9A1C" && option.ordered === 10 && option.received === 4 &&
+      option.estimated === 520 && auto.parseReceiptOrderOption({ request_id: "x", sent_at: "y", ordered: 1 }) === null, option);
+    ok("receipt: option text", AUTO_ORDER_RU.receipt.option({ code: "3F9A1C", date: "29.10", supplier: "Alfa", product: "Трюфель", qty: "10 кг",
+      received: null, amount: "520 ₼" }) === "Заказ #3F9A1C от 29.10 — Alfa — Трюфель 10 кг — ~520 ₼" &&
+      AUTO_ORDER_RU.receipt.label === "Связать с заказом (необязательно)");
+
+    const entry = (request, manual) => auto.parseSendLogEntry({ request_id: request, supplier_name: "S", trigger: "chef", channel: "whatsapp", status: "sent",
+      sent_at: "2026-10-29T14:00:00Z", lines: 1, lines_received: 1, manual_links: manual, estimated_amount: 500, actual_amount: 600, currency: "AZN" });
+    const sum = auto.summarizeSendLog([entry(REQ, 1), entry("3f9a1c0d-0000-4000-8000-000000000014", 0)]);
+    ok("dashboard: orders linked by hand counted", sum.manual === 1 && AUTO_ORDER_RU.owner.manual(1) === "🔗 вручную привязано: 1", sum);
+  }
+
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
 })();
